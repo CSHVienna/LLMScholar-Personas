@@ -1,0 +1,18 @@
+[
+  {
+    "role": "Director/Recruiter",
+    "task": "looking whom to hire",
+    "targets": [
+      "Junior Professor",
+      "Senior Professor"
+    ]
+  },
+  {
+    "role": "PhD student",
+    "task": "looking for an advisor",
+    "targets": [
+      "Junior Professor",
+      "Senior Professor"
+    ]
+  }
+]
