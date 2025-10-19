@@ -1,0 +1,18 @@
+[
+  {
+    "role": "Director(a)/Reclutador(a)",
+    "task": "buscando posibles contrataciones",
+    "targets": [
+      "Profesor(a) Junior",
+      "Profesor(a) Senior"
+    ]
+  },
+  {
+    "role": "Estudiante de doctorado",
+    "task": "buscando un(a) asesor(a)",
+    "targets": [
+      "Profesor(a) Junior",
+      "Profesor(a) Senior"
+    ]
+  }
+]

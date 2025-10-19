@@ -1,0 +1,18 @@
+[
+  {
+    "role": "Direktor(in)/Rekrutierende(r)",
+    "task": "potenzielle Einstellungen suchen",
+    "targets": [
+      "Juniorprofessor(in)",
+      "Seniorprofessor(in)"
+    ]
+  },
+  {
+    "role": "Doktorand(in)",
+    "task": "einen Betreuer(in) suchen",
+    "targets": [
+      "Juniorprofessor(in)",
+      "Seniorprofessor(in)"
+    ]
+  }
+]

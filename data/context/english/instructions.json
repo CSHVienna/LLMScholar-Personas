@@ -1,7 +1,7 @@
 [
   {
     "role": "Director/Recruiter",
-    "task": "looking whom to hire",
+    "task": "seeking potential hires",
     "targets": [
       "Junior Professor",
       "Senior Professor"
@@ -9,7 +9,7 @@
   },
   {
     "role": "PhD student",
-    "task": "looking for an advisor",
+    "task": "seeking an advisor",
     "targets": [
       "Junior Professor",
       "Senior Professor"

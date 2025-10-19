@@ -12,8 +12,15 @@ def read_text(file_path: Path | str) -> str:
     with p.open("r", encoding="utf-8") as f:
         return f.read()
     
+def path_exists(p: Path | str) -> bool:
+    return os.path.exists(p)
+
 def path(p: Path | str) -> Path:
     return Path(p)
+
+def validate_path(path: Path | str):
+    if not os.path.exists(path):
+        os.makedirs(path, exist_ok=False)
 
 def write_list_to_file(data_list: List[str], file_path: Path | str, line_separator: str = PROMPT_LINE_SEPARATOR) -> None:
     with open(file_path, 'w') as f:

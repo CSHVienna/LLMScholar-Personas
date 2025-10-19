@@ -1,0 +1,52 @@
+{
+  "k": [
+    1,
+    2,
+    5,
+    10
+  ],
+  "fields": [
+    {
+      "field": "Mathematik",
+      "subfields": [
+        "Zahlentheorie",
+        "Topologie"
+      ]
+    },
+    {
+      "field": "Informatik",
+      "subfields": [
+        "Softwareentwicklung",
+        "Künstliche Intelligenz"
+      ]
+    },
+    {
+      "field": "Physik",
+      "subfields": [
+        "Kondensierte Materie",
+        "Bildung"
+      ]
+    },
+    {
+      "field": "Biologie",
+      "subfields": [
+        "Neurowissenschaft",
+        "Anatomie"
+      ]
+    },
+    {
+      "field": "Soziologie",
+      "subfields": [
+        "Familie",
+        "Kriminologie"
+      ]
+    },
+    {
+      "field": "Psychologie",
+      "subfields": [
+        "Forensische Psychologie",
+        "Sozialpsychologie"
+      ]
+    }
+  ]
+}

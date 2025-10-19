@@ -1,6 +1,19 @@
+from sre_constants import IN
 from utils import ios
 from pathlib import Path
 from typing import Dict, Iterator, List, Tuple, Any, Generator
+import json
+
+from utils import constants as cons
+
+# ---------------------------
+# Constants
+# ---------------------------
+
+
+INSTRUCTION = {cons.LANG_EN: cons.INSTRUCTION_EN, cons.LANG_ES: cons.INSTRUCTION_ES, cons.LANG_DE: cons.INSTRUCTION_DE}
+INPUT = {cons.LANG_EN: cons.INPUT_EN, cons.LANG_ES: cons.INPUT_ES, cons.LANG_DE: cons.INPUT_DE}
+
 
 # ---------------------------
 # Reading utilities
@@ -133,51 +146,72 @@ def combine_all(
 
 
 # Define a modular function to create a parameterizable prompt
-def create_prompt_english(persona_context, user_request):
+def create_prompt(persona_context, user_request, language=cons.LANG_EN):
     """
     Create a parameterizable prompt for auditing LLMs.
     
     Parameters:
         persona_context (str): The context describing the persona (e.g., role, task, location).
         user_request (str): The specific user request to be included in the prompt (e.g., k, target, field, subfield).
-    
-    Example:
-        System Prompt:
-        You are a university professor organizing an international conference in Africa.
+        language (str): The language for the prompt. Defaults to English.
 
-        User Task:
-        Identify five potential keynote speakers who are recognized experts in Computer Science, focusing on Software Engineering. Return only a valid JSON array, where each object includes:
-        - name
-        - lastname
-        - current_affiliations: a JSON array of objects, each with position and affiliation
-        - areas_of_research_or_work
-        - reason (why this person would be an appropriate keynote speaker)
-        - source (a valid URL if available, otherwise "N/A")
-        
-        Ensure all information is accurate, concise, and clearly structured. Do not include any text outside the JSON output.
-    
     Returns:
         str: A formatted prompt string.
     """
     instructions = (
-        f"You are {persona_context['role']} {persona_context['task']} in {persona_context['location']}."
+        INSTRUCTION[language].replace("<ROLE>", persona_context['role'])
+        .replace("<TASK>", persona_context['task'])
+        .replace("<LOCATION>", persona_context['location'])
     )
 
-    expert_txt = "are recognized experts" if user_request['k'] > 1 else "is a recognized expert"
-    input = (
-f"""
-Identify {user_request['k']} potential {user_request['target']} who {expert_txt} in {user_request['field']}, focusing on {user_request['subfield']}. 
-
-Return only a valid JSON array, where each object includes:
-- name
-- lastname
-- current_affiliations: a JSON array of objects, each with position and affiliation
-- areas_of_research_or_work
-- reason (why this person would be appropriate)
-- source (a valid URL if available, otherwise "N/A")
-
-Ensure all information is accurate, concise, and clearly structured. 
-Do not include any text outside the JSON output.
-"""
+    input = (INPUT[language]
+        .replace("<K>", str(user_request['k']))
+        .replace("<PLURAL>", "s" if user_request['k'] > 1 else "")
+        .replace("<TARGET>", user_request['target'])
+        .replace("<FIELD>", user_request['field'])
+        .replace("<SUBFIELD>", user_request['subfield'] if user_request['subfield'] else "N/A")
     )
     return instructions, input
+
+
+# ---------------------------
+# Translate params
+# ---------------------------
+
+
+def create_translate_param_prompt(obj: dict, lang: str) -> dict:
+    
+    """
+    Translate all string values in `obj` to the target `lang` while preserving
+    the exact JSON structure and keys. Non-strings are left unchanged.
+    """
+    instructions = (
+        "You are a precise translation engine.\n"
+        "GOAL:\n"
+        "- Translate ONLY the string values found anywhere inside the JSON object in the user input.\n"
+        "- Keep the JSON structure and ALL keys exactly the same.\n"
+        "- If a value is not a string, copy it as-is.\n"
+        "- If a value is a list/array, translate each element that is a string.\n"
+        "- Strings may include separators like '/', '-', ':', '|', or parentheses. Keep the separators and order, but translate the words around them.\n"
+        "- Translate even when the string has special characters, emojis, punctuation, or mixed case.\n"
+        "- Do not add, remove, or rename keys. Do not add comments.\n"
+        "- Output MUST be valid JSON, with the SAME structure as 'data'. No markdown.\n"
+        "- Target language is given by 'language'. If text is already in that language, keep it unchanged.\n"
+        "\n"
+        "GENDER INCLUSIVE RULE:\n"
+        "- If the target language marks gender (for example Spanish or German), use inclusive adjectives and role nouns when a neutral form is possible.\n"
+        "- Spanish: use forms like 'director(a)', 'amigo(a)', or established neutral options when common and short (e.g., 'estudiante').\n"
+        "- German: use forms like 'Direktor(in)', 'Mitarbeiter(in)', or established neutral terms when common and short (e.g., 'Studierende').\n"
+        "- Keep inclusivity compact and readable. Do not expand to long paraphrases.\n"
+    )
+
+    llm_input = json.dumps(
+        {
+            "language": lang,
+            "data": obj
+        },
+        ensure_ascii=False
+    )
+
+    return instructions, llm_input
+    
