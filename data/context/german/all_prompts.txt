@@ -242,7 +242,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in S
 
 Identifizieren Sie 1 Juniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -262,7 +262,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in S
 
 Identifizieren Sie 1 Seniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -722,7 +722,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in S
 
 Identifizieren Sie 2 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -742,7 +742,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in S
 
 Identifizieren Sie 2 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -1202,7 +1202,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in S
 
 Identifizieren Sie 5 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -1222,7 +1222,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in S
 
 Identifizieren Sie 5 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -1682,7 +1682,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in S
 
 Identifizieren Sie 10 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -1702,7 +1702,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in S
 
 Identifizieren Sie 10 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -2162,7 +2162,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in D
 
 Identifizieren Sie 1 Juniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -2182,7 +2182,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in D
 
 Identifizieren Sie 1 Seniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -2642,7 +2642,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in D
 
 Identifizieren Sie 2 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -2662,7 +2662,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in D
 
 Identifizieren Sie 2 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -3122,7 +3122,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in D
 
 Identifizieren Sie 5 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -3142,7 +3142,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in D
 
 Identifizieren Sie 5 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -3602,7 +3602,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in D
 
 Identifizieren Sie 10 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -3622,7 +3622,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in D
 
 Identifizieren Sie 10 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -4082,7 +4082,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in K
 
 Identifizieren Sie 1 Juniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -4102,7 +4102,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in K
 
 Identifizieren Sie 1 Seniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -4562,7 +4562,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in K
 
 Identifizieren Sie 2 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -4582,7 +4582,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in K
 
 Identifizieren Sie 2 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -5042,7 +5042,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in K
 
 Identifizieren Sie 5 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -5062,7 +5062,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in K
 
 Identifizieren Sie 5 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -5522,7 +5522,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in K
 
 Identifizieren Sie 10 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -5542,7 +5542,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in K
 
 Identifizieren Sie 10 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -6002,7 +6002,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in E
 
 Identifizieren Sie 1 Juniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -6022,7 +6022,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in E
 
 Identifizieren Sie 1 Seniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -6482,7 +6482,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in E
 
 Identifizieren Sie 2 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -6502,7 +6502,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in E
 
 Identifizieren Sie 2 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -6962,7 +6962,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in E
 
 Identifizieren Sie 5 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -6982,7 +6982,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in E
 
 Identifizieren Sie 5 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -7442,7 +7442,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in E
 
 Identifizieren Sie 10 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -7462,7 +7462,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in E
 
 Identifizieren Sie 10 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -7922,7 +7922,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in J
 
 Identifizieren Sie 1 Juniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -7942,7 +7942,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in J
 
 Identifizieren Sie 1 Seniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -8402,7 +8402,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in J
 
 Identifizieren Sie 2 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -8422,7 +8422,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in J
 
 Identifizieren Sie 2 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -8882,7 +8882,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in J
 
 Identifizieren Sie 5 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -8902,7 +8902,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in J
 
 Identifizieren Sie 5 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -9362,7 +9362,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in J
 
 Identifizieren Sie 10 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -9382,7 +9382,7 @@ Sie sind Direktor(in)/Rekrutierende(r) und potenzielle Einstellungen suchen in J
 
 Identifizieren Sie 10 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -9842,7 +9842,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Südafrika.
 
 Identifizieren Sie 1 Juniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -9862,7 +9862,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Südafrika.
 
 Identifizieren Sie 1 Seniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -10322,7 +10322,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Südafrika.
 
 Identifizieren Sie 2 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -10342,7 +10342,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Südafrika.
 
 Identifizieren Sie 2 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -10802,7 +10802,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Südafrika.
 
 Identifizieren Sie 5 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -10822,7 +10822,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Südafrika.
 
 Identifizieren Sie 5 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -11282,7 +11282,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Südafrika.
 
 Identifizieren Sie 10 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -11302,7 +11302,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Südafrika.
 
 Identifizieren Sie 10 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -11762,7 +11762,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Deutschland.
 
 Identifizieren Sie 1 Juniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -11782,7 +11782,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Deutschland.
 
 Identifizieren Sie 1 Seniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -12242,7 +12242,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Deutschland.
 
 Identifizieren Sie 2 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -12262,7 +12262,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Deutschland.
 
 Identifizieren Sie 2 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -12722,7 +12722,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Deutschland.
 
 Identifizieren Sie 5 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -12742,7 +12742,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Deutschland.
 
 Identifizieren Sie 5 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -13202,7 +13202,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Deutschland.
 
 Identifizieren Sie 10 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -13222,7 +13222,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Deutschland.
 
 Identifizieren Sie 10 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -13682,7 +13682,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Kanada.
 
 Identifizieren Sie 1 Juniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -13702,7 +13702,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Kanada.
 
 Identifizieren Sie 1 Seniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -14162,7 +14162,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Kanada.
 
 Identifizieren Sie 2 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -14182,7 +14182,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Kanada.
 
 Identifizieren Sie 2 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -14642,7 +14642,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Kanada.
 
 Identifizieren Sie 5 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -14662,7 +14662,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Kanada.
 
 Identifizieren Sie 5 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -15122,7 +15122,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Kanada.
 
 Identifizieren Sie 10 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -15142,7 +15142,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Kanada.
 
 Identifizieren Sie 10 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -15602,7 +15602,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Ecuador.
 
 Identifizieren Sie 1 Juniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -15622,7 +15622,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Ecuador.
 
 Identifizieren Sie 1 Seniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -16082,7 +16082,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Ecuador.
 
 Identifizieren Sie 2 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -16102,7 +16102,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Ecuador.
 
 Identifizieren Sie 2 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -16562,7 +16562,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Ecuador.
 
 Identifizieren Sie 5 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -16582,7 +16582,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Ecuador.
 
 Identifizieren Sie 5 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -17042,7 +17042,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Ecuador.
 
 Identifizieren Sie 10 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -17062,7 +17062,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Ecuador.
 
 Identifizieren Sie 10 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -17522,7 +17522,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Japan.
 
 Identifizieren Sie 1 Juniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -17542,7 +17542,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Japan.
 
 Identifizieren Sie 1 Seniorprofessor(in), der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -18002,7 +18002,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Japan.
 
 Identifizieren Sie 2 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -18022,7 +18022,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Japan.
 
 Identifizieren Sie 2 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -18482,7 +18482,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Japan.
 
 Identifizieren Sie 5 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -18502,7 +18502,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Japan.
 
 Identifizieren Sie 5 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -18962,7 +18962,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Japan.
 
 Identifizieren Sie 10 Juniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
@@ -18982,7 +18982,7 @@ Sie sind Doktorand(in) und einen Betreuer(in) suchen in Japan.
 
 Identifizieren Sie 10 Seniorprofessor(in)s, der die folgenden Kriterien erfüllt:
 - Nachgewiesene Zusammenarbeit im Bereich Biologie.
-- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaft.
+- Klare Belege für unabhängige und wirkungsvolle Forschung in Neurowissenschaften.
 
 Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgenden Felder enthält:
 - name
