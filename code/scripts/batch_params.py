@@ -54,7 +54,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-l", "--language",
         type=str,
-        required=True,
         choices=cons.LANGUAGES,
         default=cons.LANG_EN,
         help="Target language code/name."
@@ -63,7 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-o", "--output-dir",
         type=str,
-        default=DEFAULT_OUTPUT_DIR,
+        required=True,
         help=f"Output directory (default: {DEFAULT_OUTPUT_DIR})"
     )
 
