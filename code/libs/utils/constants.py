@@ -16,7 +16,7 @@ LOCATIONS = {
 }
 
 INPUTS = {
-    "k": [1, 2, 5, 10],
+    "k": [1, 5, 10],
     "fields": [
         {
             "field": "Mathematics",
