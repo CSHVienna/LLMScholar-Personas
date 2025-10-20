@@ -78,18 +78,18 @@ python batch_prompt.py -c 0 -l de -o ../data/context/
 
 To process multiple combinations in parallel using GNU Parallel:
 ```bash
-# Process combinations 0-959 in parallel (8 jobs at a time)
-parallel -j 8 python batch_prompt.py -c {} -l germam -o ../data/context/ ::: {0..959}
+# Process combinations 0-719 in parallel (8 jobs at a time)
+parallel -j 8 python batch_prompt.py -c {} -l germam -o ../data/context/ ::: {0..719}
 
 # Process all combinations for multiple languages
 parallel -j 4 python batch_params.py -l {} -o ../data/context/ ::: english german spanish
-parallel -j 8 python batch_prompt.py -c {1} -l {2} ::: {0..959} -o ../data/context/ ::: english german spanish
+parallel -j 8 python batch_prompt.py -c {1} -l {2} ::: {0..719} -o ../data/context/ ::: english german spanish
 
 # Save output to separate files
-parallel -j 8 "python batch_prompt.py -c {} -l german -o ../data/context/ > output_{}.txt" ::: {0..959}
+parallel -j 8 "python batch_prompt.py -c {} -l german -o ../data/context/ > output_{}.txt" ::: {0..719}
 
 # Process with progress bar
-parallel --bar -j 8 python batch_prompt.py -c {} -l german -o ../data/context/ ::: {0..959}
+parallel --bar -j 8 python batch_prompt.py -c {} -l german -o ../data/context/ ::: {0..719}
 ```
 
 ## Output
