@@ -65,7 +65,7 @@ Specifies the task parameters for generating recommendations:
 **Example structure:**
 ```json
 {
-  "k": [1, 2, 5, 10],
+  "k": [1, 5, 10],
   "fields":[
     {
       "field": "Mathematics",
