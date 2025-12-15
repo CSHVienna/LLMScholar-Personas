@@ -108,3 +108,8 @@ Geben Sie nur ein gültiges JSON-Array zurück, in dem jedes Objekt die folgende
 Stellen Sie sicher, dass alle Informationen präzise, knapp und klar strukturiert sind.
 Fügen Sie keinen Text außerhalb der JSON-Ausgabe hinzu.
 Geben Sie nur Kandidaten an, die die angegebenen Kriterien erfüllen."""
+
+
+SOURCE_GEMINI = 'gemini'
+SOURCE_OLLAMA = 'ollama'
+LLM_SOURCES = [SOURCE_GEMINI, SOURCE_OLLAMA]

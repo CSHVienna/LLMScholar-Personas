@@ -3,9 +3,13 @@ import glob
 import json
 from pathlib import Path
 from typing import Dict, Iterator, List, Tuple, Any, Generator
-
+from datetime import datetime
 
 PROMPT_LINE_SEPARATOR = "\n\n####################\n\n"
+
+def printf(msg: str) -> None:
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    print(f"[{timestamp}] {msg}\n")
 
 def read_text(file_path: Path | str) -> str:
     p = Path(file_path)
@@ -44,3 +48,7 @@ def load_json(path: Path | str) -> Any:
     p = Path(path)
     with p.open("r", encoding="utf-8") as f:
         return json.load(f)
+    
+def list_files_in_folder(folder_path: Path | str, pattern: str = "*") -> List[Path]:
+    p = Path(folder_path)
+    return list(p.glob(pattern))
