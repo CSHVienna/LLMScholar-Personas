@@ -4,12 +4,16 @@ import json
 from pathlib import Path
 from typing import Dict, Iterator, List, Tuple, Any, Generator
 from datetime import datetime
+import pandas as pd
 
 PROMPT_LINE_SEPARATOR = "\n\n####################\n\n"
 
+def path_join(*args: str) -> Path:
+    return Path(os.path.join(*args))
+
 def printf(msg: str) -> None:
     timestamp = datetime.now().strftime("%H:%M:%S")
-    print(f"[{timestamp}] {msg}\n")
+    print(f"[{timestamp}] {msg}")
 
 def read_text(file_path: Path | str) -> str:
     p = Path(file_path)
@@ -52,3 +56,7 @@ def load_json(path: Path | str) -> Any:
 def list_files_in_folder(folder_path: Path | str, pattern: str = "*") -> List[Path]:
     p = Path(folder_path)
     return list(p.glob(pattern))
+
+def to_csv(df: pd.DataFrame, file_path: Path | str, **kwargs) -> None:
+    p = Path(file_path)
+    df.to_csv(p, index=False, **kwargs)

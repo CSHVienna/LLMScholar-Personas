@@ -213,3 +213,7 @@ __marimo__/
 *.key
 *.secrets
 *.api
+
+# own
+results/
+

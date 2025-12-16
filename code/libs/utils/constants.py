@@ -113,3 +113,10 @@ Geben Sie nur Kandidaten an, die die angegebenen Kriterien erfüllen."""
 SOURCE_GEMINI = 'gemini'
 SOURCE_OLLAMA = 'ollama'
 LLM_SOURCES = [SOURCE_GEMINI, SOURCE_OLLAMA]
+
+OUTPUT_CLEANED = 'cleaned'
+OUTPUT_UNCHANGED = 'unchanged'
+OUTPUT_INVALID = 'invalid'
+OUTPUT_FIXED_DICT = 'fixed_dict'
+
+RESULTS_PATH = '<ROOT>/responses/results_<SOURCE>_<LANGUAGE>'

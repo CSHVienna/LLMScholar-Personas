@@ -1,0 +1,63 @@
+import re
+import ast
+
+from utils import constants as cons
+
+def clean_content(text):
+    """ Cleans the output text by fixing umlauts and removing unnecessary quotation marks."""
+        
+    length_init = len(text)
+
+    # umlauts
+    for v in "aeiou":
+        text = text.replace(f'\\\"{v}', f"{v}̈")
+        text = text.replace(f'\\\"{v.upper()}', f"{v.upper()}̈")
+
+    # text in quotation marks 
+    text = re.sub(r'\\\"([^"]+)\\\"', r'\1', text)
+
+    # quotation marks
+    text = text.replace('\\\"\"', '\"')
+    text = text.replace('\\\",', '\",')
+    text = text.replace('\\\"', '\"')
+    
+    text = text.replace('},\n    \"', '\",\n    \"')
+    return text, cons.OUTPUT_CLEANED if len(text) != length_init else cons.OUTPUT_UNCHANGED
+
+def parse_valid_dicts(text):
+    """ Parses valid dictionaries from a text representation of a list of dictionaries. """
+    
+    def split_top_level(s):
+        items = []
+        depth = 0
+        start = 0
+
+        for i, ch in enumerate(s):
+            if ch in '{[':
+                depth += 1
+            elif ch in '}]':
+                depth -= 1
+            elif ch == ',' and depth == 0:
+                items.append(s[start:i].strip())
+                start = i + 1
+
+        items.append(s[start:].strip())
+        return items
+
+    m = re.search(r'\[(.*)', text, re.DOTALL)
+    if not m:
+        raise ValueError("No list found")
+
+    list_text = m.group(1)
+    valid_items = []
+
+    for item in split_top_level(list_text):
+        try:
+            obj = ast.literal_eval(item)
+        except Exception:
+            continue
+
+        if isinstance(obj, dict):
+            valid_items.append(obj)
+
+    return valid_items
