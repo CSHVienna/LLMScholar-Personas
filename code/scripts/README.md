@@ -8,6 +8,7 @@ These scripts work together to create localized prompt combinations:
 
 1. **`batch_params.py`** - Must be run first. Translates parameter files (instructions, locations, inputs) into the target language.
 2. **`batch_prompt.py`** - Run after params. Generates prompt combinations from the translated parameters.
+3. **`batch_parse_results.py`** - Run after collecting data from LLMs. Unifies all responses into a `recommendations.csv` and `summary.csv` files.
 
 ## Prerequisites
 `
@@ -59,6 +60,22 @@ python batch_prompt.py -c 5 -l german
 # Display combination ID 42 in Spanish
 python batch_prompt.py -c 42 -l spanish
 ```
+
+
+## batch_parse_results.py
+
+- `--results_dir` (required): Directory where all the responses (`.json` files) are located, eg. `../results`
+- `--output_dir` (required): Output directory.
+- `--model` (optional): Name of the model to load (see list of models under `data/context/models.txt`)
+- `--language` (optional): Language to load (`spanish`, `english`, and `german`)
+
+
+### Example Usage
+```bash
+# Load and parse all results across sources/models and languages in parallel
+nice -n 10 parallel -j 20 python batch_parse_results.py --results_dir ../../results --output_dir ../../results/summary_parallel --model {1} --language {2} :::: ../../data/context/models.txt ::: english german spanish
+```
+
 
 ## Complete Workflow Example
 

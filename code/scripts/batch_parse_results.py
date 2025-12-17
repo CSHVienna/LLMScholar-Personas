@@ -141,24 +141,31 @@ def _parse_gemini(response, model=None, fn=None, run_id=None):
 
     return obj
 
-def parse(results_dir, output_dir):
+def parse(results_dir, output_dir, model=None, language=None):
     '''
     Parse all results in results_dir and store the new results in output_dir
     '''
+
+    languages = cons.LANGUAGES if language is None else [language]
+    sources = cons.LLM_SOURCES if model is None else [cons.SOURCE_GEMINI if 'gemini' in model.lower() else cons.SOURCE_OLLAMA]
 
     df_results = pd.DataFrame()
     df_summary = pd.DataFrame()
     df_recommendations = pd.DataFrame()
 
-    for source in cons.LLM_SOURCES:
+    for source in sources:
 
-        for language in cons.LANGUAGES:
+        for language in languages:
             
             path = cons.RESULTS_PATH.replace('<ROOT>', results_dir).replace('<SOURCE>', source).replace('<LANGUAGE>', language)
 
             if ios.path_exists(path):
                 prefix = f"{source}_{language}_"
-                _files = ios.list_files_in_folder(path, pattern=f"{prefix}*.json")
+
+                pattern = f"{prefix}*.json" if model is None else f"{prefix}*{model}.json"
+
+                _files = ios.list_files_in_folder(path, pattern=pattern)
+
                 ios.printf(f"{prefix}: {len(_files)}")
 
                 for _file in _files:
@@ -194,11 +201,17 @@ def parse(results_dir, output_dir):
                             _obj_response.update(_obj)       
                             df_results = pd.concat([df_results, pd.DataFrame([_obj_response])], ignore_index=True)
 
+    if df_results.shape[0] == 0:
+        ios.printf("No results found.")
+        return None, None, None
+    
+    postfix = f"_{sources[0]}_{model}_{language}" if model is not None and language is not None else ""
+
     # Summary
     df_summary = df_results.copy()
     df_summary.loc[:, 'response_content'] = df_results['response_content'].apply(lambda x: len(x) if x is not None and type(x) == list else None)
     df_summary.rename(columns={'response_content': 'response_content_length'}, inplace=True)
-    ios.to_csv(df_summary, ios.path_join(output_dir, 'summary.csv'))
+    ios.to_csv(df_summary, ios.path_join(output_dir, f'summary{postfix}.csv'))
 
     # All names
     df_recommendations = df_results.copy()
@@ -206,7 +219,7 @@ def parse(results_dir, output_dir):
     for c in ['name', 'lastname', 'current_affiliations', 'areas_of_research_or_work', 'reason', 'source']:
         df_recommendations.loc[:, c] = df_recommendations['response_content'].apply(lambda x: x.get(c, '') if x is not None and type(x) == dict else None)
     df_recommendations.drop(columns=['response_content'], inplace=True)
-    ios.to_csv(df_recommendations, ios.path_join(output_dir, 'recommendations.csv'))
+    ios.to_csv(df_recommendations, ios.path_join(output_dir, f'recommendations{postfix}.csv'))
 
     return df_results, df_summary, df_recommendations
 
@@ -219,6 +232,8 @@ def main():
     parser = argparse.ArgumentParser(description='Batch parse results')
     parser.add_argument('--results_dir', type=str, help='Directory containing results to parse')
     parser.add_argument('--output_dir', type=str, help='Directory where to store the new results')
+    parser.add_argument('--model', type=str, help='Model name to use for parsing', default=None)
+    parser.add_argument('--language', type=str, help='Language to use for parsing', default=None)
     args = parser.parse_args()
 
     # summary of args
@@ -229,16 +244,17 @@ def main():
 
     # init
     ios.validate_path(args.output_dir)
-    df_results, df_summary, df_recommendations = parse(args.results_dir, args.output_dir)
+    df_results, df_summary, df_recommendations = parse(args.results_dir, args.output_dir, args.model, args.language)
 
     # print summary
     end = ios.datetime.now()
     ios.printf("Parsing completed.")
     ios.printf(f"Total time: {end - start}")
-    ios.printf('Results shapes:')
-    ios.printf(f"{df_results.shape}, {df_summary.shape}, {df_recommendations.shape}")
-    ios.printf('Valid flags:')
-    ios.printf(f"{df_results.valid_flag.value_counts()}")
+    if df_results is not None:
+        ios.printf('Results shapes:')
+        ios.printf(f"{df_results.shape}, {df_summary.shape}, {df_recommendations.shape}")
+        ios.printf('Valid flags:')
+        ios.printf(f"{df_results.valid_flag.value_counts()}")
     ios.printf("Done!")
     
 

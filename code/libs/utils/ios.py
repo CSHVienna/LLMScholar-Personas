@@ -60,3 +60,7 @@ def list_files_in_folder(folder_path: Path | str, pattern: str = "*") -> List[Pa
 def to_csv(df: pd.DataFrame, file_path: Path | str, **kwargs) -> None:
     p = Path(file_path)
     df.to_csv(p, index=False, **kwargs)
+
+def load_csv(file_path: Path | str, **kwargs) -> pd.DataFrame:
+    p = Path(file_path)
+    return pd.read_csv(p, **kwargs)
