@@ -43,11 +43,18 @@ def _parse_ollama(response, model=None, fn=None):
             content = None
             flag = cons.OUTPUT_INVALID
         else:
+            _content = None
             # candidates, students, profesors, data, juniorprofessors
-            for key_candidate in ['candidates', 'students', 'profesors', 'data', 'juniorprofessors']:
+            for key_candidate in ['candidates', 'students', 'profesors', 'data', 'juniorprofessors', 'text']:
                 if key_candidate in content:
-                    content = content.get(key_candidate, [{}])
+                    _content = content.get(key_candidate, [{}])
                     break
+
+            if _content is None:
+                if 'name' in content:
+                    _content = [content]
+
+            content = _content
             
     except Exception as e:
 
@@ -174,7 +181,7 @@ def parse(results_dir, output_dir, model=None, language=None):
 
                     for key, obj in data.items():
 
-                        model = obj.get('model', None)
+                        _model = obj.get('model', None)
 
                         _main = {'role': obj.get('parameters', {}).get('persona_context', {}).get('role',''),
                                 'task': obj.get('parameters', {}).get('persona_context', {}).get('task',''),
@@ -184,7 +191,7 @@ def parse(results_dir, output_dir, model=None, language=None):
                                 'field': obj.get('parameters', {}).get('user_request', {}).get('field', None),
                                 'subfield': obj.get('parameters', {}).get('user_request', {}).get('subfield', None),
                                 'language': obj.get('language', None),
-                                'model': model,
+                                'model': _model,
                         }
 
                         for run_id, response in enumerate(obj.get('responses', [{}])):

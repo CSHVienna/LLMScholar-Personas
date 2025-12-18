@@ -1,5 +1,6 @@
 import re
 import ast
+import codecs
 
 from utils import constants as cons
 
@@ -15,6 +16,10 @@ def clean_content(text):
 
     # text in quotation marks 
     text = re.sub(r'\\\"([^"]+)\\\"', r'\1', text)
+
+    # illegal surrogate
+    decoded = codecs.decode(text, "unicode_escape")
+    text = re.sub(r'[\ud800-\udfff]', '', decoded)
 
     # quotation marks
     text = text.replace('\\\"\"', '\"')
