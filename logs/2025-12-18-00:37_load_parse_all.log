@@ -1,0 +1,2182 @@
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: dolphin-mixtral-8x22b-v2_9-q4_K_M
+[00:37:41] language: spanish
+
+[00:37:41] ollama_spanish_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_dolphin-mixtral-8x22b-v2_9-q4_K_M.json
+[00:38:05] Parsing completed.
+[00:38:05] Total time: 0:00:23.758617
+[00:38:05] Results shapes:
+[00:38:05] (7200, 26), (7200, 26), (7849, 31)
+[00:38:05] Valid flags:
+[00:38:05] valid_flag
+unchanged    7108
+invalid        92
+Name: count, dtype: int64
+[00:38:05] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: dolphin3-8b-llama3_1-q4_K_M
+[00:37:41] language: spanish
+
+[00:37:41] ollama_spanish_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_dolphin3-8b-llama3_1-q4_K_M.json
+[00:38:05] Parsing completed.
+[00:38:05] Total time: 0:00:24.003971
+[00:38:05] Results shapes:
+[00:38:05] (7200, 26), (7200, 26), (7739, 31)
+[00:38:05] Valid flags:
+[00:38:05] valid_flag
+unchanged     7086
+invalid         85
+cleaned         24
+fixed_dict       5
+Name: count, dtype: int64
+[00:38:05] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: dolphin-mixtral-8x22b-v2_9-q4_K_M
+[00:37:41] language: english
+
+[00:37:41] ollama_english_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_english/ollama_english_dolphin-mixtral-8x22b-v2_9-q4_K_M.json
+[00:38:08] Parsing completed.
+[00:38:08] Total time: 0:00:27.280383
+[00:38:08] Results shapes:
+[00:38:08] (7200, 26), (7200, 26), (31425, 31)
+[00:38:08] Valid flags:
+[00:38:08] valid_flag
+unchanged    7195
+invalid         5
+Name: count, dtype: int64
+[00:38:08] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: dolphin3-8b-llama3_1-q4_K_M
+[00:37:41] language: english
+
+[00:37:41] ollama_english_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_english/ollama_english_dolphin3-8b-llama3_1-q4_K_M.json
+[00:38:10] Parsing completed.
+[00:38:10] Total time: 0:00:28.837967
+[00:38:10] Results shapes:
+[00:38:10] (7200, 26), (7200, 26), (17456, 31)
+[00:38:10] Valid flags:
+[00:38:10] valid_flag
+unchanged     7153
+invalid         31
+cleaned         13
+fixed_dict       3
+Name: count, dtype: int64
+[00:38:10] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: deepseek-r1-32b-qwen-distill-q4_K_M
+[00:37:41] language: german
+
+[00:37:41] ollama_german_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_german/ollama_german_deepseek-r1-32b-qwen-distill-q4_K_M.json
+[00:38:10] Parsing completed.
+[00:38:10] Total time: 0:00:29.267919
+[00:38:10] Results shapes:
+[00:38:10] (7200, 26), (7200, 26), (15194, 31)
+[00:38:10] Valid flags:
+[00:38:10] valid_flag
+unchanged    7081
+invalid       113
+cleaned         6
+Name: count, dtype: int64
+[00:38:10] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: dolphin-mixtral-8x22b-v2_9-q4_K_M
+[00:37:41] language: german
+
+[00:37:41] ollama_german_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_german/ollama_german_dolphin-mixtral-8x22b-v2_9-q4_K_M.json
+[00:38:12] Parsing completed.
+[00:38:12] Total time: 0:00:31.431843
+[00:38:12] Results shapes:
+[00:38:12] (7200, 26), (7200, 26), (18882, 31)
+[00:38:12] Valid flags:
+[00:38:12] valid_flag
+unchanged    7142
+invalid        58
+Name: count, dtype: int64
+[00:38:12] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: deepseek-r1-70b-llama-distill-q4_K_M
+[00:37:41] language: spanish
+
+[00:37:41] ollama_spanish_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_deepseek-r1-70b-llama-distill-q4_K_M.json
+[00:38:13] Parsing completed.
+[00:38:13] Total time: 0:00:32.354803
+[00:38:13] Results shapes:
+[00:38:13] (7200, 26), (7200, 26), (13063, 31)
+[00:38:13] Valid flags:
+[00:38:13] valid_flag
+unchanged    7189
+invalid         8
+cleaned         3
+Name: count, dtype: int64
+[00:38:13] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: dolphin-mixtral-8x7b-v2_7-q4_K_M
+[00:37:41] language: spanish
+
+[00:37:41] ollama_spanish_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_dolphin-mixtral-8x7b-v2_7-q4_K_M.json
+[00:38:14] Parsing completed.
+[00:38:14] Total time: 0:00:32.923648
+[00:38:14] Results shapes:
+[00:38:14] (7200, 26), (7200, 26), (29069, 31)
+[00:38:14] Valid flags:
+[00:38:14] valid_flag
+unchanged     6747
+invalid        450
+cleaned          2
+fixed_dict       1
+Name: count, dtype: int64
+[00:38:14] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: dolphin3-8b-llama3_1-q4_K_M
+[00:37:41] language: german
+
+[00:37:41] ollama_german_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_german/ollama_german_dolphin3-8b-llama3_1-q4_K_M.json
+[00:38:15] Parsing completed.
+[00:38:15] Total time: 0:00:33.684409
+[00:38:15] Results shapes:
+[00:38:15] (7200, 26), (7200, 26), (9225, 31)
+[00:38:15] Valid flags:
+[00:38:15] valid_flag
+unchanged     7102
+invalid         79
+cleaned         12
+fixed_dict       7
+Name: count, dtype: int64
+[00:38:15] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: deepseek-r1-70b-llama-distill-q4_K_M
+[00:37:41] language: german
+
+[00:37:41] ollama_german_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_german/ollama_german_deepseek-r1-70b-llama-distill-q4_K_M.json
+[00:38:15] Parsing completed.
+[00:38:15] Total time: 0:00:33.767649
+[00:38:15] Results shapes:
+[00:38:15] (7200, 26), (7200, 26), (20327, 31)
+[00:38:15] Valid flags:
+[00:38:15] valid_flag
+unchanged    7181
+invalid        17
+cleaned         2
+Name: count, dtype: int64
+[00:38:15] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: deepseek-r1-8b-0528-qwen3-q4_K_M
+[00:37:41] language: german
+
+[00:37:41] ollama_german_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_german/ollama_german_deepseek-r1-8b-0528-qwen3-q4_K_M.json
+[00:38:15] Parsing completed.
+[00:38:15] Total time: 0:00:33.834619
+[00:38:15] Results shapes:
+[00:38:15] (7200, 26), (7200, 26), (12958, 31)
+[00:38:15] Valid flags:
+[00:38:15] valid_flag
+unchanged     3997
+invalid       3137
+cleaned         33
+fixed_dict      33
+Name: count, dtype: int64
+[00:38:15] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: dolphin-phi-2_7b-v2_6-q4_K_M
+[00:37:41] language: spanish
+
+[00:37:41] ollama_spanish_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_dolphin-phi-2_7b-v2_6-q4_K_M.json
+[00:38:15] Parsing completed.
+[00:38:15] Total time: 0:00:33.895171
+[00:38:15] Results shapes:
+[00:38:15] (7200, 26), (7200, 26), (10050, 31)
+[00:38:15] Valid flags:
+[00:38:15] valid_flag
+unchanged     6653
+invalid        479
+fixed_dict      64
+cleaned          4
+Name: count, dtype: int64
+[00:38:15] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: deepseek-r1-8b-0528-qwen3-q4_K_M
+[00:37:41] language: english
+
+[00:37:41] ollama_english_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_english/ollama_english_deepseek-r1-8b-0528-qwen3-q4_K_M.json
+[00:38:15] Parsing completed.
+[00:38:15] Total time: 0:00:34.035414
+[00:38:15] Results shapes:
+[00:38:15] (7200, 26), (7200, 26), (14531, 31)
+[00:38:15] Valid flags:
+[00:38:15] valid_flag
+unchanged     4918
+invalid       2196
+fixed_dict      76
+cleaned         10
+Name: count, dtype: int64
+[00:38:15] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: dolphin-mixtral-8x7b-v2_7-q4_K_M
+[00:37:41] language: german
+
+[00:37:41] ollama_german_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_german/ollama_german_dolphin-mixtral-8x7b-v2_7-q4_K_M.json
+[00:38:15] Parsing completed.
+[00:38:15] Total time: 0:00:34.205830
+[00:38:15] Results shapes:
+[00:38:15] (7200, 26), (7200, 26), (17992, 31)
+[00:38:15] Valid flags:
+[00:38:15] valid_flag
+unchanged    7149
+invalid        51
+Name: count, dtype: int64
+[00:38:15] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: deepseek-r1-32b-qwen-distill-q4_K_M
+[00:37:41] language: spanish
+
+[00:37:41] ollama_spanish_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_deepseek-r1-32b-qwen-distill-q4_K_M.json
+[00:38:15] Parsing completed.
+[00:38:15] Total time: 0:00:34.475287
+[00:38:15] Results shapes:
+[00:38:15] (7200, 26), (7200, 26), (23440, 31)
+[00:38:15] Valid flags:
+[00:38:15] valid_flag
+unchanged    7165
+invalid        34
+cleaned         1
+Name: count, dtype: int64
+[00:38:15] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: dolphin-mixtral-8x7b-v2_7-q4_K_M
+[00:37:41] language: english
+
+[00:37:41] ollama_english_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_english/ollama_english_dolphin-mixtral-8x7b-v2_7-q4_K_M.json
+[00:38:16] Parsing completed.
+[00:38:16] Total time: 0:00:34.832995
+[00:38:16] Results shapes:
+[00:38:16] (7200, 26), (7200, 26), (28770, 31)
+[00:38:16] Valid flags:
+[00:38:16] valid_flag
+unchanged    6968
+invalid       228
+cleaned         4
+Name: count, dtype: int64
+[00:38:16] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: deepseek-r1-8b-0528-qwen3-q4_K_M
+[00:37:41] language: spanish
+
+[00:37:41] ollama_spanish_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_deepseek-r1-8b-0528-qwen3-q4_K_M.json
+[00:38:16] Parsing completed.
+[00:38:16] Total time: 0:00:35.302764
+[00:38:16] Results shapes:
+[00:38:16] (7200, 26), (7200, 26), (12671, 31)
+[00:38:16] Valid flags:
+[00:38:16] valid_flag
+unchanged     6135
+invalid        957
+fixed_dict      70
+cleaned         38
+Name: count, dtype: int64
+[00:38:16] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: deepseek-r1-32b-qwen-distill-q4_K_M
+[00:37:41] language: english
+
+[00:37:41] ollama_english_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_english/ollama_english_deepseek-r1-32b-qwen-distill-q4_K_M.json
+[00:38:16] Parsing completed.
+[00:38:16] Total time: 0:00:35.535099
+[00:38:16] Results shapes:
+[00:38:16] (7200, 26), (7200, 26), (22257, 31)
+[00:38:16] Valid flags:
+[00:38:16] valid_flag
+unchanged    7139
+invalid        52
+cleaned         9
+Name: count, dtype: int64
+[00:38:16] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: deepseek-r1-70b-llama-distill-q4_K_M
+[00:37:41] language: english
+
+[00:37:41] ollama_english_: 1
+[00:37:41] Processing file: ../../results/responses/results_ollama_english/ollama_english_deepseek-r1-70b-llama-distill-q4_K_M.json
+[00:38:17] Parsing completed.
+[00:38:17] Total time: 0:00:35.711086
+[00:38:17] Results shapes:
+[00:38:17] (7200, 26), (7200, 26), (20673, 31)
+[00:38:17] Valid flags:
+[00:38:17] valid_flag
+unchanged    7123
+invalid        77
+Name: count, dtype: int64
+[00:38:17] Done!
+[00:37:41] Arguments:
+[00:37:41] results_dir: ../../results
+[00:37:41] output_dir: ../../results/summary_parallel
+[00:37:41] model: dolphin-phi-2_7b-v2_6-q4_K_M
+[00:37:41] language: english
+
+[00:37:41] ollama_english_: 1
+[00:37:42] Processing file: ../../results/responses/results_ollama_english/ollama_english_dolphin-phi-2_7b-v2_6-q4_K_M.json
+[00:38:17] Parsing completed.
+[00:38:17] Total time: 0:00:35.829853
+[00:38:17] Results shapes:
+[00:38:17] (7200, 26), (7200, 26), (13428, 31)
+[00:38:17] Valid flags:
+[00:38:17] valid_flag
+unchanged     6510
+invalid        630
+fixed_dict      60
+Name: count, dtype: int64
+[00:38:17] Done!
+[00:38:06] Arguments:
+[00:38:06] results_dir: ../../results
+[00:38:06] output_dir: ../../results/summary_parallel
+[00:38:06] model: dolphin-phi-2_7b-v2_6-q4_K_M
+[00:38:06] language: german
+
+[00:38:06] ollama_german_: 1
+[00:38:06] Processing file: ../../results/responses/results_ollama_german/ollama_german_dolphin-phi-2_7b-v2_6-q4_K_M.json
+[00:38:37] Parsing completed.
+[00:38:37] Total time: 0:00:31.346168
+[00:38:37] Results shapes:
+[00:38:37] (7200, 26), (7200, 26), (7645, 31)
+[00:38:37] Valid flags:
+[00:38:37] valid_flag
+unchanged     6353
+invalid        724
+fixed_dict      69
+cleaned         54
+Name: count, dtype: int64
+[00:38:37] Done!
+[00:38:06] Arguments:
+[00:38:06] results_dir: ../../results
+[00:38:06] output_dir: ../../results/summary_parallel
+[00:38:06] model: falcon3-10b-instruct-q4_K_M
+[00:38:06] language: english
+
+[00:38:06] ollama_english_: 1
+[00:38:06] Processing file: ../../results/responses/results_ollama_english/ollama_english_falcon3-10b-instruct-q4_K_M.json
+[00:38:38] Parsing completed.
+[00:38:38] Total time: 0:00:31.671845
+[00:38:38] Results shapes:
+[00:38:38] (7200, 26), (7200, 26), (34591, 31)
+[00:38:38] Valid flags:
+[00:38:38] valid_flag
+unchanged    7195
+invalid         4
+cleaned         1
+Name: count, dtype: int64
+[00:38:38] Done!
+[00:38:11] Arguments:
+[00:38:11] results_dir: ../../results
+[00:38:11] output_dir: ../../results/summary_parallel
+[00:38:11] model: falcon3-10b-instruct-q4_K_M
+[00:38:11] language: german
+
+[00:38:11] ollama_german_: 1
+[00:38:11] Processing file: ../../results/responses/results_ollama_german/ollama_german_falcon3-10b-instruct-q4_K_M.json
+[00:38:43] Parsing completed.
+[00:38:43] Total time: 0:00:32.298919
+[00:38:43] Results shapes:
+[00:38:43] (7200, 26), (7200, 26), (32770, 31)
+[00:38:43] Valid flags:
+[00:38:43] valid_flag
+unchanged    7197
+invalid         2
+cleaned         1
+Name: count, dtype: int64
+[00:38:43] Done!
+[00:38:14] Arguments:
+[00:38:14] results_dir: ../../results
+[00:38:14] output_dir: ../../results/summary_parallel
+[00:38:14] model: falcon3-7b-instruct-q4_K_M
+[00:38:14] language: german
+
+[00:38:14] ollama_german_: 1
+[00:38:14] Processing file: ../../results/responses/results_ollama_german/ollama_german_falcon3-7b-instruct-q4_K_M.json
+[00:38:43] Parsing completed.
+[00:38:43] Total time: 0:00:29.357426
+[00:38:43] Results shapes:
+[00:38:43] (7200, 26), (7200, 26), (7338, 31)
+[00:38:43] Valid flags:
+[00:38:43] valid_flag
+unchanged    6775
+invalid       422
+cleaned         3
+Name: count, dtype: int64
+[00:38:43] Done!
+[00:38:13] Arguments:
+[00:38:13] results_dir: ../../results
+[00:38:13] output_dir: ../../results/summary_parallel
+[00:38:13] model: falcon3-7b-instruct-q4_K_M
+[00:38:13] language: spanish
+
+[00:38:13] ollama_spanish_: 1
+[00:38:14] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_falcon3-7b-instruct-q4_K_M.json
+[00:38:46] Parsing completed.
+[00:38:46] Total time: 0:00:33.094490
+[00:38:46] Results shapes:
+[00:38:46] (7200, 26), (7200, 26), (27227, 31)
+[00:38:46] Valid flags:
+[00:38:46] valid_flag
+unchanged     6639
+invalid        559
+fixed_dict       1
+cleaned          1
+Name: count, dtype: int64
+[00:38:46] Done!
+[00:38:11] Arguments:
+[00:38:11] results_dir: ../../results
+[00:38:11] output_dir: ../../results/summary_parallel
+[00:38:11] model: falcon3-7b-instruct-q4_K_M
+[00:38:11] language: english
+
+[00:38:11] ollama_english_: 1
+[00:38:11] Processing file: ../../results/responses/results_ollama_english/ollama_english_falcon3-7b-instruct-q4_K_M.json
+[00:38:47] Parsing completed.
+[00:38:47] Total time: 0:00:35.405858
+[00:38:47] Results shapes:
+[00:38:47] (7200, 26), (7200, 26), (34513, 31)
+[00:38:47] Valid flags:
+[00:38:47] valid_flag
+unchanged     7024
+invalid        170
+cleaned          3
+fixed_dict       3
+Name: count, dtype: int64
+[00:38:47] Done!
+[00:38:15] Arguments:
+[00:38:15] results_dir: ../../results
+[00:38:15] output_dir: ../../results/summary_parallel
+[00:38:15] model: gemma3-27b-it-q4_K_M
+[00:38:15] language: english
+
+[00:38:15] ollama_english_: 1
+[00:38:15] Processing file: ../../results/responses/results_ollama_english/ollama_english_gemma3-27b-it-q4_K_M.json
+[00:38:47] Parsing completed.
+[00:38:47] Total time: 0:00:32.388911
+[00:38:47] Results shapes:
+[00:38:47] (7200, 26), (7200, 26), (22919, 31)
+[00:38:47] Valid flags:
+[00:38:47] valid_flag
+unchanged    7197
+invalid         2
+cleaned         1
+Name: count, dtype: int64
+[00:38:47] Done!
+[00:38:15] Arguments:
+[00:38:15] results_dir: ../../results
+[00:38:15] output_dir: ../../results/summary_parallel
+[00:38:15] model: gemma3-27b-it-q4_K_M
+[00:38:15] language: spanish
+
+[00:38:15] ollama_spanish_: 1
+[00:38:16] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_gemma3-27b-it-q4_K_M.json
+[00:38:48] Parsing completed.
+[00:38:48] Total time: 0:00:32.323756
+[00:38:48] Results shapes:
+[00:38:48] (7200, 26), (7200, 26), (23138, 31)
+[00:38:48] Valid flags:
+[00:38:48] valid_flag
+unchanged    7194
+invalid         6
+Name: count, dtype: int64
+[00:38:48] Done!
+[00:38:09] Arguments:
+[00:38:09] results_dir: ../../results
+[00:38:09] output_dir: ../../results/summary_parallel
+[00:38:09] model: falcon3-10b-instruct-q4_K_M
+[00:38:09] language: spanish
+
+[00:38:09] ollama_spanish_: 1
+[00:38:09] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_falcon3-10b-instruct-q4_K_M.json
+[00:38:48] Parsing completed.
+[00:38:48] Total time: 0:00:38.600842
+[00:38:48] Results shapes:
+[00:38:48] (7200, 26), (7200, 26), (38415, 31)
+[00:38:48] Valid flags:
+[00:38:48] valid_flag
+unchanged     7196
+invalid          3
+fixed_dict       1
+Name: count, dtype: int64
+[00:38:48] Done!
+[00:38:15] Arguments:
+[00:38:15] results_dir: ../../results
+[00:38:15] output_dir: ../../results/summary_parallel
+[00:38:15] model: gemma3-27b-it-q4_K_M
+[00:38:15] language: german
+
+[00:38:15] ollama_german_: 1
+[00:38:16] Processing file: ../../results/responses/results_ollama_german/ollama_german_gemma3-27b-it-q4_K_M.json
+[00:38:48] Parsing completed.
+[00:38:48] Total time: 0:00:32.782609
+[00:38:48] Results shapes:
+[00:38:48] (7200, 26), (7200, 26), (21798, 31)
+[00:38:48] Valid flags:
+[00:38:48] valid_flag
+unchanged     7198
+invalid          1
+fixed_dict       1
+Name: count, dtype: int64
+[00:38:48] Done!
+[00:38:15] Arguments:
+[00:38:15] results_dir: ../../results
+[00:38:15] output_dir: ../../results/summary_parallel
+[00:38:15] model: gemma3-4b-it-q4_K_M
+[00:38:15] language: spanish
+
+[00:38:15] ollama_spanish_: 1
+[00:38:16] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_gemma3-4b-it-q4_K_M.json
+[00:38:50] Parsing completed.
+[00:38:50] Total time: 0:00:34.799982
+[00:38:50] Results shapes:
+[00:38:50] (7200, 26), (7200, 26), (35213, 31)
+[00:38:50] Valid flags:
+[00:38:50] valid_flag
+unchanged     7022
+invalid        167
+fixed_dict       7
+cleaned          4
+Name: count, dtype: int64
+[00:38:50] Done!
+[00:38:15] Arguments:
+[00:38:15] results_dir: ../../results
+[00:38:15] output_dir: ../../results/summary_parallel
+[00:38:15] model: gemma3-4b-it-q4_K_M
+[00:38:15] language: english
+
+[00:38:15] ollama_english_: 1
+[00:38:16] Processing file: ../../results/responses/results_ollama_english/ollama_english_gemma3-4b-it-q4_K_M.json
+[00:38:51] Parsing completed.
+[00:38:51] Total time: 0:00:35.163061
+[00:38:51] Results shapes:
+[00:38:51] (7200, 26), (7200, 26), (33275, 31)
+[00:38:51] Valid flags:
+[00:38:51] valid_flag
+unchanged     7087
+invalid         98
+cleaned         11
+fixed_dict       4
+Name: count, dtype: int64
+[00:38:51] Done!
+[00:38:16] Arguments:
+[00:38:16] results_dir: ../../results
+[00:38:16] output_dir: ../../results/summary_parallel
+[00:38:16] model: gemma3-4b-it-q4_K_M
+[00:38:16] language: german
+
+[00:38:16] ollama_german_: 1
+[00:38:16] Processing file: ../../results/responses/results_ollama_german/ollama_german_gemma3-4b-it-q4_K_M.json
+[00:38:51] Parsing completed.
+[00:38:52] Total time: 0:00:35.910206
+[00:38:52] Results shapes:
+[00:38:52] (7200, 26), (7200, 26), (18553, 31)
+[00:38:52] Valid flags:
+[00:38:52] valid_flag
+unchanged     7105
+invalid         85
+fixed_dict       6
+cleaned          4
+Name: count, dtype: int64
+[00:38:52] Done!
+[00:38:16] Arguments:
+[00:38:16] results_dir: ../../results
+[00:38:16] output_dir: ../../results/summary_parallel
+[00:38:16] model: gemma3n-e4b-it-q4_K_M
+[00:38:16] language: spanish
+
+[00:38:16] ollama_spanish_: 1
+[00:38:17] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_gemma3n-e4b-it-q4_K_M.json
+[00:38:52] Parsing completed.
+[00:38:52] Total time: 0:00:36.134165
+[00:38:52] Results shapes:
+[00:38:52] (7200, 26), (7200, 26), (28411, 31)
+[00:38:52] Valid flags:
+[00:38:52] valid_flag
+unchanged     7157
+fixed_dict      21
+invalid         20
+cleaned          2
+Name: count, dtype: int64
+[00:38:52] Done!
+[00:38:16] Arguments:
+[00:38:16] results_dir: ../../results
+[00:38:16] output_dir: ../../results/summary_parallel
+[00:38:16] model: gemma3n-e4b-it-q4_K_M
+[00:38:16] language: english
+
+[00:38:16] ollama_english_: 1
+[00:38:16] Processing file: ../../results/responses/results_ollama_english/ollama_english_gemma3n-e4b-it-q4_K_M.json
+[00:38:52] Parsing completed.
+[00:38:52] Total time: 0:00:36.422352
+[00:38:52] Results shapes:
+[00:38:52] (7200, 26), (7200, 26), (36144, 31)
+[00:38:52] Valid flags:
+[00:38:52] valid_flag
+unchanged     6998
+fixed_dict     133
+invalid         69
+Name: count, dtype: int64
+[00:38:52] Done!
+[00:38:16] Arguments:
+[00:38:16] results_dir: ../../results
+[00:38:16] output_dir: ../../results/summary_parallel
+[00:38:16] model: gemma3n-e4b-it-q4_K_M
+[00:38:16] language: german
+
+[00:38:16] ollama_german_: 1
+[00:38:17] Processing file: ../../results/responses/results_ollama_german/ollama_german_gemma3n-e4b-it-q4_K_M.json
+[00:38:54] Parsing completed.
+[00:38:54] Total time: 0:00:37.607051
+[00:38:54] Results shapes:
+[00:38:54] (7200, 26), (7200, 26), (38127, 31)
+[00:38:54] Valid flags:
+[00:38:54] valid_flag
+unchanged     7151
+invalid         26
+fixed_dict      20
+cleaned          3
+Name: count, dtype: int64
+[00:38:54] Done!
+[00:38:17] Arguments:
+[00:38:17] results_dir: ../../results
+[00:38:17] output_dir: ../../results/summary_parallel
+[00:38:17] model: gpt-oss-120b
+[00:38:17] language: spanish
+
+[00:38:17] ollama_spanish_: 1
+[00:38:18] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_gpt-oss-120b.json
+[00:38:54] Parsing completed.
+[00:38:54] Total time: 0:00:37.040090
+[00:38:54] Results shapes:
+[00:38:54] (7200, 26), (7200, 26), (35545, 31)
+[00:38:54] Valid flags:
+[00:38:54] valid_flag
+unchanged    6875
+cleaned       172
+invalid       153
+Name: count, dtype: int64
+[00:38:54] Done!
+[00:38:17] Arguments:
+[00:38:17] results_dir: ../../results
+[00:38:17] output_dir: ../../results/summary_parallel
+[00:38:17] model: gpt-oss-120b
+[00:38:17] language: english
+
+[00:38:17] ollama_english_: 1
+[00:38:17] Processing file: ../../results/responses/results_ollama_english/ollama_english_gpt-oss-120b.json
+[00:38:56] Parsing completed.
+[00:38:56] Total time: 0:00:39.661003
+[00:38:56] Results shapes:
+[00:38:56] (7200, 26), (7200, 26), (34652, 31)
+[00:38:56] Valid flags:
+[00:38:56] valid_flag
+unchanged    6881
+invalid       282
+cleaned        37
+Name: count, dtype: int64
+[00:38:56] Done!
+[00:38:17] Arguments:
+[00:38:17] results_dir: ../../results
+[00:38:17] output_dir: ../../results/summary_parallel
+[00:38:17] model: gpt-oss-120b
+[00:38:17] language: german
+
+[00:38:17] ollama_german_: 1
+[00:38:18] Processing file: ../../results/responses/results_ollama_german/ollama_german_gpt-oss-120b.json
+[00:38:59] Parsing completed.
+[00:38:59] Total time: 0:00:41.911040
+[00:38:59] Results shapes:
+[00:38:59] (7200, 26), (7200, 26), (36680, 31)
+[00:38:59] Valid flags:
+[00:38:59] valid_flag
+unchanged    6706
+invalid       260
+cleaned       234
+Name: count, dtype: int64
+[00:38:59] Done!
+[00:38:18] Arguments:
+[00:38:18] results_dir: ../../results
+[00:38:18] output_dir: ../../results/summary_parallel
+[00:38:18] model: gpt-oss-20b
+[00:38:18] language: english
+
+[00:38:18] ollama_english_: 1
+[00:38:19] Processing file: ../../results/responses/results_ollama_english/ollama_english_gpt-oss-20b.json
+[00:39:03] Parsing completed.
+[00:39:03] Total time: 0:00:45.810445
+[00:39:03] Results shapes:
+[00:39:03] (7200, 26), (7200, 26), (21464, 31)
+[00:39:03] Valid flags:
+[00:39:03] valid_flag
+unchanged     4486
+invalid       2701
+cleaned          7
+fixed_dict       6
+Name: count, dtype: int64
+[00:39:03] Done!
+[00:38:44] Arguments:
+[00:38:44] results_dir: ../../results
+[00:38:44] output_dir: ../../results/summary_parallel
+[00:38:44] model: llama3_2-3b-instruct-q4_K_M
+[00:38:44] language: english
+
+[00:38:44] ollama_english_: 1
+[00:38:44] Processing file: ../../results/responses/results_ollama_english/ollama_english_llama3_2-3b-instruct-q4_K_M.json
+Traceback (most recent call last):
+  File "/code/espinl/LLMScholar-Personas/code/scripts/batch_parse_results.py", line 273, in <module>
+    main()
+  File "/code/espinl/LLMScholar-Personas/code/scripts/batch_parse_results.py", line 254, in main
+    df_results, df_summary, df_recommendations = parse(args.results_dir, args.output_dir, args.model, args.language)
+                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/code/espinl/LLMScholar-Personas/code/scripts/batch_parse_results.py", line 229, in parse
+    ios.to_csv(df_recommendations, ios.path_join(output_dir, f'recommendations{postfix}.csv'))
+  File "/code/espinl/LLMScholar-Personas/code/libs/utils/ios.py", line 62, in to_csv
+    df.to_csv(p, index=False, **kwargs)
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/util/_decorators.py", line 333, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/core/generic.py", line 3967, in to_csv
+    return DataFrameRenderer(formatter).to_csv(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/io/formats/format.py", line 1014, in to_csv
+    csv_formatter.save()
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/io/formats/csvs.py", line 270, in save
+    self._save()
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/io/formats/csvs.py", line 275, in _save
+    self._save_body()
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/io/formats/csvs.py", line 313, in _save_body
+    self._save_chunk(start_i, end_i)
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/io/formats/csvs.py", line 324, in _save_chunk
+    libwriters.write_csv_rows(
+  File "writers.pyx", line 73, in pandas._libs.writers.write_csv_rows
+UnicodeEncodeError: 'utf-8' codec can't encode character '\udf16' in position 655: surrogates not allowed
+[00:38:48] Arguments:
+[00:38:48] results_dir: ../../results
+[00:38:48] output_dir: ../../results/summary_parallel
+[00:38:48] model: llama3_3-70b-instruct-q4_K_M
+[00:38:48] language: spanish
+
+[00:38:48] ollama_spanish_: 1
+[00:38:48] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_llama3_3-70b-instruct-q4_K_M.json
+[00:39:11] Parsing completed.
+[00:39:11] Total time: 0:00:23.350274
+[00:39:11] Results shapes:
+[00:39:11] (7200, 26), (7200, 26), (7966, 31)
+[00:39:11] Valid flags:
+[00:39:11] valid_flag
+unchanged    7200
+Name: count, dtype: int64
+[00:39:11] Done!
+[00:38:44] Arguments:
+[00:38:44] results_dir: ../../results
+[00:38:44] output_dir: ../../results/summary_parallel
+[00:38:44] model: llama3_2-3b-instruct-q4_K_M
+[00:38:44] language: spanish
+
+[00:38:44] ollama_spanish_: 1
+[00:38:45] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_llama3_2-3b-instruct-q4_K_M.json
+[00:39:11] Parsing completed.
+[00:39:11] Total time: 0:00:26.962746
+[00:39:11] Results shapes:
+[00:39:11] (7200, 26), (7200, 26), (33996, 31)
+[00:39:11] Valid flags:
+[00:39:11] valid_flag
+unchanged    7142
+invalid        29
+cleaned        29
+Name: count, dtype: int64
+[00:39:11] Done!
+[00:38:48] Arguments:
+[00:38:48] results_dir: ../../results
+[00:38:48] output_dir: ../../results/summary_parallel
+[00:38:48] model: llama3_3-70b-instruct-q4_K_M
+[00:38:48] language: german
+
+[00:38:48] ollama_german_: 1
+[00:38:49] Processing file: ../../results/responses/results_ollama_german/ollama_german_llama3_3-70b-instruct-q4_K_M.json
+[00:39:13] Parsing completed.
+[00:39:13] Total time: 0:00:24.761748
+[00:39:13] Results shapes:
+[00:39:13] (7200, 26), (7200, 26), (27307, 31)
+[00:39:13] Valid flags:
+[00:39:13] valid_flag
+unchanged    7200
+Name: count, dtype: int64
+[00:39:13] Done!
+[00:38:47] Arguments:
+[00:38:47] results_dir: ../../results
+[00:38:47] output_dir: ../../results/summary_parallel
+[00:38:47] model: llama3_2-3b-instruct-q4_K_M
+[00:38:47] language: german
+
+[00:38:47] ollama_german_: 1
+[00:38:48] Processing file: ../../results/responses/results_ollama_german/ollama_german_llama3_2-3b-instruct-q4_K_M.json
+[00:39:15] Parsing completed.
+[00:39:15] Total time: 0:00:27.722222
+[00:39:15] Results shapes:
+[00:39:15] (7200, 26), (7200, 26), (27619, 31)
+[00:39:15] Valid flags:
+[00:39:15] valid_flag
+unchanged     6975
+invalid        125
+cleaned         99
+fixed_dict       1
+Name: count, dtype: int64
+[00:39:15] Done!
+[00:38:49] Arguments:
+[00:38:49] results_dir: ../../results
+[00:38:49] output_dir: ../../results/summary_parallel
+[00:38:49] model: llama4-17b-maverick-128e-instruct-q4_K_M
+[00:38:49] language: english
+
+[00:38:49] ollama_english_: 1
+[00:38:49] Processing file: ../../results/responses/results_ollama_english/ollama_english_llama4-17b-maverick-128e-instruct-q4_K_M.json
+[00:39:17] Parsing completed.
+[00:39:17] Total time: 0:00:27.886535
+[00:39:17] Results shapes:
+[00:39:17] (7200, 26), (7200, 26), (21420, 31)
+[00:39:17] Valid flags:
+[00:39:17] valid_flag
+unchanged    7188
+invalid        12
+Name: count, dtype: int64
+[00:39:17] Done!
+[00:38:49] Arguments:
+[00:38:49] results_dir: ../../results
+[00:38:49] output_dir: ../../results/summary_parallel
+[00:38:49] model: llama4-17b-maverick-128e-instruct-q4_K_M
+[00:38:49] language: spanish
+
+[00:38:49] ollama_spanish_: 1
+[00:38:49] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_llama4-17b-maverick-128e-instruct-q4_K_M.json
+[00:39:17] Parsing completed.
+[00:39:17] Total time: 0:00:28.389705
+[00:39:17] Results shapes:
+[00:39:17] (7200, 26), (7200, 26), (7227, 31)
+[00:39:17] Valid flags:
+[00:39:17] valid_flag
+unchanged    7197
+invalid         3
+Name: count, dtype: int64
+[00:39:17] Done!
+[00:38:48] Arguments:
+[00:38:48] results_dir: ../../results
+[00:38:48] output_dir: ../../results/summary_parallel
+[00:38:48] model: llama3_3-70b-instruct-q4_K_M
+[00:38:48] language: english
+
+[00:38:48] ollama_english_: 1
+[00:38:48] Processing file: ../../results/responses/results_ollama_english/ollama_english_llama3_3-70b-instruct-q4_K_M.json
+[00:39:20] Parsing completed.
+[00:39:20] Total time: 0:00:32.072850
+[00:39:20] Results shapes:
+[00:39:20] (7200, 26), (7200, 26), (37108, 31)
+[00:39:20] Valid flags:
+[00:39:20] valid_flag
+unchanged    7199
+invalid         1
+Name: count, dtype: int64
+[00:39:20] Done!
+[00:38:57] Arguments:
+[00:38:57] results_dir: ../../results
+[00:38:57] output_dir: ../../results/summary_parallel
+[00:38:57] model: mistral-large-123b-instruct-2411-q4_K_M
+[00:38:57] language: english
+
+[00:38:57] ollama_english_: 1
+[00:38:57] Processing file: ../../results/responses/results_ollama_english/ollama_english_mistral-large-123b-instruct-2411-q4_K_M.json
+[00:39:22] Parsing completed.
+[00:39:22] Total time: 0:00:24.635600
+[00:39:22] Results shapes:
+[00:39:22] (7200, 26), (7200, 26), (13919, 31)
+[00:39:22] Valid flags:
+[00:39:22] valid_flag
+unchanged    7152
+invalid        48
+Name: count, dtype: int64
+[00:39:22] Done!
+[00:38:38] Arguments:
+[00:38:38] results_dir: ../../results
+[00:38:38] output_dir: ../../results/summary_parallel
+[00:38:38] model: gpt-oss-20b
+[00:38:38] language: spanish
+
+[00:38:38] ollama_spanish_: 1
+[00:38:39] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_gpt-oss-20b.json
+[00:39:22] Parsing completed.
+[00:39:22] Total time: 0:00:44.351205
+[00:39:22] Results shapes:
+[00:39:22] (7200, 26), (7200, 26), (25823, 31)
+[00:39:22] Valid flags:
+[00:39:22] valid_flag
+unchanged     4908
+invalid       2265
+cleaned         24
+fixed_dict       3
+Name: count, dtype: int64
+[00:39:22] Done!
+[00:38:39] Arguments:
+[00:38:39] results_dir: ../../results
+[00:38:39] output_dir: ../../results/summary_parallel
+[00:38:39] model: gpt-oss-20b
+[00:38:39] language: german
+
+[00:38:39] ollama_german_: 1
+[00:38:40] Processing file: ../../results/responses/results_ollama_german/ollama_german_gpt-oss-20b.json
+[00:39:23] Parsing completed.
+[00:39:23] Total time: 0:00:43.838914
+[00:39:23] Results shapes:
+[00:39:23] (7200, 26), (7200, 26), (27174, 31)
+[00:39:23] Valid flags:
+[00:39:23] valid_flag
+unchanged     5193
+invalid       1973
+cleaned         31
+fixed_dict       3
+Name: count, dtype: int64
+[00:39:23] Done!
+[00:38:51] Arguments:
+[00:38:51] results_dir: ../../results
+[00:38:51] output_dir: ../../results/summary_parallel
+[00:38:51] model: llama4-17b-maverick-128e-instruct-q4_K_M
+[00:38:51] language: german
+
+[00:38:51] ollama_german_: 1
+[00:38:51] Processing file: ../../results/responses/results_ollama_german/ollama_german_llama4-17b-maverick-128e-instruct-q4_K_M.json
+[00:39:24] Parsing completed.
+[00:39:24] Total time: 0:00:32.598890
+[00:39:24] Results shapes:
+[00:39:24] (7200, 26), (7200, 26), (17541, 31)
+[00:39:24] Valid flags:
+[00:39:24] valid_flag
+unchanged    7195
+invalid         5
+Name: count, dtype: int64
+[00:39:24] Done!
+[00:38:53] Arguments:
+[00:38:53] results_dir: ../../results
+[00:38:53] output_dir: ../../results/summary_parallel
+[00:38:53] model: mistral-7b-instruct-v0_3-q4_K_M
+[00:38:53] language: english
+
+[00:38:53] ollama_english_: 1
+[00:38:53] Processing file: ../../results/responses/results_ollama_english/ollama_english_mistral-7b-instruct-v0_3-q4_K_M.json
+[00:39:25] Parsing completed.
+[00:39:25] Total time: 0:00:31.524571
+[00:39:25] Results shapes:
+[00:39:25] (7200, 26), (7200, 26), (29136, 31)
+[00:39:25] Valid flags:
+[00:39:25] valid_flag
+unchanged     7172
+invalid         16
+cleaned         10
+fixed_dict       2
+Name: count, dtype: int64
+[00:39:25] Done!
+[00:38:52] Arguments:
+[00:38:52] results_dir: ../../results
+[00:38:52] output_dir: ../../results/summary_parallel
+[00:38:52] model: llama4-17b-scout-16e-instruct-q4_K_M
+[00:38:52] language: spanish
+
+[00:38:52] ollama_spanish_: 1
+[00:38:52] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_llama4-17b-scout-16e-instruct-q4_K_M.json
+[00:39:27] Parsing completed.
+[00:39:27] Total time: 0:00:34.674638
+[00:39:27] Results shapes:
+[00:39:27] (7200, 26), (7200, 26), (38891, 31)
+[00:39:27] Valid flags:
+[00:39:27] valid_flag
+unchanged     7193
+fixed_dict       4
+invalid          3
+Name: count, dtype: int64
+[00:39:27] Done!
+[00:39:00] Arguments:
+[00:39:00] results_dir: ../../results
+[00:39:00] output_dir: ../../results/summary_parallel
+[00:39:00] model: mistral-large-123b-instruct-2411-q4_K_M
+[00:39:00] language: spanish
+
+[00:39:00] ollama_spanish_: 1
+[00:39:00] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_mistral-large-123b-instruct-2411-q4_K_M.json
+[00:39:27] Parsing completed.
+[00:39:27] Total time: 0:00:26.871537
+[00:39:27] Results shapes:
+[00:39:27] (7200, 26), (7200, 26), (9690, 31)
+[00:39:27] Valid flags:
+[00:39:27] valid_flag
+unchanged    7140
+invalid        60
+Name: count, dtype: int64
+[00:39:27] Done!
+[00:39:04] Arguments:
+[00:39:04] results_dir: ../../results
+[00:39:04] output_dir: ../../results/summary_parallel
+[00:39:04] model: mistral-large-123b-instruct-2411-q4_K_M
+[00:39:04] language: german
+
+[00:39:04] ollama_german_: 1
+[00:39:05] Processing file: ../../results/responses/results_ollama_german/ollama_german_mistral-large-123b-instruct-2411-q4_K_M.json
+[00:39:27] Parsing completed.
+[00:39:27] Total time: 0:00:22.658579
+[00:39:27] Results shapes:
+[00:39:27] (7200, 26), (7200, 26), (8205, 31)
+[00:39:27] Valid flags:
+[00:39:27] valid_flag
+unchanged    4665
+invalid      2535
+Name: count, dtype: int64
+[00:39:27] Done!
+[00:38:53] Arguments:
+[00:38:53] results_dir: ../../results
+[00:38:53] output_dir: ../../results/summary_parallel
+[00:38:53] model: llama4-17b-scout-16e-instruct-q4_K_M
+[00:38:53] language: german
+
+[00:38:53] ollama_german_: 1
+[00:38:53] Processing file: ../../results/responses/results_ollama_german/ollama_german_llama4-17b-scout-16e-instruct-q4_K_M.json
+[00:39:28] Parsing completed.
+[00:39:28] Total time: 0:00:35.380478
+[00:39:28] Results shapes:
+[00:39:28] (7200, 26), (7200, 26), (39794, 31)
+[00:39:28] Valid flags:
+[00:39:28] valid_flag
+unchanged    7194
+invalid         5
+cleaned         1
+Name: count, dtype: int64
+[00:39:28] Done!
+[00:38:55] Arguments:
+[00:38:55] results_dir: ../../results
+[00:38:55] output_dir: ../../results/summary_parallel
+[00:38:55] model: mistral-7b-instruct-v0_3-q4_K_M
+[00:38:55] language: german
+
+[00:38:55] ollama_german_: 1
+[00:38:55] Processing file: ../../results/responses/results_ollama_german/ollama_german_mistral-7b-instruct-v0_3-q4_K_M.json
+[00:39:29] Parsing completed.
+[00:39:29] Total time: 0:00:33.676974
+[00:39:29] Results shapes:
+[00:39:29] (7200, 26), (7200, 26), (37033, 31)
+[00:39:29] Valid flags:
+[00:39:29] valid_flag
+unchanged     7183
+invalid         10
+cleaned          4
+fixed_dict       3
+Name: count, dtype: int64
+[00:39:29] Done!
+[00:38:55] Arguments:
+[00:38:55] results_dir: ../../results
+[00:38:55] output_dir: ../../results/summary_parallel
+[00:38:55] model: mistral-7b-instruct-v0_3-q4_K_M
+[00:38:55] language: spanish
+
+[00:38:55] ollama_spanish_: 1
+[00:38:55] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_mistral-7b-instruct-v0_3-q4_K_M.json
+[00:39:31] Parsing completed.
+[00:39:31] Total time: 0:00:36.148914
+[00:39:31] Results shapes:
+[00:39:31] (7200, 26), (7200, 26), (33055, 31)
+[00:39:31] Valid flags:
+[00:39:31] valid_flag
+unchanged    7192
+invalid         7
+cleaned         1
+Name: count, dtype: int64
+[00:39:31] Done!
+[00:38:52] Arguments:
+[00:38:52] results_dir: ../../results
+[00:38:52] output_dir: ../../results/summary_parallel
+[00:38:52] model: llama4-17b-scout-16e-instruct-q4_K_M
+[00:38:52] language: english
+
+[00:38:52] ollama_english_: 1
+[00:38:52] Processing file: ../../results/responses/results_ollama_english/ollama_english_llama4-17b-scout-16e-instruct-q4_K_M.json
+[00:39:32] Parsing completed.
+[00:39:32] Total time: 0:00:40.789803
+[00:39:32] Results shapes:
+[00:39:32] (7200, 26), (7200, 26), (43128, 31)
+[00:39:32] Valid flags:
+[00:39:32] valid_flag
+unchanged     7182
+invalid         17
+fixed_dict       1
+Name: count, dtype: int64
+[00:39:32] Done!
+[00:39:12] Arguments:
+[00:39:12] results_dir: ../../results
+[00:39:12] output_dir: ../../results/summary_parallel
+[00:39:12] model: mistral-nemo-12b-instruct-2407-q4_K_M
+[00:39:12] language: german
+
+[00:39:12] ollama_german_: 1
+[00:39:13] Processing file: ../../results/responses/results_ollama_german/ollama_german_mistral-nemo-12b-instruct-2407-q4_K_M.json
+[00:39:38] Parsing completed.
+[00:39:38] Total time: 0:00:25.911160
+[00:39:38] Results shapes:
+[00:39:38] (7200, 26), (7200, 26), (36406, 31)
+[00:39:38] Valid flags:
+[00:39:38] valid_flag
+unchanged    7178
+cleaned        17
+invalid         5
+Name: count, dtype: int64
+[00:39:38] Done!
+[00:39:12] Arguments:
+[00:39:12] results_dir: ../../results
+[00:39:12] output_dir: ../../results/summary_parallel
+[00:39:12] model: mistral-nemo-12b-instruct-2407-q4_K_M
+[00:39:12] language: english
+
+[00:39:12] ollama_english_: 1
+[00:39:13] Processing file: ../../results/responses/results_ollama_english/ollama_english_mistral-nemo-12b-instruct-2407-q4_K_M.json
+[00:39:39] Parsing completed.
+[00:39:39] Total time: 0:00:26.895526
+[00:39:39] Results shapes:
+[00:39:39] (7200, 26), (7200, 26), (34146, 31)
+[00:39:39] Valid flags:
+[00:39:39] valid_flag
+unchanged    7173
+cleaned        17
+invalid        10
+Name: count, dtype: int64
+[00:39:39] Done!
+[00:39:12] Arguments:
+[00:39:12] results_dir: ../../results
+[00:39:12] output_dir: ../../results/summary_parallel
+[00:39:12] model: mistral-nemo-12b-instruct-2407-q4_K_M
+[00:39:12] language: spanish
+
+[00:39:12] ollama_spanish_: 1
+[00:39:13] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_mistral-nemo-12b-instruct-2407-q4_K_M.json
+[00:39:40] Parsing completed.
+[00:39:40] Total time: 0:00:28.010024
+[00:39:40] Results shapes:
+[00:39:40] (7200, 26), (7200, 26), (26165, 31)
+[00:39:40] Valid flags:
+[00:39:40] valid_flag
+unchanged    7180
+invalid        11
+cleaned         9
+Name: count, dtype: int64
+[00:39:40] Done!
+[00:39:17] Arguments:
+[00:39:17] results_dir: ../../results
+[00:39:17] output_dir: ../../results/summary_parallel
+[00:39:17] model: mistral-small-22b-instruct-2409-q4_K_M
+[00:39:17] language: german
+
+[00:39:17] ollama_german_: 1
+[00:39:18] Processing file: ../../results/responses/results_ollama_german/ollama_german_mistral-small-22b-instruct-2409-q4_K_M.json
+[00:39:43] Parsing completed.
+[00:39:43] Total time: 0:00:25.280762
+[00:39:43] Results shapes:
+[00:39:43] (7200, 26), (7200, 26), (20453, 31)
+[00:39:43] Valid flags:
+[00:39:43] valid_flag
+unchanged    7193
+invalid         6
+cleaned         1
+Name: count, dtype: int64
+[00:39:43] Done!
+[00:39:14] Arguments:
+[00:39:14] results_dir: ../../results
+[00:39:14] output_dir: ../../results/summary_parallel
+[00:39:14] model: mistral-small-22b-instruct-2409-q4_K_M
+[00:39:14] language: english
+
+[00:39:14] ollama_english_: 1
+[00:39:14] Processing file: ../../results/responses/results_ollama_english/ollama_english_mistral-small-22b-instruct-2409-q4_K_M.json
+[00:39:46] Parsing completed.
+[00:39:46] Total time: 0:00:32.364294
+[00:39:46] Results shapes:
+[00:39:46] (7200, 26), (7200, 26), (23968, 31)
+[00:39:46] Valid flags:
+[00:39:46] valid_flag
+unchanged     7195
+invalid          2
+fixed_dict       2
+cleaned          1
+Name: count, dtype: int64
+[00:39:46] Done!
+[00:39:16] Arguments:
+[00:39:16] results_dir: ../../results
+[00:39:16] output_dir: ../../results/summary_parallel
+[00:39:16] model: mistral-small-22b-instruct-2409-q4_K_M
+[00:39:16] language: spanish
+
+[00:39:16] ollama_spanish_: 1
+[00:39:16] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_mistral-small-22b-instruct-2409-q4_K_M.json
+[00:39:48] Parsing completed.
+[00:39:48] Total time: 0:00:32.158355
+[00:39:48] Results shapes:
+[00:39:48] (7200, 26), (7200, 26), (12524, 31)
+[00:39:48] Valid flags:
+[00:39:48] valid_flag
+unchanged     7138
+invalid         58
+fixed_dict       3
+cleaned          1
+Name: count, dtype: int64
+[00:39:48] Done!
+[00:39:18] Arguments:
+[00:39:18] results_dir: ../../results
+[00:39:18] output_dir: ../../results/summary_parallel
+[00:39:18] model: mistral-small3_2-24b-instruct-2506-q4_K_M
+[00:39:18] language: english
+
+[00:39:18] ollama_english_: 1
+[00:39:18] Processing file: ../../results/responses/results_ollama_english/ollama_english_mistral-small3_2-24b-instruct-2506-q4_K_M.json
+[00:39:51] Parsing completed.
+[00:39:51] Total time: 0:00:32.722172
+[00:39:51] Results shapes:
+[00:39:51] (7200, 26), (7200, 26), (15119, 31)
+[00:39:51] Valid flags:
+[00:39:51] valid_flag
+unchanged    7186
+invalid        13
+cleaned         1
+Name: count, dtype: int64
+[00:39:51] Done!
+[00:39:24] Arguments:
+[00:39:24] results_dir: ../../results
+[00:39:24] output_dir: ../../results/summary_parallel
+[00:39:24] model: mixtral-8x22b-instruct-v0_1-q4_K_M
+[00:39:24] language: spanish
+
+[00:39:24] ollama_spanish_: 1
+[00:39:24] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_mixtral-8x22b-instruct-v0_1-q4_K_M.json
+[00:39:53] Parsing completed.
+[00:39:53] Total time: 0:00:29.289764
+[00:39:53] Results shapes:
+[00:39:53] (7200, 26), (7200, 26), (17558, 31)
+[00:39:53] Valid flags:
+[00:39:53] valid_flag
+unchanged    7197
+invalid         2
+cleaned         1
+Name: count, dtype: int64
+[00:39:53] Done!
+[00:39:20] Arguments:
+[00:39:20] results_dir: ../../results
+[00:39:20] output_dir: ../../results/summary_parallel
+[00:39:20] model: mistral-small3_2-24b-instruct-2506-q4_K_M
+[00:39:20] language: spanish
+
+[00:39:20] ollama_spanish_: 1
+[00:39:21] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_mistral-small3_2-24b-instruct-2506-q4_K_M.json
+[00:39:54] Parsing completed.
+[00:39:54] Total time: 0:00:33.202497
+[00:39:54] Results shapes:
+[00:39:54] (7200, 26), (7200, 26), (23554, 31)
+[00:39:54] Valid flags:
+[00:39:54] valid_flag
+unchanged    7195
+invalid         5
+Name: count, dtype: int64
+[00:39:54] Done!
+[00:39:28] Arguments:
+[00:39:28] results_dir: ../../results
+[00:39:28] output_dir: ../../results/summary_parallel
+[00:39:28] model: olmo2-13b-1124-instruct-q4_K_M
+[00:39:28] language: english
+
+[00:39:28] ollama_english_: 1
+[00:39:28] Processing file: ../../results/responses/results_ollama_english/ollama_english_olmo2-13b-1124-instruct-q4_K_M.json
+[00:39:54] Parsing completed.
+[00:39:54] Total time: 0:00:26.503419
+[00:39:54] Results shapes:
+[00:39:54] (7200, 26), (7200, 26), (7201, 31)
+[00:39:54] Valid flags:
+[00:39:54] valid_flag
+unchanged     7182
+cleaned         15
+invalid          2
+fixed_dict       1
+Name: count, dtype: int64
+[00:39:54] Done!
+[00:39:23] Arguments:
+[00:39:23] results_dir: ../../results
+[00:39:23] output_dir: ../../results/summary_parallel
+[00:39:23] model: mixtral-8x22b-instruct-v0_1-q4_K_M
+[00:39:23] language: english
+
+[00:39:23] ollama_english_: 1
+[00:39:23] Processing file: ../../results/responses/results_ollama_english/ollama_english_mixtral-8x22b-instruct-v0_1-q4_K_M.json
+[00:39:55] Parsing completed.
+[00:39:55] Total time: 0:00:32.279512
+[00:39:55] Results shapes:
+[00:39:55] (7200, 26), (7200, 26), (26961, 31)
+[00:39:55] Valid flags:
+[00:39:55] valid_flag
+unchanged    7193
+cleaned         4
+invalid         3
+Name: count, dtype: int64
+[00:39:55] Done!
+[00:39:23] Arguments:
+[00:39:23] results_dir: ../../results
+[00:39:23] output_dir: ../../results/summary_parallel
+[00:39:23] model: mistral-small3_2-24b-instruct-2506-q4_K_M
+[00:39:23] language: german
+
+[00:39:23] ollama_german_: 1
+[00:39:23] Processing file: ../../results/responses/results_ollama_german/ollama_german_mistral-small3_2-24b-instruct-2506-q4_K_M.json
+[00:39:57] Parsing completed.
+[00:39:57] Total time: 0:00:34.475456
+[00:39:57] Results shapes:
+[00:39:57] (7200, 26), (7200, 26), (16487, 31)
+[00:39:57] Valid flags:
+[00:39:57] valid_flag
+unchanged    7191
+invalid         9
+Name: count, dtype: int64
+[00:39:57] Done!
+[00:39:26] Arguments:
+[00:39:26] results_dir: ../../results
+[00:39:26] output_dir: ../../results/summary_parallel
+[00:39:26] model: mixtral-8x7b-instruct-v0_1-q4_K_M
+[00:39:26] language: english
+
+[00:39:26] ollama_english_: 1
+[00:39:26] Processing file: ../../results/responses/results_ollama_english/ollama_english_mixtral-8x7b-instruct-v0_1-q4_K_M.json
+[00:39:58] Parsing completed.
+[00:39:58] Total time: 0:00:32.536981
+[00:39:58] Results shapes:
+[00:39:58] (7200, 26), (7200, 26), (29939, 31)
+[00:39:58] Valid flags:
+[00:39:58] valid_flag
+unchanged     7153
+invalid         35
+cleaned          6
+fixed_dict       6
+Name: count, dtype: int64
+[00:39:58] Done!
+[00:39:25] Arguments:
+[00:39:25] results_dir: ../../results
+[00:39:25] output_dir: ../../results/summary_parallel
+[00:39:25] model: mixtral-8x22b-instruct-v0_1-q4_K_M
+[00:39:25] language: german
+
+[00:39:25] ollama_german_: 1
+[00:39:25] Processing file: ../../results/responses/results_ollama_german/ollama_german_mixtral-8x22b-instruct-v0_1-q4_K_M.json
+[00:40:00] Parsing completed.
+[00:40:00] Total time: 0:00:35.061927
+[00:40:00] Results shapes:
+[00:40:00] (7200, 26), (7200, 26), (29980, 31)
+[00:40:00] Valid flags:
+[00:40:00] valid_flag
+unchanged    7193
+cleaned         4
+invalid         3
+Name: count, dtype: int64
+[00:40:00] Done!
+[00:39:30] Arguments:
+[00:39:30] results_dir: ../../results
+[00:39:30] output_dir: ../../results/summary_parallel
+[00:39:30] model: olmo2-13b-1124-instruct-q4_K_M
+[00:39:30] language: spanish
+
+[00:39:30] ollama_spanish_: 1
+[00:39:30] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_olmo2-13b-1124-instruct-q4_K_M.json
+[00:40:00] Parsing completed.
+[00:40:00] Total time: 0:00:30.855886
+[00:40:00] Results shapes:
+[00:40:00] (7200, 26), (7200, 26), (12181, 31)
+[00:40:00] Valid flags:
+[00:40:00] valid_flag
+unchanged     7187
+invalid          7
+cleaned          3
+fixed_dict       3
+Name: count, dtype: int64
+[00:40:00] Done!
+[00:39:32] Arguments:
+[00:39:32] results_dir: ../../results
+[00:39:32] output_dir: ../../results/summary_parallel
+[00:39:32] model: olmo2-7b-1124-instruct-q4_K_M
+[00:39:32] language: english
+
+[00:39:32] ollama_english_: 1
+[00:39:32] Processing file: ../../results/responses/results_ollama_english/ollama_english_olmo2-7b-1124-instruct-q4_K_M.json
+[00:40:01] Parsing completed.
+[00:40:01] Total time: 0:00:29.450744
+[00:40:01] Results shapes:
+[00:40:01] (7200, 26), (7200, 26), (15394, 31)
+[00:40:01] Valid flags:
+[00:40:01] valid_flag
+unchanged    7089
+invalid        72
+cleaned        39
+Name: count, dtype: int64
+[00:40:01] Done!
+[00:39:28] Arguments:
+[00:39:28] results_dir: ../../results
+[00:39:28] output_dir: ../../results/summary_parallel
+[00:39:28] model: mixtral-8x7b-instruct-v0_1-q4_K_M
+[00:39:28] language: spanish
+
+[00:39:28] ollama_spanish_: 1
+[00:39:28] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_mixtral-8x7b-instruct-v0_1-q4_K_M.json
+[00:40:03] Parsing completed.
+[00:40:03] Total time: 0:00:35.045242
+[00:40:03] Results shapes:
+[00:40:03] (7200, 26), (7200, 26), (20477, 31)
+[00:40:03] Valid flags:
+[00:40:03] valid_flag
+unchanged     7105
+invalid         75
+fixed_dict      11
+cleaned          9
+Name: count, dtype: int64
+[00:40:03] Done!
+[00:39:28] Arguments:
+[00:39:28] results_dir: ../../results
+[00:39:28] output_dir: ../../results/summary_parallel
+[00:39:28] model: mixtral-8x7b-instruct-v0_1-q4_K_M
+[00:39:28] language: german
+
+[00:39:28] ollama_german_: 1
+[00:39:28] Processing file: ../../results/responses/results_ollama_german/ollama_german_mixtral-8x7b-instruct-v0_1-q4_K_M.json
+[00:40:03] Parsing completed.
+[00:40:03] Total time: 0:00:34.978849
+[00:40:03] Results shapes:
+[00:40:03] (7200, 26), (7200, 26), (34844, 31)
+[00:40:03] Valid flags:
+[00:40:03] valid_flag
+unchanged     7109
+invalid         76
+fixed_dict       8
+cleaned          7
+Name: count, dtype: int64
+[00:40:03] Done!
+[00:39:33] Arguments:
+[00:39:33] results_dir: ../../results
+[00:39:33] output_dir: ../../results/summary_parallel
+[00:39:33] model: olmo2-7b-1124-instruct-q4_K_M
+[00:39:33] language: spanish
+
+[00:39:33] ollama_spanish_: 1
+[00:39:33] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_olmo2-7b-1124-instruct-q4_K_M.json
+[00:40:06] Parsing completed.
+[00:40:06] Total time: 0:00:32.565288
+[00:40:06] Results shapes:
+[00:40:06] (7200, 26), (7200, 26), (20558, 31)
+[00:40:06] Valid flags:
+[00:40:06] valid_flag
+unchanged     7112
+invalid         69
+cleaned         18
+fixed_dict       1
+Name: count, dtype: int64
+[00:40:06] Done!
+[00:39:30] Arguments:
+[00:39:30] results_dir: ../../results
+[00:39:30] output_dir: ../../results/summary_parallel
+[00:39:30] model: olmo2-13b-1124-instruct-q4_K_M
+[00:39:30] language: german
+
+[00:39:30] ollama_german_: 1
+[00:39:30] Processing file: ../../results/responses/results_ollama_german/ollama_german_olmo2-13b-1124-instruct-q4_K_M.json
+[00:40:06] Parsing completed.
+[00:40:06] Total time: 0:00:36.631462
+[00:40:06] Results shapes:
+[00:40:06] (7200, 26), (7200, 26), (22837, 31)
+[00:40:06] Valid flags:
+[00:40:06] valid_flag
+unchanged     7175
+invalid         13
+cleaned         10
+fixed_dict       2
+Name: count, dtype: int64
+[00:40:06] Done!
+[00:39:39] Arguments:
+[00:39:39] results_dir: ../../results
+[00:39:39] output_dir: ../../results/summary_parallel
+[00:39:39] model: olmo2-7b-1124-instruct-q4_K_M
+[00:39:39] language: german
+
+[00:39:39] ollama_german_: 1
+[00:39:39] Processing file: ../../results/responses/results_ollama_german/ollama_german_olmo2-7b-1124-instruct-q4_K_M.json
+[00:40:11] Parsing completed.
+[00:40:11] Total time: 0:00:31.557307
+[00:40:11] Results shapes:
+[00:40:11] (7200, 26), (7200, 26), (21501, 31)
+[00:40:11] Valid flags:
+[00:40:11] valid_flag
+unchanged     6985
+invalid        152
+cleaned         60
+fixed_dict       3
+Name: count, dtype: int64
+[00:40:11] Done!
+[00:39:40] Arguments:
+[00:39:40] results_dir: ../../results
+[00:39:40] output_dir: ../../results/summary_parallel
+[00:39:40] model: phi4-14b-q4_K_M
+[00:39:40] language: english
+
+[00:39:40] ollama_english_: 1
+[00:39:40] Processing file: ../../results/responses/results_ollama_english/ollama_english_phi4-14b-q4_K_M.json
+[00:40:11] Parsing completed.
+[00:40:11] Total time: 0:00:30.708193
+[00:40:11] Results shapes:
+[00:40:11] (7200, 26), (7200, 26), (29950, 31)
+[00:40:11] Valid flags:
+[00:40:11] valid_flag
+unchanged    7193
+cleaned         7
+Name: count, dtype: int64
+[00:40:11] Done!
+[00:39:41] Arguments:
+[00:39:41] results_dir: ../../results
+[00:39:41] output_dir: ../../results/summary_parallel
+[00:39:41] model: phi4-14b-q4_K_M
+[00:39:41] language: spanish
+
+[00:39:41] ollama_spanish_: 1
+[00:39:41] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_phi4-14b-q4_K_M.json
+[00:40:12] Parsing completed.
+[00:40:12] Total time: 0:00:30.329107
+[00:40:12] Results shapes:
+[00:40:12] (7200, 26), (7200, 26), (29591, 31)
+[00:40:12] Valid flags:
+[00:40:12] valid_flag
+unchanged    7199
+invalid         1
+Name: count, dtype: int64
+[00:40:12] Done!
+[00:39:56] Arguments:
+[00:39:56] results_dir: ../../results
+[00:39:56] output_dir: ../../results/summary_parallel
+[00:39:56] model: qwen3-235b-a22b-instruct-2507-q4_K_M
+[00:39:56] language: english
+
+[00:39:56] ollama_english_: 1
+[00:39:56] Processing file: ../../results/responses/results_ollama_english/ollama_english_qwen3-235b-a22b-instruct-2507-q4_K_M.json
+[00:40:19] Parsing completed.
+[00:40:19] Total time: 0:00:22.234376
+[00:40:19] Results shapes:
+[00:40:19] (7200, 26), (7200, 26), (7200, 31)
+[00:40:19] Valid flags:
+[00:40:19] valid_flag
+invalid      7152
+unchanged      48
+Name: count, dtype: int64
+[00:40:19] Done!
+[00:39:44] Arguments:
+[00:39:44] results_dir: ../../results
+[00:39:44] output_dir: ../../results/summary_parallel
+[00:39:44] model: phi4-14b-q4_K_M
+[00:39:44] language: german
+
+[00:39:44] ollama_german_: 1
+[00:39:44] Processing file: ../../results/responses/results_ollama_german/ollama_german_phi4-14b-q4_K_M.json
+[00:40:19] Parsing completed.
+[00:40:19] Total time: 0:00:34.676122
+[00:40:19] Results shapes:
+[00:40:19] (7200, 26), (7200, 26), (35883, 31)
+[00:40:19] Valid flags:
+[00:40:19] valid_flag
+unchanged    7199
+cleaned         1
+Name: count, dtype: int64
+[00:40:19] Done!
+[00:39:47] Arguments:
+[00:39:47] results_dir: ../../results
+[00:39:47] output_dir: ../../results/summary_parallel
+[00:39:47] model: phi4-mini-3_8b-q4_K_M
+[00:39:47] language: english
+
+[00:39:48] ollama_english_: 1
+[00:39:48] Processing file: ../../results/responses/results_ollama_english/ollama_english_phi4-mini-3_8b-q4_K_M.json
+[00:40:22] Parsing completed.
+[00:40:22] Total time: 0:00:34.718278
+[00:40:22] Results shapes:
+[00:40:22] (7200, 26), (7200, 26), (18756, 31)
+[00:40:22] Valid flags:
+[00:40:22] valid_flag
+unchanged     6046
+invalid       1122
+fixed_dict      17
+cleaned         15
+Name: count, dtype: int64
+[00:40:22] Done!
+[00:39:59] Arguments:
+[00:39:59] results_dir: ../../results
+[00:39:59] output_dir: ../../results/summary_parallel
+[00:39:59] model: qwen3-235b-a22b-instruct-2507-q4_K_M
+[00:39:59] language: german
+
+[00:39:59] ollama_german_: 1
+[00:39:59] Processing file: ../../results/responses/results_ollama_german/ollama_german_qwen3-235b-a22b-instruct-2507-q4_K_M.json
+[00:40:24] Parsing completed.
+[00:40:24] Total time: 0:00:24.744239
+[00:40:24] Results shapes:
+[00:40:24] (7200, 26), (7200, 26), (7200, 31)
+[00:40:24] Valid flags:
+[00:40:24] valid_flag
+invalid    7200
+Name: count, dtype: int64
+[00:40:24] Done!
+[00:39:49] Arguments:
+[00:39:49] results_dir: ../../results
+[00:39:49] output_dir: ../../results/summary_parallel
+[00:39:49] model: phi4-mini-3_8b-q4_K_M
+[00:39:49] language: spanish
+
+[00:39:49] ollama_spanish_: 1
+[00:39:50] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_phi4-mini-3_8b-q4_K_M.json
+[00:40:25] Parsing completed.
+[00:40:25] Total time: 0:00:35.400442
+[00:40:25] Results shapes:
+[00:40:25] (7200, 26), (7200, 26), (21627, 31)
+[00:40:25] Valid flags:
+[00:40:25] valid_flag
+unchanged     4387
+invalid       2790
+cleaned         12
+fixed_dict      11
+Name: count, dtype: int64
+[00:40:25] Done!
+[00:39:54] Arguments:
+[00:39:54] results_dir: ../../results
+[00:39:54] output_dir: ../../results/summary_parallel
+[00:39:54] model: phi4-reasoning-14b-q4_K_M
+[00:39:54] language: english
+
+[00:39:54] ollama_english_: 1
+[00:39:54] Processing file: ../../results/responses/results_ollama_english/ollama_english_phi4-reasoning-14b-q4_K_M.json
+[00:40:25] Parsing completed.
+[00:40:25] Total time: 0:00:31.123850
+[00:40:25] Results shapes:
+[00:40:25] (7200, 26), (7200, 26), (17377, 31)
+[00:40:25] Valid flags:
+[00:40:25] valid_flag
+unchanged    6049
+invalid      1086
+cleaned        65
+Name: count, dtype: int64
+[00:40:25] Done!
+[00:39:58] Arguments:
+[00:39:58] results_dir: ../../results
+[00:39:58] output_dir: ../../results/summary_parallel
+[00:39:58] model: qwen3-235b-a22b-instruct-2507-q4_K_M
+[00:39:58] language: spanish
+
+[00:39:58] ollama_spanish_: 1
+[00:39:58] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_qwen3-235b-a22b-instruct-2507-q4_K_M.json
+[00:40:26] Parsing completed.
+[00:40:26] Total time: 0:00:28.363705
+[00:40:26] Results shapes:
+[00:40:26] (7200, 26), (7200, 26), (16453, 31)
+[00:40:26] Valid flags:
+[00:40:26] valid_flag
+unchanged    4840
+invalid      2360
+Name: count, dtype: int64
+[00:40:26] Done!
+[00:39:55] Arguments:
+[00:39:55] results_dir: ../../results
+[00:39:55] output_dir: ../../results/summary_parallel
+[00:39:55] model: phi4-reasoning-14b-q4_K_M
+[00:39:55] language: german
+
+[00:39:55] ollama_german_: 1
+[00:39:55] Processing file: ../../results/responses/results_ollama_german/ollama_german_phi4-reasoning-14b-q4_K_M.json
+[00:40:27] Parsing completed.
+[00:40:27] Total time: 0:00:32.408900
+[00:40:27] Results shapes:
+[00:40:27] (7200, 26), (7200, 26), (23608, 31)
+[00:40:27] Valid flags:
+[00:40:27] valid_flag
+unchanged    6699
+invalid       437
+cleaned        64
+Name: count, dtype: int64
+[00:40:27] Done!
+[00:39:52] Arguments:
+[00:39:52] results_dir: ../../results
+[00:39:52] output_dir: ../../results/summary_parallel
+[00:39:52] model: phi4-mini-3_8b-q4_K_M
+[00:39:52] language: german
+
+[00:39:52] ollama_german_: 1
+[00:39:52] Processing file: ../../results/responses/results_ollama_german/ollama_german_phi4-mini-3_8b-q4_K_M.json
+[00:40:28] Parsing completed.
+[00:40:28] Total time: 0:00:35.866851
+[00:40:28] Results shapes:
+[00:40:28] (7200, 26), (7200, 26), (24437, 31)
+[00:40:28] Valid flags:
+[00:40:28] valid_flag
+unchanged     6131
+invalid        931
+fixed_dict      86
+cleaned         52
+Name: count, dtype: int64
+[00:40:28] Done!
+[00:39:55] Arguments:
+[00:39:55] results_dir: ../../results
+[00:39:55] output_dir: ../../results/summary_parallel
+[00:39:55] model: phi4-reasoning-14b-q4_K_M
+[00:39:55] language: spanish
+
+[00:39:55] ollama_spanish_: 1
+[00:39:55] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_phi4-reasoning-14b-q4_K_M.json
+[00:40:31] Parsing completed.
+[00:40:31] Total time: 0:00:36.357616
+[00:40:31] Results shapes:
+[00:40:31] (7200, 26), (7200, 26), (30367, 31)
+[00:40:31] Valid flags:
+[00:40:31] valid_flag
+unchanged    6934
+invalid       255
+cleaned        11
+Name: count, dtype: int64
+[00:40:31] Done!
+[00:40:32] Arguments:
+[00:40:32] results_dir: ../../results
+[00:40:32] output_dir: ../../results/summary_parallel
+[00:40:32] model: gemini-2_5-flash-lite
+[00:40:32] language: spanish
+
+[00:40:32] No results found.
+[00:40:32] Parsing completed.
+[00:40:32] Total time: 0:00:00.002995
+[00:40:32] Done!
+[00:40:33] Arguments:
+[00:40:33] results_dir: ../../results
+[00:40:33] output_dir: ../../results/summary_parallel
+[00:40:33] model: gemini-2_5-flash-lite
+[00:40:33] language: german
+
+[00:40:33] No results found.
+[00:40:33] Parsing completed.
+[00:40:33] Total time: 0:00:00.002626
+[00:40:33] Done!
+[00:40:07] Arguments:
+[00:40:07] results_dir: ../../results
+[00:40:07] output_dir: ../../results/summary_parallel
+[00:40:07] model: qwq-32b-q4_K_M
+[00:40:07] language: english
+
+[00:40:07] ollama_english_: 1
+[00:40:07] Processing file: ../../results/responses/results_ollama_english/ollama_english_qwq-32b-q4_K_M.json
+[00:40:34] Parsing completed.
+[00:40:34] Total time: 0:00:26.803351
+[00:40:34] Results shapes:
+[00:40:34] (7200, 26), (7200, 26), (7200, 31)
+[00:40:34] Valid flags:
+[00:40:34] valid_flag
+invalid      7026
+unchanged     169
+cleaned         5
+Name: count, dtype: int64
+[00:40:34] Done!
+[00:40:02] Arguments:
+[00:40:02] results_dir: ../../results
+[00:40:02] output_dir: ../../results/summary_parallel
+[00:40:02] model: qwen3-32b-q4_K_M
+[00:40:02] language: german
+
+[00:40:02] ollama_german_: 1
+[00:40:02] Processing file: ../../results/responses/results_ollama_german/ollama_german_qwen3-32b-q4_K_M.json
+[00:40:36] Parsing completed.
+[00:40:36] Total time: 0:00:34.109711
+[00:40:36] Results shapes:
+[00:40:36] (7200, 26), (7200, 26), (8479, 31)
+[00:40:36] Valid flags:
+[00:40:36] valid_flag
+unchanged    7007
+invalid       191
+cleaned         2
+Name: count, dtype: int64
+[00:40:36] Done!
+[00:40:01] Arguments:
+[00:40:01] results_dir: ../../results
+[00:40:01] output_dir: ../../results/summary_parallel
+[00:40:01] model: qwen3-32b-q4_K_M
+[00:40:01] language: english
+
+[00:40:01] ollama_english_: 1
+[00:40:01] Processing file: ../../results/responses/results_ollama_english/ollama_english_qwen3-32b-q4_K_M.json
+[00:40:38] Parsing completed.
+[00:40:38] Total time: 0:00:37.382866
+[00:40:38] Results shapes:
+[00:40:38] (7200, 26), (7200, 26), (10184, 31)
+[00:40:38] Valid flags:
+[00:40:38] valid_flag
+unchanged    7008
+invalid       192
+Name: count, dtype: int64
+[00:40:38] Done!
+[00:40:12] Arguments:
+[00:40:12] results_dir: ../../results
+[00:40:12] output_dir: ../../results/summary_parallel
+[00:40:12] model: qwq-32b-q4_K_M
+[00:40:12] language: spanish
+
+[00:40:12] ollama_spanish_: 1
+[00:40:12] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_qwq-32b-q4_K_M.json
+[00:40:40] Parsing completed.
+[00:40:40] Total time: 0:00:28.019149
+[00:40:40] Results shapes:
+[00:40:40] (7200, 26), (7200, 26), (7200, 31)
+[00:40:40] Valid flags:
+[00:40:40] valid_flag
+invalid      5277
+unchanged    1922
+cleaned         1
+Name: count, dtype: int64
+[00:40:40] Done!
+[00:40:07] Arguments:
+[00:40:07] results_dir: ../../results
+[00:40:07] output_dir: ../../results/summary_parallel
+[00:40:07] model: qwen3-8b-q4_K_M
+[00:40:07] language: german
+
+[00:40:07] ollama_german_: 1
+[00:40:07] Processing file: ../../results/responses/results_ollama_german/ollama_german_qwen3-8b-q4_K_M.json
+[00:40:41] Parsing completed.
+[00:40:41] Total time: 0:00:34.108915
+[00:40:41] Results shapes:
+[00:40:41] (7200, 26), (7200, 26), (30590, 31)
+[00:40:41] Valid flags:
+[00:40:41] valid_flag
+unchanged    6795
+invalid       345
+cleaned        60
+Name: count, dtype: int64
+[00:40:41] Done!
+[00:40:01] Arguments:
+[00:40:01] results_dir: ../../results
+[00:40:01] output_dir: ../../results/summary_parallel
+[00:40:01] model: qwen3-32b-q4_K_M
+[00:40:01] language: spanish
+
+[00:40:01] ollama_spanish_: 1
+[00:40:02] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_qwen3-32b-q4_K_M.json
+[00:40:41] Parsing completed.
+[00:40:41] Total time: 0:00:39.621499
+[00:40:41] Results shapes:
+[00:40:41] (7200, 26), (7200, 26), (22933, 31)
+[00:40:41] Valid flags:
+[00:40:41] valid_flag
+unchanged     7041
+invalid        154
+cleaned          4
+fixed_dict       1
+Name: count, dtype: int64
+[00:40:41] Done!
+[00:40:12] Arguments:
+[00:40:12] results_dir: ../../results
+[00:40:12] output_dir: ../../results/summary_parallel
+[00:40:12] model: qwq-32b-q4_K_M
+[00:40:12] language: german
+
+[00:40:12] ollama_german_: 1
+[00:40:12] Processing file: ../../results/responses/results_ollama_german/ollama_german_qwq-32b-q4_K_M.json
+[00:40:42] Parsing completed.
+[00:40:42] Total time: 0:00:29.991338
+[00:40:42] Results shapes:
+[00:40:42] (7200, 26), (7200, 26), (7204, 31)
+[00:40:42] Valid flags:
+[00:40:42] valid_flag
+invalid      6685
+unchanged     515
+Name: count, dtype: int64
+[00:40:42] Done!
+[00:40:04] Arguments:
+[00:40:04] results_dir: ../../results
+[00:40:04] output_dir: ../../results/summary_parallel
+[00:40:04] model: qwen3-8b-q4_K_M
+[00:40:04] language: english
+
+[00:40:04] ollama_english_: 1
+[00:40:04] Processing file: ../../results/responses/results_ollama_english/ollama_english_qwen3-8b-q4_K_M.json
+[00:40:42] Parsing completed.
+[00:40:42] Total time: 0:00:38.232126
+[00:40:42] Results shapes:
+[00:40:42] (7200, 26), (7200, 26), (33711, 31)
+[00:40:42] Valid flags:
+[00:40:42] valid_flag
+unchanged    6969
+invalid       224
+cleaned         7
+Name: count, dtype: int64
+[00:40:42] Done!
+[00:40:04] Arguments:
+[00:40:04] results_dir: ../../results
+[00:40:04] output_dir: ../../results/summary_parallel
+[00:40:04] model: qwen3-8b-q4_K_M
+[00:40:04] language: spanish
+
+[00:40:04] ollama_spanish_: 1
+[00:40:04] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_qwen3-8b-q4_K_M.json
+[00:40:42] Parsing completed.
+[00:40:42] Total time: 0:00:38.303003
+[00:40:42] Results shapes:
+[00:40:42] (7200, 26), (7200, 26), (35659, 31)
+[00:40:42] Valid flags:
+[00:40:42] valid_flag
+unchanged     7050
+invalid        124
+cleaned         23
+fixed_dict       3
+Name: count, dtype: int64
+[00:40:42] Done!
+[00:40:13] Arguments:
+[00:40:13] results_dir: ../../results
+[00:40:13] output_dir: ../../results/summary_parallel
+[00:40:13] model: smollm2-1_7b-instruct-q4_K_M
+[00:40:13] language: english
+
+[00:40:13] ollama_english_: 1
+[00:40:13] Processing file: ../../results/responses/results_ollama_english/ollama_english_smollm2-1_7b-instruct-q4_K_M.json
+[00:40:44] Parsing completed.
+[00:40:44] Total time: 0:00:31.631128
+[00:40:44] Results shapes:
+[00:40:44] (7200, 26), (7200, 26), (23855, 31)
+[00:40:44] Valid flags:
+[00:40:44] valid_flag
+unchanged     6590
+invalid        556
+fixed_dict      31
+cleaned         23
+Name: count, dtype: int64
+[00:40:44] Done!
+[00:40:23] Arguments:
+[00:40:23] results_dir: ../../results
+[00:40:23] output_dir: ../../results/summary_parallel
+[00:40:23] model: yi-34b-chat-v1_5-q4_K_M
+[00:40:23] language: english
+
+[00:40:23] ollama_english_: 1
+[00:40:24] Processing file: ../../results/responses/results_ollama_english/ollama_english_yi-34b-chat-v1_5-q4_K_M.json
+[00:40:48] Parsing completed.
+[00:40:48] Total time: 0:00:24.143662
+[00:40:48] Results shapes:
+[00:40:48] (7200, 26), (7200, 26), (8719, 31)
+[00:40:48] Valid flags:
+[00:40:48] valid_flag
+unchanged     7086
+invalid        105
+cleaned          8
+fixed_dict       1
+Name: count, dtype: int64
+[00:40:48] Done!
+[00:40:19] Arguments:
+[00:40:19] results_dir: ../../results
+[00:40:19] output_dir: ../../results/summary_parallel
+[00:40:19] model: smollm2-1_7b-instruct-q4_K_M
+[00:40:19] language: spanish
+
+[00:40:19] ollama_spanish_: 1
+[00:40:20] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_smollm2-1_7b-instruct-q4_K_M.json
+[00:40:48] Parsing completed.
+[00:40:48] Total time: 0:00:28.956126
+[00:40:48] Results shapes:
+[00:40:48] (7200, 26), (7200, 26), (30666, 31)
+[00:40:48] Valid flags:
+[00:40:48] valid_flag
+unchanged     6208
+invalid        950
+fixed_dict      42
+Name: count, dtype: int64
+[00:40:48] Done!
+[00:40:20] Arguments:
+[00:40:20] results_dir: ../../results
+[00:40:20] output_dir: ../../results/summary_parallel
+[00:40:20] model: smollm2-1_7b-instruct-q4_K_M
+[00:40:20] language: german
+
+[00:40:20] ollama_german_: 1
+[00:40:20] Processing file: ../../results/responses/results_ollama_german/ollama_german_smollm2-1_7b-instruct-q4_K_M.json
+[00:40:49] Parsing completed.
+[00:40:49] Total time: 0:00:29.444117
+[00:40:49] Results shapes:
+[00:40:49] (7200, 26), (7200, 26), (33245, 31)
+[00:40:49] Valid flags:
+[00:40:49] valid_flag
+unchanged     6382
+invalid        747
+fixed_dict      55
+cleaned         16
+Name: count, dtype: int64
+[00:40:49] Done!
+[00:40:26] Arguments:
+[00:40:26] results_dir: ../../results
+[00:40:26] output_dir: ../../results/summary_parallel
+[00:40:26] model: yi-34b-chat-v1_5-q4_K_M
+[00:40:26] language: german
+
+[00:40:26] ollama_german_: 1
+[00:40:26] Processing file: ../../results/responses/results_ollama_german/ollama_german_yi-34b-chat-v1_5-q4_K_M.json
+[00:40:50] Parsing completed.
+[00:40:50] Total time: 0:00:24.380988
+[00:40:50] Results shapes:
+[00:40:50] (7200, 26), (7200, 26), (8077, 31)
+[00:40:50] Valid flags:
+[00:40:50] valid_flag
+unchanged     6504
+invalid        675
+fixed_dict      13
+cleaned          8
+Name: count, dtype: int64
+[00:40:50] Done!
+[00:40:27] Arguments:
+[00:40:27] results_dir: ../../results
+[00:40:27] output_dir: ../../results/summary_parallel
+[00:40:27] model: yi-9b-chat-v1_5-q4_K_M
+[00:40:27] language: spanish
+
+[00:40:27] ollama_spanish_: 1
+[00:40:28] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_yi-9b-chat-v1_5-q4_K_M.json
+[00:40:50] Parsing completed.
+[00:40:50] Total time: 0:00:22.822893
+[00:40:50] Results shapes:
+[00:40:50] (7200, 26), (7200, 26), (7404, 31)
+[00:40:50] Valid flags:
+[00:40:50] valid_flag
+unchanged     7091
+invalid         84
+cleaned         15
+fixed_dict      10
+Name: count, dtype: int64
+[00:40:50] Done!
+[00:40:25] Arguments:
+[00:40:25] results_dir: ../../results
+[00:40:25] output_dir: ../../results/summary_parallel
+[00:40:25] model: yi-34b-chat-v1_5-q4_K_M
+[00:40:25] language: spanish
+
+[00:40:25] ollama_spanish_: 1
+[00:40:25] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_yi-34b-chat-v1_5-q4_K_M.json
+[00:40:50] Parsing completed.
+[00:40:50] Total time: 0:00:25.583614
+[00:40:50] Results shapes:
+[00:40:50] (7200, 26), (7200, 26), (22166, 31)
+[00:40:50] Valid flags:
+[00:40:50] valid_flag
+unchanged     6372
+invalid        804
+fixed_dict      13
+cleaned         11
+Name: count, dtype: int64
+[00:40:50] Done!
+[00:40:26] Arguments:
+[00:40:26] results_dir: ../../results
+[00:40:26] output_dir: ../../results/summary_parallel
+[00:40:26] model: yi-9b-chat-v1_5-q4_K_M
+[00:40:26] language: english
+
+[00:40:26] ollama_english_: 1
+[00:40:27] Processing file: ../../results/responses/results_ollama_english/ollama_english_yi-9b-chat-v1_5-q4_K_M.json
+[00:40:52] Parsing completed.
+[00:40:52] Total time: 0:00:25.631586
+[00:40:52] Results shapes:
+[00:40:52] (7200, 26), (7200, 26), (35740, 31)
+[00:40:52] Valid flags:
+[00:40:52] valid_flag
+unchanged     7038
+invalid        113
+cleaned         41
+fixed_dict       8
+Name: count, dtype: int64
+[00:40:52] Done!
+[00:40:29] Arguments:
+[00:40:29] results_dir: ../../results
+[00:40:29] output_dir: ../../results/summary_parallel
+[00:40:29] model: yi-9b-chat-v1_5-q4_K_M
+[00:40:29] language: german
+
+[00:40:29] ollama_german_: 1
+[00:40:29] Processing file: ../../results/responses/results_ollama_german/ollama_german_yi-9b-chat-v1_5-q4_K_M.json
+[00:40:52] Parsing completed.
+[00:40:52] Total time: 0:00:23.409937
+[00:40:52] Results shapes:
+[00:40:52] (7200, 26), (7200, 26), (26911, 31)
+[00:40:52] Valid flags:
+[00:40:52] valid_flag
+unchanged     6998
+invalid        140
+cleaned         34
+fixed_dict      28
+Name: count, dtype: int64
+[00:40:52] Done!
+[00:40:29] Arguments:
+[00:40:29] results_dir: ../../results
+[00:40:29] output_dir: ../../results/summary_parallel
+[00:40:29] model: gemini-2_5-flash-lite
+[00:40:29] language: english
+
+[00:40:29] gemini_english_: 1
+[00:40:29] Processing file: ../../results/responses/results_gemini_english/gemini_english_gemini-2_5-flash-lite.json
+[00:41:04] Parsing completed.
+[00:41:04] Total time: 0:00:35.145219
+[00:41:04] Results shapes:
+[00:41:04] (7200, 26), (7200, 26), (38306, 31)
+[00:41:04] Valid flags:
+[00:41:04] valid_flag
+unchanged    7140
+cleaned        45
+invalid        15
+Name: count, dtype: int64
+[00:41:04] Done!

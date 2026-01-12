@@ -1,0 +1,63 @@
+[23:50:09] Arguments:
+[23:50:09] results_dir: ../../results
+[23:50:09] output_dir: ../../results/summary_parallel
+[23:50:09] model: deepseek-r1-8b-0528-qwen3-q4_K_M
+[23:50:09] language: german
+
+[23:50:09] ollama_german_: 1
+[23:50:10] Processing file: ../../results/responses/results_ollama_german/ollama_german_deepseek-r1-8b-0528-qwen3-q4_K_M.json
+[23:50:22] Parsing completed.
+[23:50:22] Total time: 0:00:12.997750
+[23:50:22] Results shapes:
+[23:50:22] (7200, 27), (7200, 27), (7642, 32)
+[23:50:22] Valid flags:
+[23:50:22] valid_flag
+invalid       5965
+cleaned        605
+unchanged      393
+refused        203
+fixed_dict      34
+Name: count, dtype: int64
+[23:50:22] Done!
+[23:50:09] Arguments:
+[23:50:09] results_dir: ../../results
+[23:50:09] output_dir: ../../results/summary_parallel
+[23:50:09] model: deepseek-r1-8b-0528-qwen3-q4_K_M
+[23:50:09] language: english
+
+[23:50:09] ollama_english_: 1
+[23:50:09] Processing file: ../../results/responses/results_ollama_english/ollama_english_deepseek-r1-8b-0528-qwen3-q4_K_M.json
+[23:50:22] Parsing completed.
+[23:50:22] Total time: 0:00:13.064095
+[23:50:22] Results shapes:
+[23:50:22] (7200, 27), (7200, 27), (7992, 32)
+[23:50:22] Valid flags:
+[23:50:22] valid_flag
+invalid       4407
+unchanged     1425
+refused        795
+cleaned        497
+fixed_dict      76
+Name: count, dtype: int64
+[23:50:22] Done!
+[23:50:09] Arguments:
+[23:50:09] results_dir: ../../results
+[23:50:09] output_dir: ../../results/summary_parallel
+[23:50:09] model: deepseek-r1-8b-0528-qwen3-q4_K_M
+[23:50:09] language: spanish
+
+[23:50:09] ollama_spanish_: 1
+[23:50:10] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_deepseek-r1-8b-0528-qwen3-q4_K_M.json
+[23:50:23] Parsing completed.
+[23:50:23] Total time: 0:00:13.631419
+[23:50:23] Results shapes:
+[23:50:23] (7200, 27), (7200, 27), (7629, 32)
+[23:50:23] Valid flags:
+[23:50:23] valid_flag
+invalid       2675
+cleaned       2299
+unchanged     2140
+fixed_dict      70
+refused         16
+Name: count, dtype: int64
+[23:50:23] Done!

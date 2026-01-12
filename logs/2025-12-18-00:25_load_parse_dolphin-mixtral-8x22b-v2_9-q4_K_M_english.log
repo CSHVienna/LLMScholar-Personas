@@ -1,0 +1,18 @@
+[00:25:15] Arguments:
+[00:25:15] results_dir: ../../results
+[00:25:15] output_dir: ../../results/summary_parallel
+[00:25:15] model: dolphin-mixtral-8x22b-v2_9-q4_K_M
+[00:25:15] language: english
+
+[00:25:15] ollama_english_: 1
+[00:25:15] Processing file: ../../results/responses/results_ollama_english/ollama_english_dolphin-mixtral-8x22b-v2_9-q4_K_M.json
+[00:25:24] Parsing completed.
+[00:25:24] Total time: 0:00:09.513644
+[00:25:24] Results shapes:
+[00:25:24] (7200, 26), (7200, 26), (31425, 31)
+[00:25:24] Valid flags:
+[00:25:24] valid_flag
+unchanged    7195
+invalid         5
+Name: count, dtype: int64
+[00:25:24] Done!

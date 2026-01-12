@@ -36,3 +36,8 @@ smollm2-1_7b-instruct-q4_K_M
 yi-34b-chat-v1_5-q4_K_M
 yi-9b-chat-v1_5-q4_K_M
 gemini-2_5-flash-lite
+gemini-2_5-flash
+gemini-2_5-pro
+gpt-4_1-2025-04-14
+gpt-4_1-mini-2025-04-14
+gpt-4_1-nano-2025-04-14

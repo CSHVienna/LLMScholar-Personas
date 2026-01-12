@@ -42,19 +42,30 @@ def _parse_ollama(response, model=None, fn=None):
             error_message = content.get('error', None)
             content = None
             flag = cons.OUTPUT_INVALID
+            for kr in cons.REFUSAL_KEYWORDS:
+                if kr in error_message.lower():
+                    flag = cons.OUTPUT_REFUSED
+                    break
+            
         else:
             _content = None
             # candidates, students, profesors, data, juniorprofessors
-            for key_candidate in ['candidates', 'students', 'profesors', 'data', 'juniorprofessors', 'text']:
+            for key_candidate in ['candidates', 'students', 'profesors', 'data', 'juniorprofessors', 'text', 'message', 'result']:
                 if key_candidate in content:
                     _content = content.get(key_candidate, [{}])
                     break
-
+            
             if _content is None:
                 if 'name' in content:
                     _content = [content]
+            else:
+                for kr in cons.REFUSAL_KEYWORDS:
+                    if kr in _content.lower():
+                        flag = cons.OUTPUT_REFUSED
+                        error_message = _content
+                        break
 
-            content = _content
+            content = _content if flag not in [cons.OUTPUT_INVALID, cons.OUTPUT_REFUSED] else None
             
     except Exception as e:
 
@@ -67,6 +78,8 @@ def _parse_ollama(response, model=None, fn=None):
             flag = cons.OUTPUT_INVALID
             error_message = str(e)
 
+    reasoning_tokens = None
+
     obj = {'created_at': response.get('created_at', ''),
             'done': response.get('done', None),
             'done_reason': response.get('done_reason', None),
@@ -76,6 +89,7 @@ def _parse_ollama(response, model=None, fn=None):
             'prompt_eval_duration': response.get('prompt_eval_duration', None),
             'eval_count': response.get('eval_count', None),                         # how many output tokens
             'eval_duration': response.get('eval_duration', None),
+            'reasoning_tokens': reasoning_tokens,
             'response_role': response.get('message', {}).get('role', ''),
             'response_content': content,
             'response_thinking': response.get('message', {}).get('thinking', ''),
@@ -101,6 +115,7 @@ def _parse_gemini(response, model=None, fn=None, run_id=None):
         response_role = None
         error_message = response.get('error', {}).get('message', '')
         flag = cons.OUTPUT_INVALID
+        reasoning_tokens = None
         content = None
         
     else:
@@ -127,7 +142,8 @@ def _parse_gemini(response, model=None, fn=None, run_id=None):
         eval_count = response.get('response', {}).get('usageMetadata', {}).get('candidatesTokenCount', None)
         eval_duration = response.get('response', {}).get('eval_duration', None)
         response_role = response.get('response', {}).get('candidates',[{}])[0].get('content', {}).get('role', None)
-        
+        reasoning_tokens = response.get('response', {}).get('usageMetadata', {}).get('thoughtsTokenCount', None)
+
     obj = {'created_at': None,
             'done': None,
             'done_reason': done_reason,
@@ -137,6 +153,83 @@ def _parse_gemini(response, model=None, fn=None, run_id=None):
             'prompt_eval_duration': None,
             'eval_count': eval_count,      # The total count of tokens of the all candidate responses.
             'eval_duration': eval_duration,
+            'reasoning_tokens': reasoning_tokens,
+            'response_role': response_role,
+            'response_content': content,
+            'response_thinking': None,
+            'tool_name': None,
+            'tool_calls': None,
+            'error_message': error_message,
+            'valid_flag': flag
+            }
+
+    return obj
+
+
+def _parse_gpt(response, model=None, fn=None, run_id=None):
+
+    if 'error' in response and response.get('error', None) is not None:
+        done_reason = None
+        prompt_eval_count = None
+        eval_count = None
+        response_role = None
+        error_message = response.get('error', None)
+        flag = cons.OUTPUT_INVALID
+        content = None
+        
+    else:
+
+        message = response.get('response', {}).get('body',{}).get('choices', [{}])[0].get('message', {})
+        content = message.get('content', None)
+        refusal = message.get('refusal', None)
+        error_message = None
+        flag = None
+
+        if refusal is not None:
+            # sometimes, the key refusal contains a message indicating refusal
+            for rk in cons.REFUSAL_KEYWORDS:
+                if rk in refusal.lower():
+                    error_message = refusal
+                    content = None
+                    flag = cons.OUTPUT_REFUSED
+                    break
+            
+            if flag is None:
+                # other times, the key refusal contains the actual content
+                # so, in the next step we try to parse it as usual
+                content = refusal
+
+        if flag is None:
+            try:
+                content, flag = txtlib.clean_content(content)
+                content = txtlib.ast.literal_eval(content)
+                error_message = None
+            except Exception as e:
+                try:
+                    content, flag = _check_format(content, e)
+
+                except Exception as e:
+                    ios.printf(f"\n====================\n{model} {fn} {e} -{response.get('response', {}).get('responseId','')}- {response.get('key', '')} {run_id} \n >>>{content}<<<\n====================\n")
+                    content = None
+                    flag = cons.OUTPUT_INVALID
+                    error_message = str(e)
+
+        done_reason = response.get('response', {}).get('body',{}).get('choices', [{}])[0].get('finish_reason', {})
+        prompt_eval_count = response.get('response', {}).get('body',{}).get('usage', {}).get('prompt_tokens', None) # prompt tokens
+        eval_count = response.get('response', {}).get('body',{}).get('usage', {}).get('completion_tokens', None) # output tokens
+        response_role = response.get('response', {}).get('body',{}).get('choices', [{}])[0].get('message', {}).get('role', None)
+        reasoning_tokens = response.get('response', {}).get('body',{}).get('usage', {}).get('completion_tokens_details', {}).get('reasoning_tokens', None)
+
+    obj = {'created_at': None,
+            'done': None,
+            'done_reason': done_reason,
+            'total_duration': None,
+            'load_duration': None,
+            'prompt_eval_count': prompt_eval_count,   # The count of tokens in the prompt.
+            'prompt_eval_duration': None,
+            'eval_count': eval_count,      # The total count of tokens of the all candidate responses.
+            'eval_duration': None,
+            'reasoning_tokens': reasoning_tokens,
             'response_role': response_role,
             'response_content': content,
             'response_thinking': None,
@@ -154,7 +247,9 @@ def parse(results_dir, output_dir, model=None, language=None):
     '''
 
     languages = cons.LANGUAGES if language is None else [language]
-    sources = cons.LLM_SOURCES if model is None else [cons.SOURCE_GEMINI if 'gemini' in model.lower() else cons.SOURCE_OLLAMA]
+    sources = cons.LLM_SOURCES if model is None else [cons.SOURCE_GEMINI if 'gemini' in model.lower() 
+                                                      else cons.SOURCE_GPT if ('gpt' in model.lower() and 'gpt-oss' not in model.lower()) else 
+                                                      cons.SOURCE_OLLAMA]
 
     df_results = pd.DataFrame()
     df_summary = pd.DataFrame()
@@ -203,6 +298,10 @@ def parse(results_dir, output_dir, model=None, language=None):
                             elif source == cons.SOURCE_OLLAMA:
                                 _obj = _parse_ollama(response, model, _file)
 
+                            elif source == cons.SOURCE_GPT:
+                                _obj = _parse_gpt(response, model, _file, run_id)
+
+    
                             _obj_response = _main.copy()
                             _obj_response['run_id'] = run_id
                             _obj_response.update(_obj)       

@@ -1,0 +1,20 @@
+[00:47:35] Arguments:
+[00:47:35] results_dir: ../../results
+[00:47:35] output_dir: ../../results/summary_parallel
+[00:47:35] model: deepseek-r1-8b-0528-qwen3-q4_K_M
+[00:47:35] language: spanish
+
+[00:47:35] ollama_spanish_: 1
+[00:47:35] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_deepseek-r1-8b-0528-qwen3-q4_K_M.json
+[00:47:46] Parsing completed.
+[00:47:46] Total time: 0:00:10.663035
+[00:47:46] Results shapes:
+[00:47:46] (7200, 26), (7200, 26), (12671, 31)
+[00:47:46] Valid flags:
+[00:47:46] valid_flag
+unchanged     3082
+cleaned       3072
+invalid        976
+fixed_dict      70
+Name: count, dtype: int64
+[00:47:46] Done!

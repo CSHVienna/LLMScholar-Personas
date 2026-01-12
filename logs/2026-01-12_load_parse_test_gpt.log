@@ -1,0 +1,57 @@
+[23:46:55] Arguments:
+[23:46:55] results_dir: ../../results
+[23:46:55] output_dir: ../../results/summary_parallel
+[23:46:55] model: gpt-4_1-mini-2025-04-14
+[23:46:55] language: english
+
+[23:46:55] gpt_english_: 1
+[23:46:55] Processing file: ../../results/responses/results_gpt_english/gpt_english_gpt-4_1-mini-2025-04-14.json
+[23:47:30] Parsing completed.
+[23:47:30] Total time: 0:00:35.853648
+[23:47:30] Results shapes:
+[23:47:30] (7200, 27), (7200, 27), (9896, 32)
+[23:47:30] Valid flags:
+[23:47:30] valid_flag
+unchanged    5226
+cleaned      1689
+invalid       285
+Name: count, dtype: int64
+[23:47:30] Done!
+[23:46:55] Arguments:
+[23:46:55] results_dir: ../../results
+[23:46:55] output_dir: ../../results/summary_parallel
+[23:46:55] model: gpt-4_1-mini-2025-04-14
+[23:46:55] language: spanish
+
+[23:46:55] gpt_spanish_: 1
+[23:46:55] Processing file: ../../results/responses/results_gpt_spanish/gpt_spanish_gpt-4_1-mini-2025-04-14.json
+[23:47:31] Parsing completed.
+[23:47:31] Total time: 0:00:36.484474
+[23:47:31] Results shapes:
+[23:47:31] (7200, 27), (7200, 27), (8139, 32)
+[23:47:31] Valid flags:
+[23:47:31] valid_flag
+cleaned      4310
+unchanged    2866
+invalid        24
+Name: count, dtype: int64
+[23:47:31] Done!
+[23:46:55] Arguments:
+[23:46:55] results_dir: ../../results
+[23:46:55] output_dir: ../../results/summary_parallel
+[23:46:55] model: gpt-4_1-mini-2025-04-14
+[23:46:55] language: german
+
+[23:46:55] gpt_german_: 1
+[23:46:55] Processing file: ../../results/responses/results_gpt_german/gpt_german_gpt-4_1-mini-2025-04-14.json
+[23:47:31] Parsing completed.
+[23:47:31] Total time: 0:00:36.662501
+[23:47:31] Results shapes:
+[23:47:31] (7200, 27), (7200, 27), (11353, 32)
+[23:47:31] Valid flags:
+[23:47:31] valid_flag
+cleaned      6339
+invalid       625
+unchanged     236
+Name: count, dtype: int64
+[23:47:31] Done!

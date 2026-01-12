@@ -1,0 +1,36 @@
+[00:41:42] Arguments:
+[00:41:42] results_dir: ../../results
+[00:41:42] output_dir: ../../results/summary_parallel
+[00:41:42] model: deepseek-r1-8b-0528-qwen3-q4_K_M
+[00:41:42] language: spanish
+
+[00:41:42] ollama_spanish_: 1
+[00:41:43] Processing file: ../../results/responses/results_ollama_spanish/ollama_spanish_deepseek-r1-8b-0528-qwen3-q4_K_M.json
+Traceback (most recent call last):
+  File "/code/espinl/LLMScholar-Personas/code/scripts/batch_parse_results.py", line 273, in <module>
+    main()
+  File "/code/espinl/LLMScholar-Personas/code/scripts/batch_parse_results.py", line 254, in main
+    df_results, df_summary, df_recommendations = parse(args.results_dir, args.output_dir, args.model, args.language)
+                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/code/espinl/LLMScholar-Personas/code/scripts/batch_parse_results.py", line 221, in parse
+    ios.to_csv(df_summary, ios.path_join(output_dir, f'summary{postfix}.csv'))
+  File "/code/espinl/LLMScholar-Personas/code/libs/utils/ios.py", line 62, in to_csv
+    df.to_csv(p, index=False, **kwargs)
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/util/_decorators.py", line 333, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/core/generic.py", line 3967, in to_csv
+    return DataFrameRenderer(formatter).to_csv(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/io/formats/format.py", line 1014, in to_csv
+    csv_formatter.save()
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/io/formats/csvs.py", line 270, in save
+    self._save()
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/io/formats/csvs.py", line 275, in _save
+    self._save_body()
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/io/formats/csvs.py", line 313, in _save_body
+    self._save_chunk(start_i, end_i)
+  File "/home/espinl/.conda/envs/py311_llmscholar/lib/python3.11/site-packages/pandas/io/formats/csvs.py", line 324, in _save_chunk
+    libwriters.write_csv_rows(
+  File "writers.pyx", line 73, in pandas._libs.writers.write_csv_rows
+UnicodeEncodeError: 'utf-8' codec can't encode character '\udc04' in position 2869: surrogates not allowed
