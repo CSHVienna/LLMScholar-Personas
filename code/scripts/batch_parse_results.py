@@ -1,5 +1,6 @@
 # export PYTHONPATH="$PYTHONPATH:../libs"
 
+import re
 import argparse
 import pandas as pd
 
@@ -8,19 +9,117 @@ from utils import constants as cons
 from utils import text as txtlib
 
 
+# Patterns for placeholder values in name/lastname fields
+_PLACEHOLDER_RE = re.compile(
+    r'^(\[.*\]|name\s*\d*|last\s*name\s*\d*|first\s*name\s*\d*|'
+    r'candidate\s*\d*|professor\s*\d*|scholar\s*\d*|researcher\s*\d*|'
+    r'tbd|n/?a|placeholder|example\s*\d*)$',
+    re.IGNORECASE
+)
+# Short responses under this character count with no JSON structure are treated as refusals
+_SHORT_REFUSAL_THRESHOLD = 300
+
+# Keys that wrap the actual list of candidates in some responses
+_WRAPPER_KEYS = ['candidates', 'students', 'professors', 'profesors', 'data',
+                 'juniorprofessors', 'text', 'message', 'result']
+
+
+def _is_refusal_string(text):
+    '''Return True if the string looks like a refusal: keyword hit OR short non-empty text with no JSON structure.'''
+    if not isinstance(text, str) or len(text) == 0:
+        return False
+    lower = text.lower()
+    for kr in cons.REFUSAL_KEYWORDS:
+        if kr in lower:
+            return True
+    # Short plain text with no JSON markers → model explained why it cannot help
+    if len(text) < _SHORT_REFUSAL_THRESHOLD and '[' not in text and '{' not in text:
+        return True
+    return False
+
+
+def _has_placeholders(items):
+    '''Return True if the majority of items use placeholder or empty name/lastname values.'''
+    if not isinstance(items, list) or len(items) == 0:
+        return False
+    count = sum(
+        1 for item in items
+        if isinstance(item, dict) and (
+            not str(item.get('name', '')).strip() or
+            not str(item.get('lastname', '')).strip() or
+            _PLACEHOLDER_RE.match(str(item.get('name', '')).strip()) or
+            _PLACEHOLDER_RE.match(str(item.get('lastname', '')).strip())
+        )
+    )
+    return count > len(items) / 2
+
+
+def _post_process_content(content, flag):
+    '''
+    After ast.literal_eval succeeds, normalise the result:
+    - Extracts inner list from wrapper-key dicts (candidates/data/etc.)
+    - Detects error/refusal dicts
+    - Marks empty lists as invalid
+    - Marks lists full of placeholders as invalid
+    Returns (content, flag, error_message).
+    '''
+    error_message = None
+
+    if isinstance(content, dict):
+        # Explicit error key → invalid or refused
+        if 'error' in content:
+            error_message = content.get('error')
+            flag = cons.OUTPUT_REFUSED if _is_refusal_string(str(error_message)) else cons.OUTPUT_INVALID
+            return None, flag, error_message
+
+        # Extract from wrapper keys
+        _inner = None
+        for key in _WRAPPER_KEYS:
+            if key in content:
+                _inner = content[key]
+                break
+
+        if _inner is None:
+            if 'name' in content:
+                # Single candidate object returned as a dict
+                _inner = [content]
+            else:
+                # Skeleton without data
+                return None, cons.OUTPUT_INVALID, None
+
+        # Wrapper value is a string → refusal text or invalid
+        if isinstance(_inner, str):
+            if _is_refusal_string(_inner):
+                return None, cons.OUTPUT_REFUSED, _inner
+            return None, cons.OUTPUT_INVALID, _inner
+
+        content = _inner
+
+    # Empty list → invalid
+    if isinstance(content, list) and len(content) == 0:
+        return None, cons.OUTPUT_INVALID, None
+
+    # List full of placeholders → invalid (skeleton with no real data)
+    if isinstance(content, list) and _has_placeholders(content):
+        return None, cons.OUTPUT_INVALID, "content has placeholder values"
+
+    return content, flag, error_message
+
+
 def _check_format(content, e):
     '''
-    Fix format issues in the content (dictionary not closed, list not closed, etc)
+    Fix format issues in the content (list not closed, etc.).
+    For truncated lists, keeps already-complete objects (fixed_dict).
     '''
     flag = cons.OUTPUT_INVALID
     if "'[' was never closed" in str(e):
         content = txtlib.parse_valid_dicts(content)
         flag = cons.OUTPUT_FIXED_DICT
-        
+
         if len(content) == 0:
             content = None
             flag = cons.OUTPUT_INVALID
-            
+
     return content, flag
 
 
@@ -33,50 +132,46 @@ def _parse_ollama(response, model=None, fn=None):
     content = response.get('message', {}).get('content', {})
     error_message = None
 
+    if not content or (isinstance(content, str) and content.strip() == ''):
+        obj = {'created_at': response.get('created_at', ''),
+                'done': response.get('done', None),
+                'done_reason': response.get('done_reason', None),
+                'total_duration': response.get('responsetotal_duration_time', None),
+                'load_duration': response.get('load_duration', None),
+                'prompt_eval_count': response.get('prompt_eval_count', None),
+                'prompt_eval_duration': response.get('prompt_eval_duration', None),
+                'eval_count': response.get('eval_count', None),
+                'eval_duration': response.get('eval_duration', None),
+                'reasoning_tokens': None,
+                'response_role': response.get('message', {}).get('role', ''),
+                'response_content': None,
+                'response_thinking': response.get('message', {}).get('thinking', ''),
+                'tool_name': response.get('message', {}).get('tool_name', ''),
+                'tool_calls': response.get('message', {}).get('tool_calls', ''),
+                'error_message': None,
+                'valid_flag': cons.OUTPUT_EMPTY}
+        return obj
+
     try:
         content, flag = txtlib.clean_content(content)
         content = txtlib.ast.literal_eval(content)
-        error_message = None
+        content, flag, error_message = _post_process_content(content, flag)
 
-        if 'error' in content:
-            error_message = content.get('error', None)
-            content = None
-            flag = cons.OUTPUT_INVALID
-            for kr in cons.REFUSAL_KEYWORDS:
-                if kr in error_message.lower():
-                    flag = cons.OUTPUT_REFUSED
-                    break
-            
-        else:
-            _content = None
-            # candidates, students, profesors, data, juniorprofessors
-            for key_candidate in ['candidates', 'students', 'profesors', 'data', 'juniorprofessors', 'text', 'message', 'result']:
-                if key_candidate in content:
-                    _content = content.get(key_candidate, [{}])
-                    break
-            
-            if _content is None:
-                if 'name' in content:
-                    _content = [content]
-            else:
-                for kr in cons.REFUSAL_KEYWORDS:
-                    if kr in _content.lower():
-                        flag = cons.OUTPUT_REFUSED
-                        error_message = _content
-                        break
-
-            content = _content if flag not in [cons.OUTPUT_INVALID, cons.OUTPUT_REFUSED] else None
-            
     except Exception as e:
-
-        try:
-            content, flag = _check_format(content, e)
-                    
-        except Exception as e:
-            ios.printf(f"\n====================\n{model} {fn} {e} {response.get('created_at', '')} \n >>>{content}<<<\n====================\n")
+        # Short plain-text response → refusal
+        if _is_refusal_string(content):
+            error_message = content
             content = None
-            flag = cons.OUTPUT_INVALID
-            error_message = str(e)
+            flag = cons.OUTPUT_REFUSED
+        else:
+            try:
+                content, flag = _check_format(content, e)
+
+            except Exception as e:
+                ios.printf(f"\n====================\n{model} {fn} {e} {response.get('created_at', '')} \n >>>{content}<<<\n====================\n")
+                content = None
+                flag = cons.OUTPUT_INVALID
+                error_message = str(e)
 
     reasoning_tokens = None
 
@@ -123,19 +218,44 @@ def _parse_gemini(response, model=None, fn=None, run_id=None):
         content = response.get('response', {}).get('candidates',[{}])[0].get('content', {}).get('parts', [{}])[0].get('text', "")
         error_message = None
 
+        if not content or (isinstance(content, str) and content.strip() == ''):
+            done_reason = response.get('response', {}).get('candidates',[{}])[0].get('finishReason', None)
+            prompt_eval_count = response.get('response', {}).get('usageMetadata', {}).get('promptTokenCount', None)
+            eval_count = response.get('response', {}).get('usageMetadata', {}).get('candidatesTokenCount', None)
+            eval_duration = response.get('response', {}).get('eval_duration', None)
+            response_role = response.get('response', {}).get('candidates',[{}])[0].get('content', {}).get('role', None)
+            reasoning_tokens = response.get('response', {}).get('usageMetadata', {}).get('thoughtsTokenCount', None)
+            obj = {'created_at': None, 'done': None, 'done_reason': done_reason,
+                   'total_duration': None, 'load_duration': None,
+                   'prompt_eval_count': prompt_eval_count, 'prompt_eval_duration': None,
+                   'eval_count': eval_count, 'eval_duration': eval_duration,
+                   'reasoning_tokens': reasoning_tokens, 'response_role': response_role,
+                   'response_content': None, 'response_thinking': None,
+                   'tool_name': None, 'tool_calls': None,
+                   'error_message': None, 'valid_flag': cons.OUTPUT_EMPTY}
+            return obj
+
         try:
             content, flag = txtlib.clean_content(content)
             content = txtlib.ast.literal_eval(content)
-            error_message = None
+            content, flag, error_message = _post_process_content(content, flag)
         except Exception as e:
-            try:
-                content, flag = _check_format(content, e)
-
-            except Exception as e:
-                ios.printf(f"\n====================\n{model} {fn} {e} -{response.get('response', {}).get('responseId','')}- {response.get('key', '')} {run_id} \n >>>{content}<<<\n====================\n")
+            # Short plain-text response → refusal
+            if _is_refusal_string(content):
+                error_message = content
                 content = None
-                flag = cons.OUTPUT_INVALID
-                error_message = str(e)
+                flag = cons.OUTPUT_REFUSED
+            else:
+                try:
+                    content, flag = _check_format(content, e)
+                    if isinstance(content, list):
+                        content, flag, _ = _post_process_content(content, flag)
+
+                except Exception as e:
+                    ios.printf(f"\n====================\n{model} {fn} {e} -{response.get('response', {}).get('responseId','')}- {response.get('key', '')} {run_id} \n >>>{content}<<<\n====================\n")
+                    content = None
+                    flag = cons.OUTPUT_INVALID
+                    error_message = str(e)
 
         done_reason = response.get('response', {}).get('candidates',[{}])[0].get('finishReason', None)
         prompt_eval_count = response.get('response', {}).get('usageMetadata', {}).get('promptTokenCount', None)
@@ -185,6 +305,22 @@ def _parse_gpt(response, model=None, fn=None, run_id=None):
         error_message = None
         flag = None
 
+        if content is None and refusal is None:
+            done_reason = response.get('response', {}).get('body',{}).get('choices', [{}])[0].get('finish_reason', {})
+            prompt_eval_count = response.get('response', {}).get('body',{}).get('usage', {}).get('prompt_tokens', None)
+            eval_count = response.get('response', {}).get('body',{}).get('usage', {}).get('completion_tokens', None)
+            response_role = response.get('response', {}).get('body',{}).get('choices', [{}])[0].get('message', {}).get('role', None)
+            reasoning_tokens = response.get('response', {}).get('body',{}).get('usage', {}).get('completion_tokens_details', {}).get('reasoning_tokens', None)
+            obj = {'created_at': None, 'done': None, 'done_reason': done_reason,
+                   'total_duration': None, 'load_duration': None,
+                   'prompt_eval_count': prompt_eval_count, 'prompt_eval_duration': None,
+                   'eval_count': eval_count, 'eval_duration': None,
+                   'reasoning_tokens': reasoning_tokens, 'response_role': response_role,
+                   'response_content': None, 'response_thinking': None,
+                   'tool_name': None, 'tool_calls': None,
+                   'error_message': None, 'valid_flag': cons.OUTPUT_EMPTY}
+            return obj
+
         if refusal is not None:
             # sometimes, the key refusal contains a message indicating refusal
             for rk in cons.REFUSAL_KEYWORDS:
@@ -203,16 +339,22 @@ def _parse_gpt(response, model=None, fn=None, run_id=None):
             try:
                 content, flag = txtlib.clean_content(content)
                 content = txtlib.ast.literal_eval(content)
-                error_message = None
+                content, flag, error_message = _post_process_content(content, flag)
             except Exception as e:
-                try:
-                    content, flag = _check_format(content, e)
-
-                except Exception as e:
-                    ios.printf(f"\n====================\n{model} {fn} {e} -{response.get('response', {}).get('responseId','')}- {response.get('key', '')} {run_id} \n >>>{content}<<<\n====================\n")
+                # Short plain-text response → refusal
+                if _is_refusal_string(content):
+                    error_message = content
                     content = None
-                    flag = cons.OUTPUT_INVALID
-                    error_message = str(e)
+                    flag = cons.OUTPUT_REFUSED
+                else:
+                    try:
+                        content, flag = _check_format(content, e)
+
+                    except Exception as e:
+                        ios.printf(f"\n====================\n{model} {fn} {e} -{response.get('response', {}).get('responseId','')}- {response.get('key', '')} {run_id} \n >>>{content}<<<\n====================\n")
+                        content = None
+                        flag = cons.OUTPUT_INVALID
+                        error_message = str(e)
 
         done_reason = response.get('response', {}).get('body',{}).get('choices', [{}])[0].get('finish_reason', {})
         prompt_eval_count = response.get('response', {}).get('body',{}).get('usage', {}).get('prompt_tokens', None) # prompt tokens
@@ -251,14 +393,12 @@ def parse(results_dir, output_dir, model=None, language=None):
                                                       else cons.SOURCE_GPT if ('gpt' in model.lower() and 'gpt-oss' not in model.lower()) else 
                                                       cons.SOURCE_OLLAMA]
 
-    df_results = pd.DataFrame()
-    df_summary = pd.DataFrame()
-    df_recommendations = pd.DataFrame()
+    rows = []
 
     for source in sources:
 
         for language in languages:
-            
+
             path = cons.RESULTS_PATH.replace('<ROOT>', results_dir).replace('<SOURCE>', source).replace('<LANGUAGE>', language)
 
             if ios.path_exists(path):
@@ -291,7 +431,7 @@ def parse(results_dir, output_dir, model=None, language=None):
 
                         for run_id, response in enumerate(obj.get('responses', [{}])):
                             run_id += 1
-                            
+
                             if source == cons.SOURCE_GEMINI:
                                 _obj = _parse_gemini(response, model, _file, run_id)
 
@@ -301,11 +441,12 @@ def parse(results_dir, output_dir, model=None, language=None):
                             elif source == cons.SOURCE_GPT:
                                 _obj = _parse_gpt(response, model, _file, run_id)
 
-    
                             _obj_response = _main.copy()
                             _obj_response['run_id'] = run_id
-                            _obj_response.update(_obj)       
-                            df_results = pd.concat([df_results, pd.DataFrame([_obj_response])], ignore_index=True)
+                            _obj_response.update(_obj)
+                            rows.append(_obj_response)
+
+    df_results = pd.DataFrame(rows)
 
     if df_results.shape[0] == 0:
         ios.printf("No results found.")

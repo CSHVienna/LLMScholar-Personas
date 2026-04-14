@@ -36,7 +36,8 @@ from sklearn.metrics import (accuracy_score, classification_report,
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 VALID_LABELS = {'i': 'invalid', 'c': 'cleaned', 'u': 'unchanged',
-                'r': 'refused', 'f': 'fixed_dict', 's': 'skip', 'q': 'quit'}
+                'r': 'refused', 'f': 'fixed_dict', 'e': 'empty',
+                's': 'skip', 'q': 'quit'}
 
 RESULTS_PATH_TEMPLATE = '{root}/responses/results_{source}_{language}'
 
@@ -56,6 +57,7 @@ LABEL_COLORS = {
     'unchanged':  GREEN,
     'refused':    MAGENTA,
     'fixed_dict': CYAN,
+    'empty':      GRAY,
 }
 
 
@@ -213,6 +215,7 @@ def display_sample(i: int, total: int, row: pd.Series, content: str | None):
           f"{colorize('[u]nchanged', GREEN)}  "
           f"{colorize('[r]efused', MAGENTA)}  "
           f"{colorize('[f]ixed_dict', CYAN)}  "
+          f"{colorize('[e]mpty', GRAY)}  "
           f"{GRAY}[s]kip  [q]uit{RESET}")
     print_separator('═')
 
@@ -265,6 +268,8 @@ def main():
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--model', default=None, help='Filter by model name')
     parser.add_argument('--language', default=None, help='Filter by language')
+    parser.add_argument('--export_sample', default=None, help='Export the sample to a CSV and exit (for sharing)')
+    parser.add_argument('--sample_csv', default=None, help='Use a pre-defined sample CSV instead of sampling')
     args = parser.parse_args()
 
     # Load summary
@@ -275,9 +280,6 @@ def main():
         df = df[df['model'] == args.model]
     if args.language:
         df = df[df['language'] == args.language]
-
-    # Exclude cleaned responses until clean_content is fixed
-    df = df[df['valid_flag'] != 'cleaned']
 
     if df.empty:
         print(colorize("No rows match filters.", RED))
@@ -296,8 +298,21 @@ def main():
         df_done = pd.DataFrame()
         already_done_idx = set()
 
-    # Sample
-    sample = sample_rows(df, args.n, args.stratified, args.seed, already_done_idx)
+    # Sample — either from pre-defined CSV or by sampling summary
+    if args.sample_csv:
+        print(colorize(f"Using pre-defined sample: {args.sample_csv}", CYAN))
+        sample = pd.read_csv(args.sample_csv)
+        sample = sample[~sample['index'].isin(already_done_idx)].reset_index(drop=True)
+    else:
+        sample = sample_rows(df, args.n, args.stratified, args.seed, already_done_idx)
+
+    # Export sample and exit if requested
+    if args.export_sample:
+        export_path = Path(args.export_sample)
+        sample.to_csv(export_path, index=False)
+        print(colorize(f"Sample exported to {export_path} ({len(sample)} rows). Share this file.", GREEN))
+        return
+
     remaining = len(sample)
 
     if remaining == 0:

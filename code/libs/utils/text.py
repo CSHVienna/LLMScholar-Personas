@@ -1,12 +1,13 @@
 import re
 import ast
 import codecs
+import unicodedata
 
 from utils import constants as cons
 
 def clean_content(text):
-    """ Cleans the output text by fixing umlauts and removing unnecessary quotation marks."""
-        
+    """ Cleans the output text by fixing umlauts, removing diacritics/tildes, and removing unnecessary quotation marks."""
+
     length_init = len(text)
 
     # umlauts
@@ -14,7 +15,7 @@ def clean_content(text):
         text = text.replace(f'\\\"{v}', f"{v}̈")
         text = text.replace(f'\\\"{v.upper()}', f"{v.upper()}̈")
 
-    # text in quotation marks 
+    # text in quotation marks
     text = re.sub(r'\\\"([^"]+)\\\"', r'\1', text)
 
     # illegal surrogate
@@ -25,8 +26,13 @@ def clean_content(text):
     text = text.replace('\\\"\"', '\"')
     text = text.replace('\\\",', '\",')
     text = text.replace('\\\"', '\"')
-    
+
     text = text.replace('},\n    \"', '\",\n    \"')
+
+    # Remove diacritics and tildes (e.g. á→a, ü→u, ñ→n) for ground truth matching
+    text = unicodedata.normalize('NFD', text)
+    text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+
     return text, cons.OUTPUT_CLEANED if len(text) != length_init else cons.OUTPUT_UNCHANGED
 
 def parse_valid_dicts(text):

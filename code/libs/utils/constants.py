@@ -120,6 +120,7 @@ REFUSAL_KEYWORDS = ["sorry,", "apologize", "unable to", "cannot", "can't",
                     "unable to provide", "unable to access",
                     "cannot access"]
 
+OUTPUT_EMPTY = 'empty'
 OUTPUT_CLEANED = 'cleaned'
 OUTPUT_UNCHANGED = 'unchanged'
 OUTPUT_INVALID = 'invalid'
