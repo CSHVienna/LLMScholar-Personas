@@ -19,9 +19,23 @@ _PLACEHOLDER_RE = re.compile(
 # Short responses under this character count with no JSON structure are treated as refusals
 _SHORT_REFUSAL_THRESHOLD = 300
 
-# Keys that wrap the actual list of candidates in some responses
-_WRAPPER_KEYS = ['candidates', 'students', 'professors', 'profesors', 'data',
-                 'juniorprofessors', 'text', 'message', 'result']
+# Keys that wrap the actual list of candidates in some responses (matched case-insensitively)
+_WRAPPER_KEYS = {
+    'candidates', 'candidate', 'candidates_pool', 'candidatos',
+    'students', 'student',
+    'professors', 'professor', 'profesors', 'profesores', 'profesor',
+    'profs', 'prof',
+    'junior_professors', 'juniorprofessors', 'juniorprofessor', 'juniorprofessoren',
+    'senior_professors', 'seniorprofessors', 'seniorprofessor',
+    'advisors', 'advisor', 'advisor_list', 'betreuer',
+    'researchers', 'researcher',
+    'scholars', 'scholar',
+    'faculty',
+    'profiles', 'profile',
+    'items', 'item',
+    'answer', 'output', 'response', 'result', 'results', 'result_list', 'recruitment_results',
+    'data', 'text', 'message',
+}
 
 
 def _is_refusal_string(text):
@@ -45,10 +59,8 @@ def _has_placeholders(items):
     count = sum(
         1 for item in items
         if isinstance(item, dict) and (
-            not str(item.get('name', '')).strip() or
-            not str(item.get('lastname', '')).strip() or
-            _PLACEHOLDER_RE.match(str(item.get('name', '')).strip()) or
-            _PLACEHOLDER_RE.match(str(item.get('lastname', '')).strip())
+            (not str(item.get('name', '')).strip() or _PLACEHOLDER_RE.match(str(item.get('name', '')).strip())) and
+            (not str(item.get('lastname', '')).strip() or _PLACEHOLDER_RE.match(str(item.get('lastname', '')).strip()))
         )
     )
     return count > len(items) / 2
@@ -72,11 +84,11 @@ def _post_process_content(content, flag):
             flag = cons.OUTPUT_REFUSED if _is_refusal_string(str(error_message)) else cons.OUTPUT_INVALID
             return None, flag, error_message
 
-        # Extract from wrapper keys
+        # Extract from wrapper keys (case-insensitive)
         _inner = None
-        for key in _WRAPPER_KEYS:
-            if key in content:
-                _inner = content[key]
+        for key, value in content.items():
+            if key.lower().strip() in _WRAPPER_KEYS:
+                _inner = value
                 break
 
         if _inner is None:
@@ -84,7 +96,10 @@ def _post_process_content(content, flag):
                 # Single candidate object returned as a dict
                 _inner = [content]
             else:
-                # Skeleton without data
+                # Check if any string value is a refusal before marking invalid
+                for value in content.values():
+                    if isinstance(value, str) and _is_refusal_string(value):
+                        return None, cons.OUTPUT_REFUSED, value
                 return None, cons.OUTPUT_INVALID, None
 
         # Wrapper value is a string → refusal text or invalid
@@ -92,6 +107,10 @@ def _post_process_content(content, flag):
             if _is_refusal_string(_inner):
                 return None, cons.OUTPUT_REFUSED, _inner
             return None, cons.OUTPUT_INVALID, _inner
+
+        # Wrapper value is a single dict → wrap in list
+        if isinstance(_inner, dict):
+            _inner = [_inner]
 
         content = _inner
 
@@ -112,7 +131,8 @@ def _check_format(content, e):
     For truncated lists, keeps already-complete objects (fixed_dict).
     '''
     flag = cons.OUTPUT_INVALID
-    if "'[' was never closed" in str(e):
+    error_str = str(e)
+    if "'[' was never closed" in error_str or "'{' was never closed" in error_str:
         content = txtlib.parse_valid_dicts(content)
         flag = cons.OUTPUT_FIXED_DICT
 
@@ -166,6 +186,8 @@ def _parse_ollama(response, model=None, fn=None):
         else:
             try:
                 content, flag = _check_format(content, e)
+                if isinstance(content, list):
+                    content, flag, error_message = _post_process_content(content, flag)
 
             except Exception as e:
                 ios.printf(f"\n====================\n{model} {fn} {e} {response.get('created_at', '')} \n >>>{content}<<<\n====================\n")
@@ -349,6 +371,8 @@ def _parse_gpt(response, model=None, fn=None, run_id=None):
                 else:
                     try:
                         content, flag = _check_format(content, e)
+                        if isinstance(content, list):
+                            content, flag, error_message = _post_process_content(content, flag)
 
                     except Exception as e:
                         ios.printf(f"\n====================\n{model} {fn} {e} -{response.get('response', {}).get('responseId','')}- {response.get('key', '')} {run_id} \n >>>{content}<<<\n====================\n")

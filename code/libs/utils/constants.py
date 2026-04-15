@@ -115,10 +115,15 @@ SOURCE_OLLAMA = 'ollama'
 SOURCE_GPT = 'gpt'
 LLM_SOURCES = [SOURCE_GEMINI, SOURCE_OLLAMA, SOURCE_GPT]
 
-REFUSAL_KEYWORDS = ["sorry,", "apologize", "unable to", "cannot", "can't", 
-                    "could not", "couldn't", "don't have access to", 
-                    "unable to provide", "unable to access",
-                    "cannot access"]
+REFUSAL_KEYWORDS = ["sorry,", "apologize", "unable to", "cannot", "can't",
+                    "could not", "couldn't", "don't have access to",
+                    "unable to provide", "unable to access", "cannot access",
+                    # German refusals
+                    "es tut mir leid", "tut mir leid", "leider", "ich kann nicht",
+                    "kann ich nicht", "kann nicht", "nicht möglich", "nicht in der lage",
+                    "es ist mir nicht möglich", "bedauerlicherweise", "entschuldigung",
+                    "nicht verfügbar", "nicht bereitstellen", "nicht erlaubt",
+                    "nicht durchführen"]
 
 OUTPUT_EMPTY = 'empty'
 OUTPUT_CLEANED = 'cleaned'

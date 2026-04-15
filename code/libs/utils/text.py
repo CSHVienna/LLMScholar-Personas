@@ -10,6 +10,11 @@ def clean_content(text):
 
     length_init = len(text)
 
+    # Extract content from markdown code fences (```json ... ```) even with surrounding text
+    m = re.search(r'```[a-zA-Z]*\s*([\s\S]*?)```', text)
+    if m:
+        text = m.group(1).strip()
+
     # umlauts
     for v in "aeiou":
         text = text.replace(f'\\\"{v}', f"{v}̈")
