@@ -123,7 +123,17 @@ REFUSAL_KEYWORDS = ["sorry,", "apologize", "unable to", "cannot", "can't",
                     "kann ich nicht", "kann nicht", "nicht möglich", "nicht in der lage",
                     "es ist mir nicht möglich", "bedauerlicherweise", "entschuldigung",
                     "nicht verfügbar", "nicht bereitstellen", "nicht erlaubt",
-                    "nicht durchführen"]
+                    "nicht durchführen", "ich habe keinen zugriff", "ich habe keinen zugang",
+                    "ich bin nicht in der lage", "das kann ich nicht", "ich kann das nicht",
+                    "mir ist es nicht möglich", "ich verfüge nicht", "ich bin nicht berechtigt",
+                    "außerstande", "nicht imstande",
+                    # Spanish refusals
+                    "lo siento", "disculpa", "disculpe", "no puedo", "no es posible",
+                    "no tengo acceso", "lamentablemente", "lamento no", "no me es posible",
+                    "no tengo la capacidad", "no tengo información", "me es imposible",
+                    "no dispongo", "no cuento con", "no puedo proporcionar",
+                    "no es factible", "no estoy en condiciones", "no tengo datos",
+                    "no tengo conocimiento", "no tengo la habilidad"]
 
 OUTPUT_EMPTY = 'empty'
 OUTPUT_CLEANED = 'cleaned'
