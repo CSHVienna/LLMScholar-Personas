@@ -1,0 +1,101 @@
+sample_index,Researcher_id,Name,perceived_ethnicity,__ethnicity_confidence,__ethnicity_source
+0,31353847.0,Shahid  Yamin,Unknown,0.0,unknown
+1,153557758.0,Jun-Ying  Zheng,Asian,0.9993414282798768,demographicx
+2,1723245.0,M.  Marcon,Hispanic or Latino,0.6674062013626099,demographicx
+3,145145105.0,John  Mills,Asian,0.5687457323074341,demographicx
+4,145493030.0,M.  Jasim,Asian,0.9990899562835692,demographicx
+5,153095947.0,Jacobsen  Thomas,Black or African American,0.5757886171340942,demographicx
+6,79459409.0,Hoskins  Jm,Black or African American,0.9704332947731018,demographicx
+7,153904773.0,Ezekiel  Maier,Unknown,0.0,unknown
+8,122366356.0,Andreas  Schroeder,White,0.6454564929008484,demographicx
+9,1436386109.0,Nabila B. El-Bandy,White,0.599705696105957,demographicx
+10,108468656.0,Bruce  Thobane,White,0.774006187915802,demographicx
+11,1422669577.0,Jeremy  Leslie-Spinks,Black or African American,0.9584134817123412,demographicx
+12,118854623.0,Felipe Augusto Santana do Nascimento,Hispanic or Latino,0.9839851260185242,demographicx
+13,67286669.0,M. F. Franklin,Black or African American,0.5677909851074219,demographicx
+14,90768352.0,جلال  ستاره,Unknown,0.0,unknown
+15,3612248.0,Outi  Kuittinen,White,0.9910317659378052,demographicx
+16,1422511992.0,Noemi  Pérez-Felpete,Hispanic or Latino,0.9863828420639038,demographicx
+17,15947578.0,Elvis  Pirev,Hispanic or Latino,0.9876668453216552,demographicx
+18,38323679.0,M A Black,White,0.8933501839637756,demographicx
+19,147273531.0,Leila Saud Abdulkadir,Black or African American,0.98615825176239,demographicx
+20,33902936.0,Sheriza Mohd Razali,Asian,0.980466902256012,demographicx
+21,50243708.0,Hubert,Unknown,0.0,unknown
+22,117148386.0,Alfred T. Schofield,Black or African American,0.5738811492919922,demographicx
+23,50487492.0,Yuko  Ueno,Asian,0.9971542358398438,demographicx
+24,47704645.0,Yadira  Rangel,Hispanic or Latino,0.9908472299575806,demographicx
+25,152222560.0,Tim  Foster,White,0.7618008255958557,ethnicolr
+26,90907390.0,Maria T. Gomes,Asian,0.763527512550354,demographicx
+27,49369192.0,Mohamed  Ghanem,Unknown,0.0,unknown
+28,66694903.0,Biljana I. Steljić,White,0.9945250749588012,demographicx
+29,73397567.0,Ernesto Acosta reyes,Hispanic or Latino,0.9978274703025818,demographicx
+30,34905341.0,N. J. Harned,White,0.9528740048408508,demographicx
+31,66972062.0,Amanat Ali Jalbani,Asian,0.9983945488929749,demographicx
+32,89346789.0,Hosam M El Seadawy,Unknown,0.0,unknown
+33,31132589.0,Ben  Cutler,Black or African American,0.9596011638641356,demographicx
+34,14531533.0,Camille  Jacquemond,Unknown,0.0,unknown
+35,7372489.0,Keith  Harshman,White,0.9729384183883668,demographicx
+36,152902723.0,Marco Antonio de Meneses Silva,Hispanic or Latino,0.9331294298171996,demographicx
+37,49275416.0,Enrique  Soto,Hispanic or Latino,0.9467505216598512,ethnicolr
+38,92186731.0,Jf  Morris,Black or African American,0.8755457401275635,demographicx
+39,102650399.0,Lutz  Gromoll,White,0.9974545836448668,demographicx
+40,34110355.0,Mongi  Besbes,Asian,0.9913124442100524,demographicx
+41,81537091.0,Alfred W. Campbell,Black or African American,0.7489156126976013,demographicx
+42,108471498.0,Pierre François Indermuehle,White,0.9820660948753356,demographicx
+43,113721936.0,Mabel,Unknown,0.0,unknown
+44,52484504.0,Douglas S Robinson,Black or African American,0.7236722111701965,demographicx
+45,117787427.0,M.  Seidlitz,White,0.6403356194496155,demographicx
+46,1423701086.0,Angelia,Unknown,0.0,unknown
+47,5689990.0,Ike  Lagunju,Black or African American,0.992099940776825,demographicx
+48,144500972.0,Mariona  Cid,Hispanic or Latino,0.981247901916504,demographicx
+49,117892384.0,Predrag  Simonovi,White,0.9732781052589417,demographicx
+50,81682291.0,M. Billye Sankofa Waters,Black or African American,0.991187572479248,demographicx
+51,90692112.0,Stanley  Schumann,White,0.7181223630905151,demographicx
+52,88144140.0,Teresa  Radziejewska,White,0.6798426508903503,demographicx
+53,3531640.0,Eghosa  Iyare,Black or African American,0.9977741837501526,demographicx
+54,13732053.0,Mickael D. Tessier,White,0.8228775262832642,demographicx
+55,144518496.0,J. A. Montoya,Hispanic or Latino,0.8970635533332825,demographicx
+56,2475420.0,Henrik  Korsgaard,White,0.9103184342384338,demographicx
+57,1411464735.0,Enrique  Navarro-Camba,Hispanic or Latino,0.9864524602890016,demographicx
+58,9446782.0,Cyrille Le Royer,Black or African American,0.7060638666152954,demographicx
+59,1441511368.0,Mohammed Y. Al-Fhady,Unknown,0.0,unknown
+60,108160156.0,Celine Parreñas Shimizu,Asian,0.9937223792076112,demographicx
+61,7578471.0,Tomas  Borgegård,Unknown,0.0,unknown
+62,40371327.0,Mohnish  Pandey,Asian,0.9989088773727416,demographicx
+63,51404650.0,M  Wang,Asian,0.9958750605583192,demographicx
+64,39918020.0,Roland K Chiu,Asian,0.9867812991142272,demographicx
+65,2107676.0,João Flávio Vieira de Vasconcellos,Hispanic or Latino,0.9845573902130128,demographicx
+66,150914029.0,Abdol Hamid Nazari,Asian,0.9943133592605592,demographicx
+67,1404980154.0,Raul  Fernandez-Rojas,Hispanic or Latino,0.9800927639007568,demographicx
+68,80049620.0,Luque  Parra,Hispanic or Latino,0.982502818107605,demographicx
+69,48008798.0,Cristina  Florean,Unknown,0.0,unknown
+70,70907297.0,Chastity  Baccus,Hispanic or Latino,0.9307460188865662,demographicx
+71,1410074347.0,Abdulameer E. Al-Saffar,Asian,0.7920782566070557,demographicx
+72,50843861.0,Bhakti  Patil,Asian,0.9942657351493835,demographicx
+73,1395833518.0,Devendra K.  Soni,Asian,0.9992596507072448,demographicx
+74,102398944.0,Tibor K. Pog,Unknown,0.0,unknown
+75,152715509.0,K  Deguchi,Asian,0.9984201192855836,demographicx
+76,47221479.0,R  Porta,Hispanic or Latino,0.632098376750946,demographicx
+77,21192660.0,Aletta  Norval,Black or African American,0.986254334449768,demographicx
+78,21075884.0,Liliane  Derouet,Unknown,0.0,unknown
+79,98607978.0,A. V. Bogdan,Asian,0.9963396787643432,demographicx
+80,46551556.0,Roberto  Forero,Hispanic or Latino,0.9812262058258056,demographicx
+81,73251375.0,Evelina  Amess,Unknown,0.0,unknown
+82,145637498.0,Erik  Banks,Black or African American,0.5625892281532288,demographicx
+83,2388958.0,Fabrice  Jacquet,Black or African American,0.951339602470398,demographicx
+84,30156304.0,Vladimir  Privman,White,0.98919278383255,demographicx
+85,6371448.0,Ikuko  Nakagaki,Asian,0.9985659718513488,demographicx
+86,46379206.0,Fabrice  Morel,Black or African American,0.932574450969696,demographicx
+87,30984060.0,Corrado  Comparotto,White,0.9335429668426514,demographicx
+88,32860651.0,Crystal  Esau,Black or African American,0.9022146463394164,demographicx
+89,151735737.0,Sinem  Elmas,Unknown,0.0,unknown
+90,3018770.0,Ramon  Noordeloos,Unknown,0.0,unknown
+91,2027246533.0,Flavio  Lucignano,Hispanic or Latino,0.8853978514671326,demographicx
+92,1475614971.0,Najat  M'Jid,Unknown,0.0,unknown
+93,93535827.0,Rafie,Unknown,0.0,unknown
+94,34900382.0,Anna G. Holmes,Black or African American,0.5441686511039734,demographicx
+95,134467591.0,Marcelo  Sachet,Hispanic or Latino,0.9898244738578796,demographicx
+96,1992591535.0,Jorge I.  De la Torre,Hispanic or Latino,0.9754417538642884,demographicx
+97,2309566.0,Minna  Pirhonen,White,0.7097638249397278,demographicx
+98,51144025.0,Ayoub  Khalfaoui,Unknown,0.0,unknown
+99,40110979.0,Atsuyuki  Maeda,Asian,0.9988775849342346,demographicx

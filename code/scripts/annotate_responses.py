@@ -24,8 +24,10 @@ After labeling, computes accuracy/precision/recall/F1 vs algorithmic valid_flag.
 import argparse
 import json
 import os
+import re
 import sys
 import textwrap
+import unicodedata
 from pathlib import Path
 
 import pandas as pd
@@ -39,6 +41,10 @@ VALID_LABELS = {'i': 'invalid', 'c': 'cleaned', 'u': 'unchanged',
                 'r': 'refused', 'f': 'fixed_dict', 'e': 'empty',
                 's': 'skip', 'q': 'quit'}
 
+# Labels that count as "valid" for binary accuracy computation
+VALID_GROUP = {'cleaned', 'unchanged', 'fixed_dict'}
+INVALID_GROUP = {'invalid', 'empty', 'refused'}
+
 RESULTS_PATH_TEMPLATE = '{root}/responses/results_{source}_{language}'
 
 # Colors (ANSI)
@@ -50,6 +56,7 @@ GREEN  = '\033[92m'
 RED    = '\033[91m'
 GRAY   = '\033[90m'
 MAGENTA = '\033[95m'
+BLUE   = '\033[94m'
 
 LABEL_COLORS = {
     'invalid':    RED,
@@ -65,6 +72,31 @@ LABEL_COLORS = {
 
 def colorize(text: str, color: str) -> str:
     return f"{color}{text}{RESET}"
+
+
+def _compute_cleaned(text: str) -> tuple[str, bool]:
+    """Apply the same cleaning logic as batch_parse_results/text.py.
+    Returns (cleaned_text, was_changed) so we can show both lengths."""
+    original = text
+    m = re.search(r'```[a-zA-Z]*\s*([\s\S]*?)```', text)
+    if m:
+        text = m.group(1).strip()
+    for v in "aeiou":
+        text = text.replace(f'\\\"{v}', f"{v}\u0308")
+        text = text.replace(f'\\\"{v.upper()}', f"{v.upper()}\u0308")
+    text = re.sub(r'\\\"([^"]+)\\\"', r'\1', text)
+    try:
+        decoded = text.encode('raw_unicode_escape').decode('unicode_escape')
+        text = re.sub(r'[\ud800-\udfff]', '', decoded)
+    except Exception:
+        pass
+    text = text.replace('\\\"\"', '\"')
+    text = text.replace('\\\",', '\",')
+    text = text.replace('\\\"', '\"')
+    text = text.replace('},\n    \"', '\",\n    \"')
+    text = unicodedata.normalize('NFD', text)
+    text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
+    return text, text != original
 
 
 def get_source(model: str) -> str:
@@ -106,7 +138,12 @@ def extract_raw_content(response: dict, source: str) -> str:
 
 
 def _find_matching_entry(data, row):
-    """Return (key, run_idx) for the entry matching the row parameters, or (None, None)."""
+    """Return the raw response dict matching the row parameters, or None.
+
+    run_id in the CSV is 1-indexed (first run = 1), so run_idx = run_id - 1
+    converts it to a 0-based list index. The bounds check guards against
+    missing runs in the JSON file.
+    """
     for key, obj in data.items():
         p = obj.get('parameters', {})
         pc = p.get('persona_context', {})
@@ -118,9 +155,9 @@ def _find_matching_entry(data, row):
                 ur.get('target', '') == row['target'] and
                 ur.get('field') == row['field'] and
                 ur.get('subfield') == row['subfield']):
-            run_idx = int(row['run_id']) - 1
+            run_idx = int(row['run_id']) - 1   # run_id is 1-indexed
             responses = obj.get('responses', [])
-            if 0 <= run_idx < len(responses):
+            if 0 <= run_idx < len(responses):  # bounds check
                 return responses[run_idx]
     return None
 
@@ -177,7 +214,8 @@ def print_separator(char='─', width=80):
     print(colorize(char * width, GRAY))
 
 
-def display_sample(i: int, total: int, row: pd.Series, content: str | None):
+def display_sample(i: int, total: int, row: pd.Series, content: str | None,
+                   show_algo_label: bool = False):
     os.system('clear' if os.name == 'posix' else 'cls')
     print_separator('═')
     print(colorize(f"  RESPONSE ANNOTATOR  [{i}/{total}]", BOLD + CYAN))
@@ -192,19 +230,37 @@ def display_sample(i: int, total: int, row: pd.Series, content: str | None):
     print(f"  {BOLD}Location:{RESET}  {row['location']}")
     print(f"  {BOLD}Request:{RESET}   k={row['k']} {row['target']} in {row['field']} / {row['subfield']}")
     print(f"  {BOLD}Run ID:{RESET}    {row['run_id']}")
-    print(f"  {BOLD}Algo label:{RESET} {colorize(algo_flag, flag_color)}")
+    if show_algo_label:
+        print(f"  {BOLD}Algo label:{RESET} {colorize(algo_flag, flag_color)}")
     print_separator()
 
-    # Raw content
-    print(f"  {BOLD}Raw response:{RESET}")
+    # Raw content + lengths
     if content is None:
         print(colorize("  [Could not load raw content]", RED))
     elif content.strip() == '':
         print(colorize("  [Empty response]", RED))
     else:
+        cleaned, was_changed = _compute_cleaned(content)
+        len_raw = len(content)
+        len_cleaned = len(cleaned)
+        diff = len_raw - len_cleaned
+        if was_changed:
+            len_info = colorize(f"raw={len_raw}  cleaned={len_cleaned}  (diff={diff:+d} → cleaned)", YELLOW)
+        else:
+            len_info = colorize(f"raw={len_raw}  cleaned={len_cleaned}  (unchanged)", GREEN)
+        print(f"  {BOLD}Response:{RESET} {len_info}")
+        print()
+        if was_changed:
+            print(colorize("  ── RAW ──────────────────────────────────────────────────────────────────────────", GRAY))
         for line in content.splitlines():
             wrapped = textwrap.fill(line, width=100, subsequent_indent='    ')
             print(f"  {wrapped}")
+        if was_changed:
+            print()
+            print(colorize("  ── CLEANED ──────────────────────────────────────────────────────────────────────", YELLOW))
+            for line in cleaned.splitlines():
+                wrapped = textwrap.fill(line, width=100, subsequent_indent='    ')
+                print(f"  {wrapped}")
 
     print_separator()
 
@@ -238,14 +294,28 @@ def compute_metrics(df_labeled: pd.DataFrame):
     report = classification_report(y_true, y_pred, labels=labels, zero_division=0)
     cm = confusion_matrix(y_true, y_pred, labels=labels)
 
+    # Binary valid/invalid accuracy — 'valid','cleaned','unchanged','fixed_dict' → valid;
+    # 'invalid','empty','refused' → invalid; 'v' (generic valid label) maps to valid side.
+    df_binary = df[df['manual_label'].isin(VALID_GROUP | INVALID_GROUP)].copy()
+    if not df_binary.empty:
+        to_binary = lambda s: 'valid' if s in VALID_GROUP else 'invalid'
+        y_true_b = df_binary['manual_label'].map(to_binary)
+        y_pred_b = df_binary['valid_flag'].map(to_binary)
+        acc_b = accuracy_score(y_true_b, y_pred_b)
+    else:
+        acc_b = None
+
     print_separator('═')
     print(colorize("  EVALUATION RESULTS", BOLD + CYAN))
     print_separator('═')
     print(f"  Samples labeled (excl. skip): {len(df)}")
-    print(f"  Overall Accuracy: {colorize(f'{acc:.4f}', BOLD + GREEN)}\n")
+    print(f"  Overall Accuracy (exact label): {colorize(f'{acc:.4f}', BOLD + GREEN)}")
+    if acc_b is not None:
+        print(f"  Binary Accuracy  (valid/invalid): {colorize(f'{acc_b:.4f}', BOLD + BLUE)}  "
+              f"{GRAY}(n={len(df_binary)}){RESET}")
+    print()
     print("  Per-class metrics (manual = truth, algo = prediction):")
     print_separator()
-    # indent the report
     for line in report.splitlines():
         print("  " + line)
     print_separator()
@@ -270,6 +340,8 @@ def main():
     parser.add_argument('--language', default=None, help='Filter by language')
     parser.add_argument('--export_sample', default=None, help='Export the sample to a CSV and exit (for sharing)')
     parser.add_argument('--sample_csv', default=None, help='Use a pre-defined sample CSV instead of sampling')
+    parser.add_argument('--show_algo_label', action='store_true',
+                        help='Show the algorithmic label during annotation (may introduce bias)')
     args = parser.parse_args()
 
     # Load summary
@@ -292,8 +364,13 @@ def main():
     output_path = Path(args.output)
     if output_path.exists():
         df_done = pd.read_csv(output_path)
-        print(colorize(f"Resuming: {len(df_done)} samples already labeled.", YELLOW))
-        already_done_idx = set(df_done['original_index'].tolist())
+        if 'manual_label' in df_done.columns:
+            df_done = df_done[df_done['manual_label'].notna() & (df_done['manual_label'] != '')]
+        else:
+            df_done = pd.DataFrame()
+        if len(df_done) > 0:
+            print(colorize(f"Resuming: {len(df_done)} samples already labeled.", YELLOW))
+        already_done_idx = set(df_done['original_index'].tolist()) if not df_done.empty else set()
     else:
         df_done = pd.DataFrame()
         already_done_idx = set()
@@ -329,7 +406,8 @@ def main():
         # Load raw content
         content = load_raw_content(args.results_dir, row)
 
-        display_sample(i + len(already_done_idx), len(already_done_idx) + remaining, row, content)
+        display_sample(i + len(already_done_idx), len(already_done_idx) + remaining, row, content,
+                       show_algo_label=args.show_algo_label)
 
         # Get label
         while True:

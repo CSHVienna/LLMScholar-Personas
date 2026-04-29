@@ -1,6 +1,5 @@
 import re
 import ast
-import codecs
 import unicodedata
 
 from utils import constants as cons
@@ -8,7 +7,7 @@ from utils import constants as cons
 def clean_content(text):
     """ Cleans the output text by fixing umlauts, removing diacritics/tildes, and removing unnecessary quotation marks."""
 
-    length_init = len(text)
+    original = text
 
     # Extract content from markdown code fences (```json ... ```) even with surrounding text
     m = re.search(r'```[a-zA-Z]*\s*([\s\S]*?)```', text)
@@ -23,8 +22,9 @@ def clean_content(text):
     # text in quotation marks
     text = re.sub(r'\\\"([^"]+)\\\"', r'\1', text)
 
-    # illegal surrogate
-    decoded = codecs.decode(text, "unicode_escape")
+    # illegal surrogate — raw_unicode_escape avoids the Python 3 bug where
+    # codecs.decode(str) uses UTF-8 internally, corrupting é→Ã©, ñ→Ã±, etc.
+    decoded = text.encode('raw_unicode_escape').decode('unicode_escape')
     text = re.sub(r'[\ud800-\udfff]', '', decoded)
 
     # quotation marks
@@ -38,7 +38,7 @@ def clean_content(text):
     text = unicodedata.normalize('NFD', text)
     text = ''.join(c for c in text if unicodedata.category(c) != 'Mn')
 
-    return text, cons.OUTPUT_CLEANED if len(text) != length_init else cons.OUTPUT_UNCHANGED
+    return text, cons.OUTPUT_CLEANED if text != original else cons.OUTPUT_UNCHANGED
 
 def parse_valid_dicts(text):
     """ Parses valid dictionaries from a text representation of a list of dictionaries. """

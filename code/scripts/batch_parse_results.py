@@ -649,6 +649,10 @@ def _post_process_content(content, flag):
     error_message = None
 
     if isinstance(content, dict):
+        # Empty dict → empty
+        if len(content) == 0:
+            return None, cons.OUTPUT_EMPTY, None
+
         # Explicit error key → invalid or refused
         if 'error' in content:
             error_message = content.get('error')
@@ -685,9 +689,9 @@ def _post_process_content(content, flag):
 
         content = _inner
 
-    # Empty list → invalid
+    # Empty list → empty
     if isinstance(content, list) and len(content) == 0:
-        return None, cons.OUTPUT_INVALID, None
+        return None, cons.OUTPUT_EMPTY, None
 
     # List full of placeholders → invalid (skeleton with no real data)
     if isinstance(content, list) and _has_placeholders(content):
@@ -703,7 +707,8 @@ def _check_format(content, e):
     '''
     flag = cons.OUTPUT_INVALID
     error_str = str(e)
-    if "'[' was never closed" in error_str or "'{' was never closed" in error_str:
+    if ("'[' was never closed" in error_str or "'{' was never closed" in error_str
+            or "unterminated string literal" in error_str):
         content = txtlib.parse_valid_dicts(content)
         flag = cons.OUTPUT_FIXED_DICT
 
