@@ -218,3 +218,12 @@ results/
 
 
 *.pkl
+
+data/semantic_scholar_data
+data/data
+data/*.duckdb
+data/*.parquet
+.old
+
+
+
