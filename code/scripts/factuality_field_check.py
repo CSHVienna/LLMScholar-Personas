@@ -45,13 +45,30 @@ CHECK_NONE     = "none"
 
 AUTHOR_HALLUCINATED = "hallucinated"
 
+# Translates LLM field values (ES / DE) → canonical English before comparison
+FIELD_TRANSLATION = {
+    "Biología":                   "Biology",
+    "Física":                     "Physics",
+    "Ciencias de la computación": "Computer Science",
+    "Sociología":                 "Sociology",
+    "Psicología":                 "Psychology",
+    "Matemáticas":                "Mathematics",
+    "Biologie":                   "Biology",
+    "Physik":                     "Physics",
+    "Informatik":                 "Computer Science",
+    "Soziologie":                 "Sociology",
+    "Psychologie":                "Psychology",
+    "Mathematik":                 "Mathematics",
+}
+
 
 # ── Normalisation ──────────────────────────────────────────────────────────────
 
 def _norm_field(s: str) -> str:
-    """Lowercase, replace _ with space, collapse whitespace."""
+    """Translate ES/DE→EN, then lowercase, replace _ with space, collapse whitespace."""
     if not isinstance(s, str):
         return ""
+    s = FIELD_TRANSLATION.get(s.strip(), s)
     s = s.lower().replace("_", " ")
     return re.sub(r"\s+", " ", s).strip()
 

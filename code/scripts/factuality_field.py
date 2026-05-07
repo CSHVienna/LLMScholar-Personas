@@ -41,6 +41,24 @@ GT_FILES = {
     "Sociology":       "DataFrameRankings_Genderize_Namsor_Sociology.csv",
 }
 
+# Translates LLM field values (ES / DE) → canonical English
+FIELD_TRANSLATION = {
+    # Spanish
+    "Biología":                    "Biology",
+    "Física":                      "Physics",
+    "Ciencias de la computación":  "Computer Science",
+    "Sociología":                  "Sociology",
+    "Psicología":                  "Psychology",
+    "Matemáticas":                 "Mathematics",
+    # German
+    "Biologie":                    "Biology",
+    "Physik":                      "Physics",
+    "Informatik":                  "Computer Science",
+    "Soziologie":                  "Sociology",
+    "Psychologie":                 "Psychology",
+    "Mathematik":                  "Mathematics",
+}
+
 # Maps recommendation `field` values → ground truth file keys
 REC_FIELD_TO_GT = {
     "Biology":          "Biology",
@@ -55,7 +73,7 @@ STATUS_FOUND_IN_FIELD = "found_in_field"
 STATUS_FOUND_OTHER    = "found_in_other_field"
 STATUS_NOT_FOUND      = "not_found"
 
-GT_COLS = ["Year", "Researcher_id", "Name", "Combined_gender", "Career_age", "Citations"]
+GT_COLS = ["Year", "Researcher_id", "Name", "Combined_gender", "First_year", "Citations"]
 CHUNK_SIZE = 500_000
 
 
@@ -116,11 +134,13 @@ def _build_field_index(df: pd.DataFrame) -> dict:
     df["_first"] = parts.str[0].str[0].fillna("")
 
     def to_record(row: pd.Series) -> dict:
+        first_year = row.get("First_year")
+        career_age = (2025 - float(first_year)) if pd.notna(first_year) else None
         return {
             "gt_name":       row["Name"],
             "gt_gender":     row["Combined_gender"] if pd.notna(row.get("Combined_gender")) else None,
-            "gt_career_age": row["Career_age"]      if pd.notna(row.get("Career_age"))      else None,
-            "gt_citations":  row["Citations"]        if pd.notna(row.get("Citations"))        else None,
+            "gt_career_age": career_age,
+            "gt_citations":  row["Citations"]       if pd.notna(row.get("Citations"))        else None,
         }
 
     # Full-name index (first occurrence wins after outer dedup)
@@ -214,6 +234,7 @@ def run(recommendations_path: str, data_dir: str, output_path: str) -> None:
         name     = str(row.get("name",     "") or "").strip()
         lastname = str(row.get("lastname", "") or "").strip()
         field    = str(row.get("field",    "") or "").strip()
+        field    = FIELD_TRANSLATION.get(field, field)  # translate ES/DE → EN
 
         full_name     = f"{name} {lastname}".strip()
         norm_full     = normalize_name(full_name)
