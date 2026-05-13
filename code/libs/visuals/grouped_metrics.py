@@ -36,6 +36,7 @@ import pandas as pd
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 from scipy import stats as _stats
+from statsmodels.stats.proportion import proportion_confint
 
 
 # ── Default style constants (mirror gridcons.py) ─────────────────────────────
@@ -46,7 +47,7 @@ LABEL_FONT_SIZE = 11
 SPINE_LW        = 0.3
 
 DEFAULT_DIRECTIONS = {
-    'refusals': None, 'validity': '↑', 'duplicates': '↓',
+    'refusals': '↓', 'validity': '↑', 'duplicates': '↓',
     'consistency': None, 'factuality': '↑', 'connectedness': None,
     'similarity': None, 'diversity': None, 'parity': '↑',
     'div_gender': None, 'div_ethnicity': None,
@@ -56,12 +57,105 @@ DEFAULT_DIRECTIONS = {
     'factuality_field': '↑', 'factuality_seniority': '↑',
 }
 
+# Bernoulli (binary 0/1) metrics — Wilson score CI was used when aggregating
+# raw per-call 0/1 indicators. With two-stage aggregation (per-cell mean first,
+# then group mean), cell-level values are continuous in [0,1] and Wilson no
+# longer applies — Student-t is used for everything. Re-populate this set if
+# you ever pass raw per-call 0/1 data again.
+BINARY_METRICS: set[str] = set()
+
 
 def _ci95(s: pd.Series) -> float:
     s = s.dropna()
     if len(s) < 2:
         return np.nan
     return float(_stats.t.ppf(0.975, df=len(s) - 1) * s.sem())
+
+
+def _ci_wilson(s: pd.Series) -> tuple[float, float]:
+    """Return (mean, half-width) of Wilson 95% CI for a 0/1 series."""
+    s = s.dropna()
+    n = len(s)
+    if n == 0:
+        return (np.nan, np.nan)
+    k = float(s.sum())
+    low, high = proportion_confint(count=k, nobs=n, alpha=0.05, method='wilson')
+    return (k / n, (high - low) / 2.0)
+
+
+def _resolve_order(src_df: pd.DataFrame, col: str, order: Optional[Sequence] = None) -> list:
+    available = set(src_df[col].dropna().unique())
+    if order is not None:
+        out = [v for v in order if v in available]
+        out += sorted([v for v in available if v not in order], key=str)
+        return out
+    return sorted(available, key=str)
+
+
+def _row_metric_stats(grp: pd.DataFrame, metric: str) -> tuple[float, float, int, str]:
+    """Return (mean, ci_half, n, method) for one (group, metric) cell."""
+    s = grp[metric].dropna() if metric in grp.columns else pd.Series(dtype=float)
+    if metric in BINARY_METRICS:
+        mean_v, ci_v = _ci_wilson(s)
+        method = 'wilson'
+    else:
+        mean_v = float(s.mean()) if len(s) else np.nan
+        ci_v   = _ci95(s)
+        method = 'student-t'
+    return mean_v, ci_v, len(s), method
+
+
+def compute_grouped_metrics_table(
+    all_calls_df: pd.DataFrame,
+    group_configs: Sequence[Mapping[str, Any]],
+    metrics: Sequence[str],
+    long: bool = False,
+) -> pd.DataFrame:
+    """
+    Return the per-(section, row, metric) numeric table that
+    `plot_grouped_metrics` would render.
+
+    Parameters
+    ----------
+    long : bool
+        If True, returns long-format (one row per metric × section × label) with
+        columns [section, label, n_calls, metric, mean, ci_half, ci_low, ci_high,
+        method]. If False (default), returns wide-format keyed by (section, label)
+        with one column block (`{metric}_mean`, `{metric}_ci`, `{metric}_n`) per
+        metric — same shape that `plot_grouped_metrics` uses internally.
+    """
+    long_rows: list[dict] = []
+    wide_rows: list[dict] = []
+    for gc in group_configs:
+        col = gc['column']
+        src_df = all_calls_df
+        for fk, fv in gc.get('filter', {}).items():
+            if fk in src_df.columns:
+                src_df = src_df[src_df[fk] == fv]
+        if col not in src_df.columns:
+            continue
+        order = _resolve_order(src_df, col, gc.get('order'))
+        for val in order:
+            grp = src_df[src_df[col] == val]
+            wide = {'section': gc['label'], 'label': str(val), 'n_calls': len(grp)}
+            for m in metrics:
+                mean_v, ci_v, n_m, method = _row_metric_stats(grp, m)
+                wide[f'{m}_mean'] = mean_v
+                wide[f'{m}_ci']   = ci_v
+                wide[f'{m}_n']    = n_m
+                long_rows.append({
+                    'section': gc['label'],
+                    'label':   str(val),
+                    'metric':  m,
+                    'n':       n_m,
+                    'mean':    mean_v,
+                    'ci_half': ci_v,
+                    'ci_low':  mean_v - ci_v if pd.notna(mean_v) and pd.notna(ci_v) else np.nan,
+                    'ci_high': mean_v + ci_v if pd.notna(mean_v) and pd.notna(ci_v) else np.nan,
+                    'method':  method,
+                })
+            wide_rows.append(wide)
+    return pd.DataFrame(long_rows) if long else pd.DataFrame(wide_rows)
 
 
 def _shades(hex_color: str, n: int) -> list[tuple]:
@@ -89,6 +183,7 @@ def plot_grouped_metrics(
     *,
     metrics: Optional[Sequence[str]] = None,
     metric_directions: Optional[Mapping[str, Optional[str]]] = None,
+    metric_labels: Optional[Mapping[str, str]] = None,
     figsize: Optional[tuple] = None,
     save_path: Optional[str] = None,
     tick_font_size: int = TICK_FONT_SIZE,
@@ -96,7 +191,7 @@ def plot_grouped_metrics(
     label_font_size: int = LABEL_FONT_SIZE,
     spine_lw: float = SPINE_LW,
     fig_dpi: int = FIG_DPI,
-    panel_width: float = 2.8,
+    panel_width: float = 1.6,
     show: bool = True,
 ) -> plt.Figure:
     """
@@ -158,8 +253,13 @@ def plot_grouped_metrics(
             row = {'label': str(val)}
             for m in metrics:
                 s = grp[m].dropna() if m in grp.columns else pd.Series(dtype=float)
-                row[f'{m}_mean'] = float(s.mean()) if len(s) else np.nan
-                row[f'{m}_ci']   = _ci95(s)
+                if m in BINARY_METRICS:
+                    mean_v, ci_v = _ci_wilson(s)
+                    row[f'{m}_mean'] = mean_v
+                    row[f'{m}_ci']   = ci_v
+                else:
+                    row[f'{m}_mean'] = float(s.mean()) if len(s) else np.nan
+                    row[f'{m}_ci']   = _ci95(s)
                 row[f'{m}_n']    = len(s)
             rows.append(row)
         if rows:
@@ -205,11 +305,17 @@ def plot_grouped_metrics(
     BRACKET_W_IN  = 0.10   # inches: horizontal bracket extent
     RIGHT_PAD     = 0.10   # inches: margin right of row labels
 
-    label_col_w = max(
-        1.8,
-        SEC_LEFT_PAD + _sec_label_in + SEC_BX_GAP + BRACKET_W_IN
-        + BX_ROW_GAP + _row_label_in + RIGHT_PAD,
-    )
+    # When there's only one section, the section label and bracket are hidden
+    # (see below), so reclaim that horizontal space.
+    _single_section = len(sections) == 1
+    if _single_section:
+        label_col_w = max(1.0, SEC_LEFT_PAD + _row_label_in + RIGHT_PAD)
+    else:
+        label_col_w = max(
+            1.8,
+            SEC_LEFT_PAD + _sec_label_in + SEC_BX_GAP + BRACKET_W_IN
+            + BX_ROW_GAP + _row_label_in + RIGHT_PAD,
+        )
     # Bracket positioned so that its right edge sits BX_ROW_GAP to the left of
     # the longest row label. Right-edge of row labels is at x≈0.98 normalized.
     _row_label_left = 0.98 - _row_label_in / label_col_w
@@ -238,15 +344,19 @@ def plot_grouped_metrics(
     bracket_w_norm = BRACKET_W_IN / label_col_w
     sec_x_norm     = SEC_LEFT_PAD / label_col_w
 
+    # Skip section label + bracket entirely when there is only one section —
+    # the bracket adds visual noise without conveying any grouping information.
+    draw_section_chrome = len(sections) > 1
     for si, (sec, (y_top, y_bot)) in enumerate(zip(sections, sec_ranges)):
         y_c = (y_top + y_bot) / 2
-        # break_long_words=False prevents mid-word breaks (e.g. "Mathematics" → "Mathematic\ns")
-        wrapped = _textwrap.fill(sec['label'], width=12, break_long_words=False)
-        lax.text(sec_x_norm, y_c, wrapped, ha='left', va='center', multialignment='left',
-                 fontsize=label_font_size * 0.72, fontweight='bold')
-        lax.plot([BX, BX],                  [y_top - 0.3, y_bot + 0.3], color='#444', lw=spine_lw * 3)
-        lax.plot([BX, BX + bracket_w_norm], [y_top - 0.3, y_top - 0.3], color='#444', lw=spine_lw * 3)
-        lax.plot([BX, BX + bracket_w_norm], [y_bot + 0.3, y_bot + 0.3], color='#444', lw=spine_lw * 3)
+        if draw_section_chrome:
+            # break_long_words=False prevents mid-word breaks (e.g. "Mathematics" → "Mathematic\ns")
+            wrapped = _textwrap.fill(sec['label'], width=12, break_long_words=False)
+            lax.text(sec_x_norm, y_c, wrapped, ha='left', va='center', multialignment='left',
+                     fontsize=label_font_size * 0.72, fontweight='bold')
+            lax.plot([BX, BX],                  [y_top - 0.3, y_bot + 0.3], color='#444', lw=spine_lw * 3)
+            lax.plot([BX, BX + bracket_w_norm], [y_top - 0.3, y_top - 0.3], color='#444', lw=spine_lw * 3)
+            lax.plot([BX, BX + bracket_w_norm], [y_bot + 0.3, y_bot + 0.3], color='#444', lw=spine_lw * 3)
         for ri, row in enumerate(sec['rows']):
             lax.text(0.98, y_lookup[(si, ri)], row['label'],
                      ha='right', va='center', fontsize=tick_font_size, color=tick_font_color)
@@ -257,10 +367,11 @@ def plot_grouped_metrics(
     CHAR_W_DATA = (tick_font_size - 1) / 72 * 0.65 / panel_width  # ~data units per char
     MARGIN      = 0.97   # don't let labels go past here
 
+    labels = metric_labels or {}
     for m, ax in zip(metrics, axes[1:]):
         direction = dirs.get(m)
         arrow = f' {direction}' if direction else ''
-        nice  = _nice_metric_name(m)
+        nice  = labels.get(m, _nice_metric_name(m))
         ax.set_title(f'{nice}{arrow}', fontsize=tick_font_size, fontweight='bold', pad=4)
         ax.set_xlim(0, 1); ax.set_ylim(y_lo, y_hi)
         ax.invert_yaxis(); ax.set_yticks([])
