@@ -43,7 +43,7 @@ def write_list_to_file(data_list: List[str], file_path: Path | str, line_separat
         f.write(line_separator.join(data_list))
 
 
-def read_list_from_file(file_path: Path | str, line_separator: str = PROMPT_LINE_SEPARATOR) -> List[List[str]]:
+def read_list_from_file_llm_prompt(file_path: Path | str, line_separator: str = PROMPT_LINE_SEPARATOR) -> List[List[str]]:
     content = []
     with open(file_path, 'r') as f:
         item = []
@@ -57,7 +57,16 @@ def read_list_from_file(file_path: Path | str, line_separator: str = PROMPT_LINE
 
         return content
 
+def read_list_from_file(file_path: Path | str) -> List[List[str]]:
+    item = []
 
+    with open(file_path, 'r') as f:
+        
+        for line in f.read().splitlines():
+            item.append(line.strip())
+
+    return item
+    
 def load_json(path: Path | str) -> Any:
     p = Path(path)
     with p.open("r", encoding="utf-8") as f:

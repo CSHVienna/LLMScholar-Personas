@@ -1,0 +1,561 @@
+{
+  "gemini-2_5-flash-lite": {
+    "family": "gemini",
+    "params": {
+      "active_b": null,
+      "total_b": 0.77
+    },
+    "size": "T",
+    "source": "vertex ai",
+    "context_length": 1000000,
+    "quantization": null,
+    "reasoning": true,
+    "access":"proprietary"
+  },
+  "smollm2-1_7b-instruct-q4_K_M": {
+    "family": "smollm",
+    "params": {
+      "active_b": null,
+      "total_b": 1.71
+    },
+    "size": "T",
+    "source": "ollama",
+    "context_length": 8000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "dolphin-phi-2_7b-v2_6-q4_K_M": {
+    "family": "dolphin",
+    "params": {
+      "active_b": null,
+      "total_b": 2.78
+    },
+    "size": "T",
+    "source": "ollama",
+    "context_length": 2000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "llama3_2-3b-instruct-q4_K_M": {
+    "family": "llama",
+    "params": {
+      "active_b": null,
+      "total_b": 3.21
+    },
+    "size": "T",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "phi4-mini-3_8b-q4_K_M": {
+    "family": "phi",
+    "params": {
+      "active_b": null,
+      "total_b": 3.84
+    },
+    "size": "T",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "gemma3-4b-it-q4_K_M": {
+    "family": "gemma",
+    "params": {
+      "active_b": null,
+      "total_b": 4.3
+    },
+    "size": "T",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "gpt-4_1-nano-2025-04-14": {
+    "family": "gpt-4",
+    "params": {
+      "active_b": null,
+      "total_b": null
+    },
+    "size": "T",
+    "source": "openai",
+    "context_length": 1000000,
+    "quantization": null,
+    "reasoning": false,
+    "access":"proprietary"
+  },
+  "gemini-2_5-flash": {
+    "family": "gemini",
+    "params": {
+      "active_b": null,
+      "total_b": 5.0
+    },
+    "size": "S",
+    "source": "vertex ai",
+    "context_length": 1000000,
+    "quantization": null,
+    "reasoning": true,
+    "access":"proprietary"
+  },
+  "gemma3n-e4b-it-q4_K_M": {
+    "family": "gemma",
+    "params": {
+      "active_b": null,
+      "total_b": 6.87
+    },
+    "size": "S",
+    "source": "ollama",
+    "context_length": 32000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "mistral-7b-instruct-v0_3-q4_K_M": {
+    "family": "mistral",
+    "params": {
+      "active_b": null,
+      "total_b": 7.25
+    },
+    "size": "S",
+    "source": "ollama",
+    "context_length": 32000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "olmo2-7b-1124-instruct-q4_K_M": {
+    "family": "olmo",
+    "params": {
+      "active_b": null,
+      "total_b": 7.3
+    },
+    "size": "S",
+    "source": "ollama",
+    "context_length": 4000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "falcon3-7b-instruct-q4_K_M": {
+    "family": "falcon",
+    "params": {
+      "active_b": null,
+      "total_b": 7.46
+    },
+    "size": "S",
+    "source": "ollama",
+    "context_length": 32000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "dolphin3-8b-llama3_1-q4_K_M": {
+    "family": "dolphin",
+    "params": {
+      "active_b": null,
+      "total_b": 8.03
+    },
+    "size": "S",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "deepseek-r1-8b-0528-qwen3-q4_K_M": {
+    "family": "deepseek",
+    "params": {
+      "active_b": null,
+      "total_b": 8.19
+    },
+    "size": "S",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": true,
+    "access":"open-weight"
+  },
+  "qwen3-8b-q4_K_M": {
+    "family": "qwen",
+    "params": {
+      "active_b": null,
+      "total_b": 8.19
+    },
+    "size": "S",
+    "source": "ollama",
+    "context_length": 40000,
+    "quantization": "Q4_K_M",
+    "reasoning": true,
+    "access":"open-weight"
+  },
+  "yi-9b-chat-v1_5-q4_K_M": {
+    "family": "yi",
+    "params": {
+      "active_b": null,
+      "total_b": 8.83
+    },
+    "size": "S",
+    "source": "ollama",
+    "context_length": 4000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "gpt-4_1-mini-2025-04-14": {
+    "family": "gpt-4",
+    "params": {
+      "active_b": null,
+      "total_b": null
+    },
+    "size": "S",
+    "source": "openai",
+    "context_length": 1000000,
+    "quantization": null,
+    "reasoning": false,
+    "access":"proprietary"
+  },
+  "falcon3-10b-instruct-q4_K_M": {
+    "family": "falcon",
+    "params": {
+      "active_b": null,
+      "total_b": 10.3
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 32000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "mistral-nemo-12b-instruct-2407-q4_K_M": {
+    "family": "mistral",
+    "params": {
+      "active_b": null,
+      "total_b": 12.2
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 128000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "olmo2-13b-1124-instruct-q4_K_M": {
+    "family": "olmo",
+    "params": {
+      "active_b": null,
+      "total_b": 13.7
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 4000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "phi4-14b-q4_K_M": {
+    "family": "phi",
+    "params": {
+      "active_b": null,
+      "total_b": 14.7
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 16000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "phi4-reasoning-14b-q4_K_M": {
+    "family": "phi",
+    "params": {
+      "active_b": null,
+      "total_b": 14.7
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 32000,
+    "quantization": "Q4_K_M",
+    "reasoning": true,
+    "access":"open-weight"
+  },
+  "gemini-2_5-pro": {
+    "family": "gemini",
+    "params": {
+      "active_b": null,
+      "total_b": 20.0
+    },
+    "size": "M",
+    "source": "vertex ai",
+    "context_length": 1000000,
+    "quantization": null,
+    "reasoning": true,
+    "access":"proprietary"
+  },
+  "gpt-oss-20b": {
+    "family": "gpt-oss",
+    "params": {
+      "active_b": 3.6,
+      "total_b": 20.9
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": true,
+    "access":"open-weight"
+  },
+  "mistral-small-22b-instruct-2409-q4_K_M": {
+    "family": "mistral",
+    "params": {
+      "active_b": null,
+      "total_b": 22.2
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "mistral-small3_2-24b-instruct-2506-q4_K_M": {
+    "family": "mistral",
+    "params": {
+      "active_b": null,
+      "total_b": 24.0
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "gemma3-27b-it-q4_K_M": {
+    "family": "gemma",
+    "params": {
+      "active_b": null,
+      "total_b": 27.4
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "deepseek-r1-32b-qwen-distill-q4_K_M": {
+    "family": "deepseek",
+    "params": {
+      "active_b": null,
+      "total_b": 32.8
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": true,
+    "access":"open-weight"
+  },
+  "qwen3-32b-q4_K_M": {
+    "family": "qwen",
+    "params": {
+      "active_b": null,
+      "total_b": 32.8
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 40000,
+    "quantization": "Q4_K_M",
+    "reasoning": true,
+    "access":"open-weight"
+  },
+  "qwq-32b-q4_K_M": {
+    "family": "qwq",
+    "params": {
+      "active_b": null,
+      "total_b": 32.8
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 40000,
+    "quantization": "Q4_K_M",
+    "reasoning":false,
+    "access":"open-weight"
+  },
+  "yi-34b-chat-v1_5-q4_K_M": {
+    "family": "yi",
+    "params": {
+      "active_b": null,
+      "total_b": 34.4
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 4000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "mixtral-8x7b-instruct-v0_1-q4_K_M": {
+    "family": "mixtral",
+    "params": {
+      "active_b": 13.0,
+      "total_b": 46.7
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 32000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "dolphin-mixtral-8x7b-v2_7-q4_K_M": {
+    "family": "dolphin",
+    "params": {
+      "active_b": 13.0,
+      "total_b": 46.7
+    },
+    "size": "M",
+    "source": "ollama",
+    "context_length": 32000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "deepseek-r1-70b-llama-distill-q4_K_M": {
+    "family": "deepseek",
+    "params": {
+      "active_b": null,
+      "total_b": 70.6
+    },
+    "size": "L",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": true,
+    "access":"open-weight"
+  },
+  "llama3_3-70b-instruct-q4_K_M": {
+    "family": "llama",
+    "params": {
+      "active_b": null,
+      "total_b": 70.6
+    },
+    "size": "L",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "llama4-17b-scout-16e-instruct-q4_K_M": {
+    "family": "llama",
+    "params": {
+      "active_b": 17.0,
+      "total_b": 109.0
+    },
+    "size": "L",
+    "source": "ollama",
+    "context_length": 10000000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "gpt-oss-120b": {
+    "family": "gpt-oss",
+    "params": {
+      "active_b": 5.1,
+      "total_b": 117.0
+    },
+    "size": "L",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": true,
+    "access":"open-weight"
+  },
+  "mistral-large-123b-instruct-2411-q4_K_M": {
+    "family": "mistral",
+    "params": {
+      "active_b": null,
+      "total_b": 123.0
+    },
+    "size": "L",
+    "source": "ollama",
+    "context_length": 131000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "mixtral-8x22b-instruct-v0_1-q4_K_M": {
+    "family": "mixtral",
+    "params": {
+      "active_b": 39.0,
+      "total_b": 141.0
+    },
+    "size": "L",
+    "source": "ollama",
+    "context_length": 65000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "dolphin-mixtral-8x22b-v2_9-q4_K_M": {
+    "family": "dolphin",
+    "params": {
+      "active_b": 39.0,
+      "total_b": 141.0
+    },
+    "size": "L",
+    "source": "ollama",
+    "context_length": 65000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "gpt-4_1-2025-04-14": {
+    "family": "gpt-4",
+    "params": {
+      "active_b": null,
+      "total_b": null
+    },
+    "size": "L",
+    "source": "openai",
+    "context_length": 1000000,
+    "quantization": null,
+    "reasoning": false,
+    "access":"proprietary"
+  },
+  "qwen3-235b-a22b-instruct-2507-q4_K_M": {
+    "family": "qwen",
+    "params": {
+      "active_b": 22.0,
+      "total_b": 235.0
+    },
+    "size": "XL",
+    "source": "ollama",
+    "context_length": 262000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  },
+  "llama4-17b-maverick-128e-instruct-q4_K_M": {
+    "family": "llama",
+    "params": {
+      "active_b": 17.0,
+      "total_b": 402.0
+    },
+    "size": "XL",
+    "source": "ollama",
+    "context_length": 1000000,
+    "quantization": "Q4_K_M",
+    "reasoning": false,
+    "access":"open-weight"
+  }
+}

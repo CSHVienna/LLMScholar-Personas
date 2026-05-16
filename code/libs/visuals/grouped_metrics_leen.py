@@ -47,14 +47,25 @@ LABEL_FONT_SIZE = 11
 SPINE_LW        = 0.3
 
 DEFAULT_DIRECTIONS = {
-    'refusals': '↓', 'validity': '↑', 'duplicates': '↓',
-    'consistency': None, 'factuality': '↑', 'connectedness': None,
-    'similarity': None, 'diversity': None, 'parity': '↑',
-    'div_gender': None, 'div_ethnicity': None,
-    'div_language': None, 'div_geography': None,
-    'parity_gender': '↑', 'parity_ethnicity': '↑',
-    'parity_language': '↑', 'parity_geography': '↑',
-    'factuality_field': '↑', 'factuality_seniority': '↑',
+    'validity':                    '↑',
+    'refusals':                    '↓',
+    'factuality_author':                  '↑',
+    'factuality_field':            '↑',
+    'factuality_seniority':        '↑',
+    'factuality_location':         '↑',
+    'consistency':                 None,
+    'duplicates':                  '↓',
+    'div_gender':                  None,
+    'div_ethnicity':               None,
+    'div_location':                None,
+    'div_productivity_works':      None,
+    'div_productivity_citations':  None,
+    'parity_gender':               '↑',
+    'parity_ethnicity':            '↑',
+    'parity_works':                '↑',
+    'parity_citations':            '↑',
+    'popularity_works':            None,
+    'popularity_citations':        None,
 }
 
 # Bernoulli (binary 0/1) metrics — Wilson score CI was used when aggregating
@@ -184,6 +195,7 @@ def plot_grouped_metrics(
     metrics: Optional[Sequence[str]] = None,
     metric_directions: Optional[Mapping[str, Optional[str]]] = None,
     metric_labels: Optional[Mapping[str, str]] = None,
+    force_sections = False,
     figsize: Optional[tuple] = None,
     save_path: Optional[str] = None,
     tick_font_size: int = TICK_FONT_SIZE,
@@ -193,6 +205,8 @@ def plot_grouped_metrics(
     fig_dpi: int = FIG_DPI,
     panel_width: float = 1.6,
     show: bool = True,
+    textwrap_width: int = 11,
+    
 ) -> plt.Figure:
     """
     Plot grouped horizontal-bar metric panels with section labels and 95% CIs.
@@ -237,8 +251,8 @@ def plot_grouped_metrics(
     for gc in group_configs:
         col    = gc['column']
 
-        src_df = all_calls_df
-        
+        src_df = all_calls_df # if not force_sections else all_calls_df.query("column==@col").rename(columns={'label':col}).copy()
+
         for fk, fv in gc.get('filter', {}).items():
             if fk in src_df.columns:
                 src_df = src_df[src_df[fk] == fv]
@@ -257,30 +271,19 @@ def plot_grouped_metrics(
             row = {'label': str(val)}
             for m in metrics:
                 m_mean = f"{m}_mean"
-                val_mean = grp[m_mean].dropna().iloc[0] if m_mean in grp.columns else pd.Series(dtype=float)
+                tmp_mean = grp[m_mean].dropna()
+                val_mean = tmp_mean.iloc[0] if m_mean in grp.columns and not tmp_mean.empty else np.nan
                 row[m_mean] = val_mean
 
                 m_ci = f"{m}_ci"
-                val_ci = grp[m_ci].dropna().iloc[0] if m_ci in grp.columns else pd.Series(dtype=float)
+                tmp_ci = grp[m_ci].dropna()
+                val_ci = tmp_ci.iloc[0] if m_ci in grp.columns and not tmp_ci.empty else np.nan
                 row[m_ci] = val_ci
                 
                 m_n = f"{m}_n"
                 cn = 'n'
-                val_n = grp[cn].dropna().iloc[0] if cn in grp.columns else pd.Series(dtype=float)
+                val_n = grp[cn].dropna().iloc[0] if cn in grp.columns else np.nan
                 row[m_n] = val_n
-
-                # print(m, val_mean, val_ci, val_n)
-                
-                # s = grp[m].dropna() if m in grp.columns else pd.Series(dtype=float)
-                # if m in BINARY_METRICS:
-                #     mean_v, ci_v = _ci_wilson(s)
-                #     row[f'{m}_mean'] = mean_v
-                #     row[f'{m}_ci']   = ci_v
-                # else:
-                #     row[f'{m}_mean'] = float(s.mean()) if len(s) else np.nan
-                #     row[f'{m}_ci']   = _ci95(s)
-                # row[f'{m}_n']    = len(s)
-                # print(row['label'], m, row[f'{m}_mean'], row[f'{m}_ci'], row[f'{m}_n'])
 
             rows.append(row)
         if rows:
@@ -312,7 +315,7 @@ def plot_grouped_metrics(
         (len(row['label']) for sec in sections for row in sec['rows']), default=10
     )
     max_sec_chars = max(
-        max((len(line) for line in _textwrap.fill(sec['label'], width=11,
+        max((len(line) for line in _textwrap.fill(sec['label'], width=textwrap_width,
                                                   break_long_words=True).split('\n')),
             default=8)
         for sec in sections
@@ -375,13 +378,13 @@ def plot_grouped_metrics(
         y_c = (y_top + y_bot) / 2
         if draw_section_chrome:
             # break_long_words=False prevents mid-word breaks (e.g. "Mathematics" → "Mathematic\ns")
-            wrapped = _textwrap.fill(sec['label'], width=11, break_long_words=True)
+            wrapped = _textwrap.fill(sec['label'], width=textwrap_width, break_long_words=True)
             lax.text(sec_x_norm, y_c, wrapped, ha='right', va='center', multialignment='right', fontsize=label_font_size * 0.72, fontweight='bold')
             lax.plot([BX, BX],                  [y_top - 0.3, y_bot + 0.3], color='#444', lw=spine_lw * 3)
             lax.plot([BX, BX + bracket_w_norm], [y_top - 0.3, y_top - 0.3], color='#444', lw=spine_lw * 3)
             lax.plot([BX, BX + bracket_w_norm], [y_bot + 0.3, y_bot + 0.3], color='#444', lw=spine_lw * 3)
         for ri, row in enumerate(sec['rows']):
-            wrapped = _textwrap.fill(row['label'], width=11, break_long_words=True)
+            wrapped = _textwrap.fill(row['label'], width=textwrap_width, break_long_words=True)
             lax.text(0.98, y_lookup[(si, ri)], wrapped, ha='right', va='center', fontsize=tick_font_size, color=tick_font_color)
 
     # ── Metric panels ─────────────────────────────────────────────────────────
@@ -508,22 +511,18 @@ def plot_grouped_metrics_labeled(
     df = all_calls_df.copy()
     new_configs: list[dict] = []
  
+    # force_sections = plot_kwargs.get('force_sections', False)
+    
     for i, gc in enumerate(group_configs):
         # Strip our extension keys before forwarding.
         new_gc = {k: v for k, v in gc.items()
                   if k not in ('label_labels', 'column_labels')}
         
-        # 1) Section header remap.
-        lbl_map = _merge_label_map(section_labels, gc.get('label_labels'))
-        
-        if lbl_map and 'label' in gc:
-            new_gc['label'] = lbl_map.get(gc['label'], gc['label'])
- 
-        # 2) Row label remap — rewrite values into a derived column so the
+        # 1) Row label remap — rewrite values into a derived column so the
         #    existing renderer naturally picks them up.
         col_map = _merge_label_map(row_labels, gc.get('column_labels'))
-
         src_col = gc.get('column')
+
         if col_map and src_col and src_col in df.columns:
             derived = f'__lbl__{src_col}__{i}'
             df[derived] = _remap_series(df[src_col], col_map)
