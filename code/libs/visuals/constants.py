@@ -75,6 +75,12 @@ PLOT_LABELS = {
     'parity_citations':           'Parity $_{cit.}$',
     'popularity_works':           'Popularity $_{pub.}$',
     'popularity_citations':       'Popularity $_{cit.}$',
+    'pct_high_citations':         '% H cit.',
+    'pct_med_citations':          '% M cit.',
+    'pct_low_citations':          '% L cit.',
+    'pct_high_works':             '% H pub.',
+    'pct_med_works':              '% M pub.',
+    'pct_low_works':              '% L pub.',
 }
 
 PLOT_METRICS = [

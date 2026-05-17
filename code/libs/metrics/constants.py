@@ -73,13 +73,36 @@ PRODUCTIVITY_METRIC_COLS = [
 
 FACTUALITY_METRICS   = ['factuality_author', 'factuality_field', 'factuality_seniority', 'factuality_location']
 PARITY_METRICS = ['parity_ethnicity', 'parity_gender', 'parity_works', 'parity_citations']
+DIVERSITY_METRIC = ['div_gender', 'div_ethnicity', 'div_location'] # 'div_productivity_works', 'div_productivity_citations']
+POPULARITY_METRICS = ['pct_low_works', 'pct_med_works', 'pct_high_works', 'pct_low_citations', 'pct_med_citations', 'pct_high_citations', 'popularity_works', 'popularity_citations']
 
-TECHNICAL_METRICS = ['validity','refusals_c','duplicates_c'] + FACTUALITY_METRICS
-SOCIAL_METRICS = PARITY_METRICS
+TECHNICAL_METRICS = ['validity','refusals','consistency','duplicates'] + FACTUALITY_METRICS
+SOCIAL_METRICS = PARITY_METRICS + DIVERSITY_METRIC + POPULARITY_METRICS
+
+TECHNICAL_METRICS_NORM = ['validity','refusals_c','duplicates_c'] + FACTUALITY_METRICS
 
 PERSONA_VARIABLES = ['language_en', 'location_en', 'role_en']
-CONTEXT_VARIABLES = ['k', 'field_en', 'target_en']
+CONTEXT_VARIABLES = ['k', 'field_en', 'subfield_en', 'target_en']
 
+MAIN_CONTEXT_VARIABLES = CONTEXT_VARIABLES.copy()
+MAIN_CONTEXT_VARIABLES.remove('subfield_en') 
+
+PROMPT_VAR_GROUPS = {'persona': PERSONA_VARIABLES, 
+                    'context': CONTEXT_VARIABLES}
+
+EVALUATION_METRIC_GROUPS = {'technical': TECHNICAL_METRICS, 
+                            'social': SOCIAL_METRICS}
+
+PROMPT_TYPE_MAP = {
+    "language_en": "persona",
+    "role_en": "persona",
+    "location_en": "persona",
+    
+    "field_en": "context",
+    "subfield_en": "context",
+    "k": "context",
+    "target_en": "context",
+}
 
 #######################################################################################################################
 # NORMALIZATION (TO ENGLISH)
