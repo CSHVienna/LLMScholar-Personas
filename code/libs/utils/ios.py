@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from datetime import datetime
@@ -86,3 +87,14 @@ def to_csv(df: pd.DataFrame, file_path: Path | str, **kwargs) -> None:
 def load_csv(file_path: Path | str, **kwargs) -> pd.DataFrame:
     p = Path(file_path)
     return pd.read_csv(p, **kwargs)
+
+
+def file_hash(*paths) -> str:
+    """MD5 of mtime+size for each path — changes when any source file is updated."""
+    parts = []
+    for p in paths:
+        p = Path(p)
+        if p.exists():
+            s = p.stat()
+            parts.append(f"{p}:{s.st_size}:{int(s.st_mtime)}")
+    return hashlib.md5("|".join(parts).encode()).hexdigest()[:10]

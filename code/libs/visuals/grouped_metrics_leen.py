@@ -64,8 +64,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
-from scipy import stats as _stats
-from statsmodels.stats.proportion import proportion_confint
 
 
 # ── Default style constants (mirror gridcons.py) ─────────────────────────────

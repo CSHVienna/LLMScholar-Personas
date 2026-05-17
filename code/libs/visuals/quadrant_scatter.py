@@ -109,7 +109,10 @@ def plot_quadrant_scatter(
                 ("Q4", "Q4 · high tech / low social"),
             ]
         ]
-        ax.legend(handles=handles, loc="best", frameon=True, framealpha=0.9)
+        ax.legend(handles=handles, loc="best", frameon=True, framealpha=0.9, 
+                  handlelength=0.5,    # was 2.0 — collapses the handle area to just the dot
+                  handletextpad=0.6,   # was 0.8 — tightens dot ↔ text gap
+                  )
 
     plt.tight_layout()
     return fig, ax
