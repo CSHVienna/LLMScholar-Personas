@@ -43,12 +43,22 @@ ALL_METRICS = [
     'parity_ethnicity', 'parity_gender','parity_works', 'parity_citations',
 
     # Productivity
-    'pct_low_works', 'pct_med_works', 'pct_high_works', 
-    'pct_low_citations', 'pct_med_citations', 'pct_high_citations',
+    'pct_works_low', 'pct_works_med', 'pct_works_high', 
+    'pct_citations_low', 'pct_citations_med', 'pct_citations_high',
     
     # popularity
     'popularity_works', 'popularity_citations',
 ]
+
+PREFIX_GROUPS_METRICS = {
+        'factuality_': 'Factuality',
+        'parity_':     'Parity',
+        'div_':        'Diversity',
+        'pct_works_':        '% Publications',
+        'pct_citations_':        '% Citations',
+        'popularity_': 'Popularity'
+    }
+
 
 # Bernoulli (binary 0/1) metrics — paper uses Wilson score CI here.
 BINARY_METRICS = {'validity', 'refusals'}
@@ -61,20 +71,20 @@ PRODUCTIVITY_METRIC_COLS = [
     'parity_citations',
     'popularity_works', 
     'popularity_citations',
-    'pct_low_works',  
-    'pct_med_works',  
-    'pct_high_works',  
+    'pct_works_low',  
+    'pct_works_med',  
+    'pct_works_high',  
     'div_productivity_works',
-    'pct_low_citations', 
-    'pct_med_citations', 
-    'pct_high_citations', 
+    'pct_citations_low', 
+    'pct_citations_med', 
+    'pct_citations_high', 
     'div_productivity_citations',
 ]
 
 FACTUALITY_METRICS   = ['factuality_author', 'factuality_field', 'factuality_seniority', 'factuality_location']
 PARITY_METRICS = ['parity_ethnicity', 'parity_gender', 'parity_works', 'parity_citations']
 DIVERSITY_METRIC = ['div_gender', 'div_ethnicity', 'div_location'] # 'div_productivity_works', 'div_productivity_citations']
-POPULARITY_METRICS = ['pct_low_works', 'pct_med_works', 'pct_high_works', 'pct_low_citations', 'pct_med_citations', 'pct_high_citations', 'popularity_works', 'popularity_citations']
+POPULARITY_METRICS = ['pct_works_low', 'pct_works_med', 'pct_works_high', 'pct_citations_low', 'pct_citations_med', 'pct_citations_high', 'popularity_works', 'popularity_citations']
 
 TECHNICAL_METRICS = ['validity','refusals','consistency','duplicates'] + FACTUALITY_METRICS
 SOCIAL_METRICS = PARITY_METRICS + DIVERSITY_METRIC + POPULARITY_METRICS
@@ -88,7 +98,9 @@ MAIN_CONTEXT_VARIABLES = CONTEXT_VARIABLES.copy()
 MAIN_CONTEXT_VARIABLES.remove('subfield_en') 
 
 PROMPT_VAR_GROUPS = {'persona': PERSONA_VARIABLES, 
-                    'context': CONTEXT_VARIABLES}
+                    'context': CONTEXT_VARIABLES,
+                    'llm':['model'],
+                    }
 
 EVALUATION_METRIC_GROUPS = {'technical': TECHNICAL_METRICS, 
                             'social': SOCIAL_METRICS}

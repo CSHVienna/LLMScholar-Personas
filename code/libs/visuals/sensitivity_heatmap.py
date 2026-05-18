@@ -14,8 +14,9 @@ neutral grey above each block.
 from __future__ import annotations
 
 import colorsys
+import warnings
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -25,54 +26,6 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import MaxNLocator
 import seaborn as sns
-
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-PROMPT_VAR_COLORS: Dict[str, str] = {
-    'persona': '#efaf76',
-    'context': '#7ab0d3',
-}
-
-ROW_GROUPS: Dict[str, List[str]] = {
-    'persona': ['role_en', 'location_en', 'language_en'],
-    'context': ['k', 'field_en', 'subfield_en', 'target_en'],
-}
-
-COL_GROUPS: Dict[str, List[str]] = {
-    'technical': [
-        'validity', 'refusals', 'consistency', 'duplicates',
-        'factuality_author', 'factuality_field',
-        'factuality_location', 'factuality_seniority',
-    ],
-    'social': [
-        'div_ethnicity', 'div_gender', 'div_location',
-        'parity_ethnicity', 'parity_gender',
-        'pct_high_citations', 'pct_med_citations', 'pct_low_citations',
-        'pct_high_works', 'pct_med_works', 'pct_low_works',
-    ],
-}
-
-NAME_MAP: Dict[str, str] = {
-    'role_en': 'Role', 'location_en': 'Location', 'language_en': 'Language',
-    'k': 'k', 'field_en': 'Field', 'subfield_en': 'Subfield',
-    'target_en': 'Target',
-    'validity': 'Validity', 'refusals': 'Refusals',
-    'consistency': 'Consistency', 'duplicates': 'Duplicates',
-    'factuality_author': 'Fact. author',
-    'factuality_field': 'Fact. field',
-    'factuality_location': 'Fact. location',
-    'factuality_seniority': 'Fact. seniority',
-    'div_ethnicity': 'Div. ethnicity', 'div_gender': 'Div. gender',
-    'div_location': 'Div. location',
-    'parity_ethnicity': 'Par. ethnicity', 'parity_gender': 'Par. gender',
-    'pct_high_citations': '% high cit.', 'pct_med_citations': '% mid cit.',
-    'pct_low_citations': '% low cit.',
-    'pct_high_works': '% high works', 'pct_med_works': '% mid works',
-    'pct_low_works': '% low works',
-}
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +79,18 @@ class GroupedSensitivityHeatmap:
     row_group_colors: Dict[str, str]
     name_map: Dict[str, str] = field(default_factory=dict)
 
+    # Prefix-based x-tick grouping. Maps {raw_column_prefix: bracket_label},
+    # e.g. {'factuality_': 'Factuality', 'div_': 'Diversity'}. For any
+    # column whose name starts with one of these prefixes the prefix is
+    # stripped, the bracket label is drawn below the tick labels spanning
+    # the run of matching columns, and the displayed tick label is looked
+    # up in name_map by full-name first then by suffix (so name_map can
+    # mix full names for ungrouped cols / row labels and suffix defaults
+    # for grouped cols). When this dict is empty the behaviour is
+    # identical to the original: full column names go straight through
+    # name_map and no brackets are drawn.
+    tick_prefix_groups: Dict[str, str] = field(default_factory=dict)
+
     # significance (optional): a same-shape DataFrame of p-values aligned to df
     pvalue_df: Optional[pd.DataFrame] = None
 
@@ -178,7 +143,7 @@ class GroupedSensitivityHeatmap:
 
     # advanced geometry – usually no need to touch
     tick_label_room_y: float = 0.065  # horizontal room for y-tick text
-    tick_label_room_x: float = 0.145  # vertical room for x-tick text (rotated)
+    tick_label_room_x: float = 0.12  # vertical room for x-tick text (rotated)
     band_width: float = 0.022         # used for both row band & col box thickness
     band_gap: float = 0.006           # gap between band/box and tick labels
     ylabel_room: float = 0.025
@@ -192,18 +157,38 @@ class GroupedSensitivityHeatmap:
     col_box_color: str = '#eaecef'    # light grey fill for col-group boxes
     col_box_text_color: str = '#555'
 
+    # Prefix-group bracket tier (only used when tick_prefix_groups is set)
+    prefix_group_room: float = 0.034     # vertical room for the bracket tier
+    prefix_group_color: str = '#8a8a8a'  # bracket line + text color
+    prefix_group_linewidth: float = 0.7
+    prefix_group_fontsize: float = 9.0
+    prefix_group_tick_height: float = 0.005   # end-tick height (fig coords)
+    prefix_group_inset: float = 0.003         # bracket inset from cell edges
+
     # -- setup -------------------------------------------------------------
 
     def __post_init__(self):
+        # Drop any rows/cols listed in row_groups / col_groups that aren't
+        # actually in the DataFrame, emitting a single warning per kind.
+        # This keeps `ROW_GROUPS` / `COL_GROUPS` reusable across data
+        # slices that don't contain every metric.
+        self.row_groups = GroupedSensitivityHeatmap._filter_groups(
+            self.row_groups, self.df.index, kind='row',
+        )
+        self.col_groups = GroupedSensitivityHeatmap._filter_groups(
+            self.col_groups, self.df.columns, kind='column',
+        )
+
         rows = [r for g in self.row_groups.values() for r in g]
         cols = [c for g in self.col_groups.values() for c in g]
 
-        missing_rows = [r for r in rows if r not in self.df.index]
-        missing_cols = [c for c in cols if c not in self.df.columns]
-        if missing_rows or missing_cols:
-            raise KeyError(
-                f"Missing from DataFrame — rows: {missing_rows}, "
-                f"cols: {missing_cols}"
+        if not rows:
+            print(
+                "No rows remain after filtering — nothing to plot.",
+            )
+        if not cols:
+            print(
+                "No columns remain after filtering — nothing to plot.",
             )
 
         self._data = (self.df.loc[rows, cols]
@@ -265,8 +250,93 @@ class GroupedSensitivityHeatmap:
 
     # -- helpers -----------------------------------------------------------
 
+    @staticmethod
+    def _filter_groups(groups: Dict[str, List[str]],
+                       available: Iterable[str], *,
+                       kind: str) -> Dict[str, List[str]]:
+        """Return a copy of `groups` with entries missing from `available`
+        removed. Groups that become empty are dropped entirely.
+
+        A single `UserWarning` is emitted listing every dropped entry,
+        annotated with the group it came from, so the user can fix their
+        config or data without seeing N separate warnings.
+        """
+        available_set = set(available)
+        filtered: Dict[str, List[str]] = {}
+        missing: List[Tuple[str, str]] = []  # (group, name)
+        emptied: List[str] = []
+
+        for group, names in groups.items():
+            kept = [n for n in names if n in available_set]
+            missing.extend((group, n) for n in names if n not in available_set)
+            if kept:
+                filtered[group] = kept
+            elif names:  # had members, but none survived
+                emptied.append(group)
+
+        if missing:
+            formatted = ', '.join(f'{n!r} ({g})' for g, n in missing)
+            warnings.warn(
+                f"Skipping {len(missing)} {kind}(s) missing from "
+                f"DataFrame: {formatted}",
+                stacklevel=3,
+            )
+        if emptied:
+            warnings.warn(
+                f"Dropping empty {kind}-group(s) after filtering: "
+                f"{', '.join(emptied)}",
+                stacklevel=3,
+            )
+        return filtered
+
     def _pretty(self, name: str) -> str:
         return self.name_map.get(name, name)
+
+    def _split_tick(self, col: str) -> Tuple[str, Optional[str]]:
+        """Split a raw column name into (tick_label, prefix_group_label).
+
+        Lookup order for the tick label is:
+            1. `name_map[col]`         — full-name override (most specific)
+            2. `name_map[suffix]`      — suffix default (most reusable)
+            3. raw suffix              — fallback
+
+        Returning the prefix-group label lets the caller decide whether
+        to draw a bracket; the column is ungrouped (None) if no prefix
+        in `tick_prefix_groups` matches.
+
+        Longest-prefix-match is used so e.g. 'fact_' and 'factuality_'
+        can coexist without ambiguity.
+        """
+        for prefix in sorted(self.tick_prefix_groups, key=len, reverse=True):
+            if col.startswith(prefix):
+                suffix = col[len(prefix):]
+                if col in self.name_map:
+                    label = self.name_map[col]
+                else:
+                    label = self.name_map.get(suffix, suffix)
+                return label, self.tick_prefix_groups[prefix]
+        return self._pretty(col), None
+
+    def _find_prefix_runs(self, cg: str) -> List[Tuple[int, int, str]]:
+        """Find contiguous runs of columns in col-group `cg` that share a
+        prefix-group label. Returns (j_start, j_end, label) tuples with
+        inclusive ends, in column order.
+        """
+        cols = self.col_groups[cg]
+        runs: List[Tuple[int, int, str]] = []
+        cur_label: Optional[str] = None
+        cur_start = 0
+        for j, c in enumerate(cols):
+            _, label = self._split_tick(c)
+            if label == cur_label:
+                continue
+            if cur_label is not None:
+                runs.append((cur_start, j - 1, cur_label))
+            cur_label = label
+            cur_start = j
+        if cur_label is not None:
+            runs.append((cur_start, len(cols) - 1, cur_label))
+        return runs
 
     def _block(self, row_g: str, col_g: str) -> pd.DataFrame:
         return self._data.loc[self.row_groups[row_g], self.col_groups[col_g]]
@@ -384,11 +454,13 @@ class GroupedSensitivityHeatmap:
             if self.title:
                 top -= 0.07
 
-        # bottom: x-tick labels + col-group box + xlabel + edge
+        # bottom: x-tick labels + (prefix-group bracket) + col-group box + xlabel + edge
         if self.bottom is not None:
             bottom = self.bottom
         else:
             bottom = self.edge_pad + self.tick_label_room_x
+            if self.tick_prefix_groups:
+                bottom += self.prefix_group_room
             if self.show_col_group_labels:
                 bottom += self._col_box_height + self.band_gap
             if self.xlabel:
@@ -405,7 +477,7 @@ class GroupedSensitivityHeatmap:
             sp.set_visible(False)
 
     def _style_xticks(self, ax, labels):
-        ax.set_xticklabels(labels, rotation=42, ha='right',
+        ax.set_xticklabels(labels, rotation=42, ha='center',
                            fontsize=9, color='#333')
         ax.tick_params(axis='x', length=0, pad=2)
 
@@ -436,7 +508,8 @@ class GroupedSensitivityHeatmap:
                                     cmap=cmap, vmin=vmin, vmax=vmax)
 
         if show_xticks:
-            self._style_xticks(ax, [self._pretty(c) for c in block.columns])
+            tick_labels = [self._split_tick(c)[0] for c in block.columns]
+            self._style_xticks(ax, tick_labels)
         else:
             ax.set_xticks([])
         if show_yticks:
@@ -476,6 +549,13 @@ class GroupedSensitivityHeatmap:
             y += self.xlabel_room
         return y
 
+    def _prefix_group_y_bottom(self) -> float:
+        """Y position (figure coords) of the bottom of the bracket tier."""
+        y = self._col_box_y()
+        if self.show_col_group_labels:
+            y += self._col_box_height + self.band_gap
+        return y
+
     def _xlabel_y(self) -> float:
         return self.edge_pad + 0.015
 
@@ -491,6 +571,55 @@ class GroupedSensitivityHeatmap:
         box.text(0.5, 0.5, label.upper(), ha='center', va='center',
                  color=self.col_box_text_color, fontweight='bold',
                  fontsize=9.5, transform=box.transAxes)
+
+    def _add_prefix_group_brackets(self, fig, ax, cg):
+        """For each contiguous prefix-group run inside col-group `cg`,
+        draw `├──── label ────┤` spanning the run's columns, below the
+        x-tick labels and above the col-group box.
+
+        Positions are in figure coords. The bottom-row block axis `ax`
+        anchors x positions; the cell width inside the block is
+        `ax.width / N`, so each run spans an integer slice of that.
+        """
+        from matplotlib.lines import Line2D
+
+        runs = self._find_prefix_runs(cg)
+        if not runs:
+            return
+
+        bb = ax.get_position()
+        n = len(self.col_groups[cg])
+        cell_w = bb.width / n
+
+        y0 = self._prefix_group_y_bottom()
+        y_line = y0 + 0.78 * self.prefix_group_room  # bracket line near top
+        y_text = y0 + 0.30 * self.prefix_group_room  # text below the line
+        half_tick = self.prefix_group_tick_height / 2
+        inset = self.prefix_group_inset
+        lw = self.prefix_group_linewidth
+        color = self.prefix_group_color
+
+        for j_start, j_end, label in runs:
+            x_left  = bb.x0 + j_start * cell_w + inset
+            x_right = bb.x0 + (j_end + 1) * cell_w - inset
+            x_mid   = (x_left + x_right) / 2
+
+            # ├ end tick, ──── horizontal, ┤ end tick
+            for x in (x_left, x_right):
+                fig.add_artist(Line2D(
+                    [x, x], [y_line - half_tick, y_line + half_tick],
+                    color=color, linewidth=lw,
+                    transform=fig.transFigure, clip_on=False,
+                ))
+            fig.add_artist(Line2D(
+                [x_left, x_right], [y_line, y_line],
+                color=color, linewidth=lw,
+                transform=fig.transFigure, clip_on=False,
+            ))
+            fig.text(x_mid, y_text, label,
+                     ha='center', va='center',
+                     fontsize=self.prefix_group_fontsize,
+                     color=color)
 
     def _add_colorbar(self, fig, ax_ref, cmap, vmin, vmax, right,
                       label, label_color):
@@ -567,6 +696,13 @@ class GroupedSensitivityHeatmap:
             for cg in col_keys:
                 self._add_col_box(fig, block_axes[(row_keys[-1], cg)], cg)
 
+        # prefix-group brackets (between tick labels and col-group boxes)
+        if self.tick_prefix_groups:
+            for cg in col_keys:
+                self._add_prefix_group_brackets(
+                    fig, block_axes[(row_keys[-1], cg)], cg,
+                )
+
         # shared colorbar label: one rotated text spanning both colorbars
         if self.colorbar_label and self.show_colorbars:
             label_x = right + self.cbar_gap + self.cbar_width \
@@ -595,6 +731,74 @@ class GroupedSensitivityHeatmap:
 # ---------------------------------------------------------------------------
 # Demo
 # ---------------------------------------------------------------------------
+
+# Row groups (prompt variables, organised by family)
+ROW_GROUPS: Dict[str, List[str]] = {
+    'persona': ['language', 'location', 'role'],
+    'context': ['k', 'field', 'subfield', 'target'],
+    'llm':     ['model'],
+}
+
+# Column groups (metrics, partitioned into technical / social)
+COL_GROUPS: Dict[str, List[str]] = {
+    'technical': [
+        'validity', 'refusals', 'consistency', 'duplicates',
+        'factuality_author', 'factuality_field',
+        'factuality_seniority', 'factuality_location',
+    ],
+    'social': [
+        'parity_eth', 'parity_gender', 'parity_pub', 'parity_cit',
+        'div_gen', 'div_eth', 'div_loc',
+        'pct_pub_l', 'pct_pub_m', 'pct_pub_h',
+        'pct_cit_l', 'pct_cit_m', 'pct_cit_h',
+        'popularity_pub', 'popularity_cit',
+    ],
+}
+
+PROMPT_VAR_COLORS = {
+    'persona': '#E08E45',
+    'context': '#5C8BB2',
+    'llm':     '#6e6e6e',
+}
+
+# name_map lookup order for a grouped column 'factuality_field' is:
+#   1. name_map['factuality_field']  — full-name override (most specific)
+#   2. name_map['field']             — suffix default (most reusable)
+#   3. 'field'                       — raw suffix fallback
+#
+# For row names and ungrouped columns, only step 1 (full name) is used.
+# Use full-name keys to disambiguate suffix/row collisions — here both
+# row variable 'field' and the suffix of 'factuality_field' would map
+# to 'Field' without the explicit overrides for grouped columns.
+NAME_MAP = {
+    # row labels
+    'language': 'Language', 'location': 'Location', 'role': 'Role',
+    'k': 'k', 'field': 'Field', 'subfield': 'Subfield',
+    'target': 'Target', 'model': 'Model',
+    # ungrouped technical metrics
+    'validity': 'Validity', 'refusals': 'Refusals',
+    'consistency': 'Consistency', 'duplicates': 'Duplicates',
+    # full-name overrides for grouped columns whose suffix collides with
+    # a row name ('field', 'location'): force lowercase tick labels
+    'factuality_field':    'field',
+    'factuality_location': 'location',
+    # suffix defaults (no collision → bare key is enough)
+    'author': 'author', 'seniority': 'seniority',
+    'eth': 'eth.', 'gender': 'gender', 'pub': 'pub.', 'cit': 'cit.',
+    'gen': 'gen.', 'loc': 'loc.',
+    'l_pub': 'L pub.', 'm_pub': 'M pub.', 'h_pub': 'H pub.',
+    'l_cit': 'L cit.', 'm_cit': 'M cit.', 'h_cit': 'H cit.',
+}
+
+TICK_PREFIX_GROUPS = {
+    'factuality_': 'Factuality',
+    'parity_':     'Parity',
+    'div_':        'Diversity',
+    'pct_works_':        '% Publications',
+    'pct_citations_':      '% Citations',
+    'popularity_': 'Popularity',
+}
+
 
 def _make_demo_anova_df(seed: int = 7) -> pd.DataFrame:
     """Long-format ANOVA-style placeholder: one row per (prompt_var, metric).
@@ -634,7 +838,8 @@ def main():
         col_groups=COL_GROUPS,
         row_group_colors=PROMPT_VAR_COLORS,
         name_map=NAME_MAP,
-        figsize=(12, 5),
+        tick_prefix_groups=TICK_PREFIX_GROUPS,
+        figsize=(14, 5.5),
         title=None,
         show_colorbar_labels=False,
         significance_style='bold',   # 'stars' | 'bold' | 'italic' | None

@@ -1,7 +1,7 @@
 
 from libs.metrics.constants import ALL_METRICS
 
-PROMPT_VAR_COLORS = {'context': '#7ab0d3', 'persona': '#efaf76'}
+PROMPT_VAR_COLORS = {'context': '#7ab0d3', 'persona': '#efaf76', 'llm': '#9a9a9a', 'model': '#9a9a9a'}
  
 ETHNICITY_MAP = {
         'White': 'White',
@@ -75,12 +75,12 @@ PLOT_LABELS = {
     'parity_citations':           'Parity $_{cit.}$',
     'popularity_works':           'Popularity $_{pub.}$',
     'popularity_citations':       'Popularity $_{cit.}$',
-    'pct_high_citations':         '% H cit.',
-    'pct_med_citations':          '% M cit.',
-    'pct_low_citations':          '% L cit.',
-    'pct_high_works':             '% H pub.',
-    'pct_med_works':              '% M pub.',
-    'pct_low_works':              '% L pub.',
+    'pct_citations_high':         '% H cit.',
+    'pct_citations_med':       '% M cit.',
+    'pct_citations_low':          '% L cit.',
+    'pct_works_high':             '% H pub.',
+    'pct_works_med':           '% M pub.',
+    'pct_works_low':              '% L pub.',
 }
 
 PLOT_METRICS = [
