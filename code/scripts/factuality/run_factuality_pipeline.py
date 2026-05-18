@@ -10,7 +10,9 @@ Steps:
                                   (field check: field_status)
   2.  factuality_seniority.py    field            → factuality_seniority.csv
   3.  factuality_location.py     seniority        → factuality_location.csv
-  4.  factuality_ethnicity.py    location         → factuality_full.csv  (final)
+  3.5 factuality_affiliation.py  location         → factuality_affiliation.csv
+                                  (LLM current_affiliations vs OA institution history)
+  4.  factuality_ethnicity.py    affiliation      → factuality_full.csv  (final)
 
 Usage (from code/scripts/factuality/):
   python run_factuality_pipeline.py
@@ -106,16 +108,27 @@ def main() -> None:
             False,
         ),
         (
-            "3/4    factuality_location",
+            "3/5    factuality_location",
             [sys.executable, "factuality_location.py",
              "--input",  f"{r}/factuality_seniority.csv",
              "--output", f"{r}/factuality_location.csv"],
             False,
         ),
+        # PLAN.md Tarea 2 — nuevo step de factuality de afiliación,
+        # insertado entre location y ethnicity (Hallazgo 4).
         (
-            "4/4    factuality_ethnicity → factuality_full",
+            "3.5/5  factuality_affiliation",
+            [sys.executable, "factuality_affiliation.py",
+             "--input",  f"{r}/factuality_location.csv",
+             "--output", f"{r}/factuality_affiliation.csv"],
+            False,
+        ),
+        (
+            # PLAN.md Tarea 2 — el step de ethnicity ahora lee del CSV de
+            # afiliación (antes leía de factuality_location.csv).
+            "4/5    factuality_ethnicity → factuality_full",
             [sys.executable, "factuality_ethnicity.py",
-             "--input",            f"{r}/factuality_location.csv",
+             "--input",            f"{r}/factuality_affiliation.csv",
              "--ethnicity_lookup", f"{r}/recommendations_with_ethnicity.csv",
              "--output",           f"{r}/factuality_full.csv"],
             False,

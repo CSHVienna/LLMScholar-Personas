@@ -161,7 +161,45 @@ LOCATION_NORM_MAP = {
     'Sudáfrica': 'South Africa',
     'Südafrika': 'South Africa', 
     'Sudafrica': 'South Africa',
-    'Ecuador': 'Ecuador',
+    'Ecuador': 'Ecuador'}
+
+
+BENCHMARK_DEMOGRAPHIC_ATTRIBUTES = ['gender', 'ethnicity', 'prominence_pub', 'prominence_cit']
+
+BENCHMARK_MODEL_GROUPS = ['model_access', 'model_size', 'model_class']
+BENCHMARK_MODEL_GROUPS_LABEL_MAP = {"model_access": "Access", "model_size": "Size", "model_class": "Reasoning"}
+
+BENCHMARK_PER_ATTEMPT_COLS = BENCHMARK_MODEL_GROUPS + ['model', 'grounded','temperature', 'date', 'time', 'task_name', 'task_param', 'task_attempt']
+BENCHMARK_PER_REQUEST_COLS = BENCHMARK_MODEL_GROUPS + ["model", 'grounded','temperature', "date", "time", "task_name", "task_param"]
+
+# ── Sub-population dimensions (PLAN.md Tarea 3) ────────────────────────────────
+# Consumido por aggregators.aggregate_*_by_subpop para calcular social metrics
+# por subgrupo; para cada subpop value el GT se filtra a ese subgrupo (e.g.
+# parity_gender en Japón se compara contra la distribución female/male de
+# autores en Japón, no el GT global).
+
+# Orden canónico de los 6 fields del experimento — usado para ordenar ejes
+# de plots y columnas de tablas.
+FIELD_ORDER    = ['Biology', 'Computer Science', 'Mathematics', 'Physics', 'Psychology', 'Sociology']
+# Códigos ISO-2 de los 5 países del experimento (Ecuador, Japón, Alemania,
+# Canadá, Sudáfrica) — mismo formato que oa_country_code en factuality_full.csv.
+LOCATION_ORDER = ['EC', 'JP', 'DE', 'CA', 'ZA']
+# Orden canónico de los idiomas del persona prompting — siempre English,
+# Spanish, German en plots/tablas. Lower-case porque así viven en los CSV.
+LANGUAGE_ORDER = ['english', 'spanish', 'german']
+LANGUAGE_LABELS = {'english': 'English', 'spanish': 'Spanish', 'german': 'German'}
+
+# Dimensiones individuales por las que se puede sub-poblacionar.
+BENCHMARK_SUBPOPULATION_DIMS   = ['field', 'location']
+# Combinaciones a iterar en el notebook: por field solo, por location solo,
+# y cruzado field × location.
+BENCHMARK_SUBPOPULATION_COMBOS = [['field'], ['location'], ['field', 'location']]
+                             
+
+BENCHMARK_MODEL_GROUP_LABEL_MAP = {
+    "open": "Open", "proprietary": "Proprietary",
+    "S": "Small", "M": "Medium", "L": "Large", "XL": "Extra Large",
+    "non-reasoning": "Disabled", "reasoning": "Enabled",
 }
 # ── Normalize task to canonical English ─────────────────────
 TASK_NORM_MAP = {
@@ -184,3 +222,11 @@ ROLE_NORM_MAP = {
     'Director(a)/Reclutador(a)':     'Director/Recruiter',
     'Direktor(in)/Rekrutierende(r)': 'Director/Recruiter',
 }
+
+
+#######################################################################################################################
+# FIGURE / PLOT SETTINGS
+#######################################################################################################################
+
+FIG_DPI    = 600
+FONT_SCALE = 1.55
