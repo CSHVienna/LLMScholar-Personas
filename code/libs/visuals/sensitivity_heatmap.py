@@ -143,7 +143,7 @@ class GroupedSensitivityHeatmap:
 
     # advanced geometry – usually no need to touch
     tick_label_room_y: float = 0.065  # horizontal room for y-tick text
-    tick_label_room_x: float = 0.12  # vertical room for x-tick text (rotated)
+    tick_label_room_x: float = 0.11  # vertical room for x-tick text (rotated)
     band_width: float = 0.022         # used for both row band & col box thickness
     band_gap: float = 0.006           # gap between band/box and tick labels
     ylabel_room: float = 0.025
@@ -246,6 +246,7 @@ class GroupedSensitivityHeatmap:
         pvalue_df = (anova_df.pivot(index=row_col, columns=col_col,
                                     values=pvalue_col)
                      if pvalue_col is not None else None)
+
         return cls(df=value_df, pvalue_df=pvalue_df, **kwargs)
 
     # -- helpers -----------------------------------------------------------

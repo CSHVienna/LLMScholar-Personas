@@ -54,8 +54,8 @@ PREFIX_GROUPS_METRICS = {
         'factuality_': 'Factuality',
         'parity_':     'Parity',
         'div_':        'Diversity',
-        'pct_works_':        '% Publications',
-        'pct_citations_':        '% Citations',
+        'pct_works_':        'Publications tertile',
+        'pct_citations_':        'Citations tertile',
         'popularity_': 'Popularity'
     }
 
@@ -82,12 +82,12 @@ PRODUCTIVITY_METRIC_COLS = [
 ]
 
 FACTUALITY_METRICS   = ['factuality_author', 'factuality_field', 'factuality_seniority', 'factuality_location']
-PARITY_METRICS = ['parity_ethnicity', 'parity_gender', 'parity_works', 'parity_citations']
-DIVERSITY_METRIC = ['div_gender', 'div_ethnicity', 'div_location'] # 'div_productivity_works', 'div_productivity_citations']
+PARITY_METRICS = ['parity_gender', 'parity_ethnicity', 'parity_works', 'parity_citations']
+DIVERSITY_METRICS = ['div_gender', 'div_ethnicity', 'div_location'] # 'div_productivity_works', 'div_productivity_citations']
 POPULARITY_METRICS = ['pct_works_low', 'pct_works_med', 'pct_works_high', 'pct_citations_low', 'pct_citations_med', 'pct_citations_high', 'popularity_works', 'popularity_citations']
 
 TECHNICAL_METRICS = ['validity','refusals','consistency','duplicates'] + FACTUALITY_METRICS
-SOCIAL_METRICS = PARITY_METRICS + DIVERSITY_METRIC + POPULARITY_METRICS
+SOCIAL_METRICS = PARITY_METRICS + DIVERSITY_METRICS + POPULARITY_METRICS
 
 TECHNICAL_METRICS_NORM = ['validity','refusals_c','duplicates_c'] + FACTUALITY_METRICS
 
@@ -114,6 +114,39 @@ PROMPT_TYPE_MAP = {
     "subfield_en": "context",
     "k": "context",
     "target_en": "context",
+}
+
+
+NESTED_METRIC_PAIRS = {
+    'consistency': 'validity',
+    'duplicates': 'validity',
+    'factuality_author': 'validity',
+
+    'factuality_field': 'factuality_author',
+    'factuality_seniority': 'factuality_author',
+    'factuality_location': 'factuality_author',
+    
+    'div_gender': 'factuality_author',
+    'div_ethnicity': 'factuality_author',
+    'div_location': 'factuality_author',
+    'div_productivity_works': 'factuality_author',
+    'div_productivity_citations': 'factuality_author',
+    
+    'parity_gender': 'factuality_author',
+    'parity_ethnicity': 'factuality_author',
+    'parity_works': 'factuality_author',
+    'parity_citations': 'factuality_author',
+    
+    'popularity_works': 'factuality_author',
+    'popularity_citations': 'factuality_author',
+    
+    'pct_works_low': 'factuality_author',
+    'pct_works_med': 'factuality_author',
+    'pct_works_high': 'factuality_author',
+    'pct_citations_low': 'factuality_author',
+    'pct_citations_med': 'factuality_author',
+    'pct_citations_high': 'factuality_author',
+    # add other nested pairs here
 }
 
 #######################################################################################################################
