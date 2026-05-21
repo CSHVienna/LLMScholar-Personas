@@ -10,12 +10,7 @@ Pipeline (each step only handles items not already resolved):
   2. DuckDB authors EXACT        — single scan, normalized match against
                                     display_name AND display_name_alternatives;
                                     best author per name by citations. Fast.
-  3. DuckDB authors JW           — for names not resolved by exact match,
-                                    Jaro-Winkler similarity (≥0.85) against
-                                    candidates pre-blocked by the first 2
-                                    chars of the last name. Catches LLM
-                                    name variants ("J Smith" vs "John Smith").
-  4. DuckDB works    (--db_path) — for resolved oa_ids, derive country and
+  3. DuckDB works    (--db_path) — for resolved oa_ids, derive country and
                                     institution from the most-recent paper
                                     (the `authors.last_known_institution` field
                                     in the snapshot is empty, so we use
@@ -614,21 +609,11 @@ def run(
         cache.update(resolve_via_authors(db_path, pending))
         save_cache(cache, cache_path)   # checkpoint: safe to Ctrl+C from here
 
-    # 2.5 DuckDB authors — JW fuzzy match for names exact-match missed
-    if db_path:
-        unresolved = [n for n in unique_norms if n not in cache or not cache[n].get("oa_id")]
-        # avoid re-running JW on names we already tried-and-failed in a previous run
-        unresolved = [n for n in unresolved
-                      if n not in cache or not cache[n].get("_jw_tried")]
-        if unresolved:
-            jw_resolved = resolve_via_jw(db_path, unresolved)
-            for n in unresolved:
-                # mark as JW-tried regardless (so re-runs skip)
-                if n in jw_resolved:
-                    cache[n] = jw_resolved[n]
-                cache.setdefault(n, _empty_record())
-                cache[n]["_jw_tried"] = True
-            save_cache(cache, cache_path)   # checkpoint: safe to Ctrl+C from here
+    # Stage B (JW fuzzy fallback) deshabilitada — manual validation 20-request
+    # sample mostró precision 10% en matches fuzzy vs 78% en exact, así que el
+    # recall marginal no compensa el ruido de homónimos. La función
+    # `resolve_via_jw` queda definida arriba por si se quiere re-activar con
+    # un threshold más alto (>=0.95) y/o un field-check obligatorio.
 
     # mark unresolved names as not_found (so re-runs don't retry)
     for n in unique_norms:

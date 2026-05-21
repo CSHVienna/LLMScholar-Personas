@@ -1,27 +1,36 @@
 """
 factuality_author_jw.py — Jaro-Winkler name matching (vectorized via rapidfuzz.process.cdist).
 
-Matching logic is identical to the original per-record version but ~20–50× faster:
-  • references are pre-indexed per 2-char last-name block
-  • per block, six cdist calls build a (n_queries × n_refs) int8 score matrix in C/SIMD
-  • numpy argmax selects the best candidate per query in one pass
-  • individual similarities are recomputed only for accepted matches (cheap post-pass)
+Matcheo simplificado: una sola comparación display_name (full name) vs display_name
+del researcher en SS, con threshold único. La versión previa (scoring 5-de-7 sobre
+6 componentes — first, last, second, dn_vs_last, dn_vs_first, display_name×2)
+generaba muchos homónimos: un nombre podía superar el umbral acumulando matches
+parciales sin que el display_name en sí coincidiera bien. Sample manual mostró que
+la mayoría de los falsos positivos venían de ese efecto aditivo.
 
-Comparison pairs and thresholds:
-  1. display_name   vs display_name   (0.85)  — counted twice (display_name + longest_name)
-  2. first_name     vs first_name     (0.70)
-  3. last_name      vs last_name      (0.70)
-  4. second_name    vs second_name    (0.70)
-  5. display_name   vs last_name      (0.70)
-  6. display_name   vs first_name     (0.70)
-  max possible score = 7  (display_name match contributes 2)
+Algoritmo:
+  • references pre-indexed per 2-char last-name block
+  • per block, ONE cdist call computa la matriz (n_queries × n_refs) de JW
+    similarity entre display_names (full names normalized)
+  • argmax selecciona el mejor candidato por query
+  • se acepta si JW >= dn_threshold (default 0.85)
+  • per-component sims (first/last/second/dn_vs_last/dn_vs_first) se recomputan
+    para matches aceptados como información, pero NO afectan la decisión
+
+Output columns:
+  author_status ('found' | 'hallucinated'), matched_name, researcher_id,
+  match_score (JW similarity float 0-1, igual semántica que oa_match_score),
+  matched_fields (siempre 'display_name' para found, None para hallucinated),
+  gt_field, gt_gender, gt_career_age, gt_citations,
+  sim_display_name, sim_longest_name, sim_first_name, sim_last_name,
+  sim_second_name, sim_dn_vs_last, sim_dn_vs_first, sim_alternative_names
 
 Usage (from code/scripts/):
   python factuality_author_jw.py \\
       --recommendations ../../../results/summary/recommendations.csv \\
       --parquet /data/datasets/LLMScholar-Personas/data/semantic_scholar_data/clean/Researchers_Deduplicated_Genderize_Namsor.parquet \\
       --output  ../../../results/summary/factuality_author_jw.csv \\
-      [--min_matches 5] [--workers -1]
+      [--dn_threshold 0.85] [--workers -1]
 """
 
 import argparse
@@ -41,9 +50,16 @@ from rapidfuzz.process import cdist as rfdist
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
+DN_THRESHOLD        = 0.85   # umbral JW(display_name, display_name)
+PER_TOKEN_THRESHOLD = 0.95   # umbral JW por token (>1 char). Iniciales (1 char) se ignoran.
+
+# THRESHOLDS se mantiene SÓLO para que `matched_fields` y las columnas sim_*
+# de salida sigan teniendo los mismos nombres que antes (compatibilidad
+# downstream). La decisión de match usa exclusivamente DN_THRESHOLD +
+# el filtro per-token.
 THRESHOLDS = {
-    "display_name":  0.85,
-    "longest_name":  0.85,
+    "display_name":  DN_THRESHOLD,
+    "longest_name":  DN_THRESHOLD,
     "first_name":    0.70,
     "last_name":     0.70,
     "second_name":   0.70,
@@ -169,43 +185,37 @@ def build_index(parquet_path: str, use_cache: bool = True) -> dict[str, dict]:
 
 # ── Vectorized block matching ────────────────────────────────────────────────
 
-def _score_matrix(
-    q_dn, q_fn, q_sn, q_ln,
-    r_dn, r_fn, r_sn, r_ln,
-    workers: int,
-) -> np.ndarray:
+def _dn_score_matrix(q_dn, r_dn, workers: int) -> np.ndarray:
     """
-    Compute (n_queries × n_refs) int8 score matrix using six cdist calls.
-    display_name match contributes 2 points (display_name + longest_name).
+    Compute (n_queries × n_refs) float32 matrix of JW similarities between
+    query display_names and reference display_names. Single cdist call.
     """
-    kw = dict(scorer=_JW, dtype=np.float32, workers=workers)
-    scores = np.zeros((len(q_dn), len(r_dn)), dtype=np.int8)
+    return rfdist(q_dn, r_dn, scorer=_JW, dtype=np.float32, workers=workers)
 
-    mat = rfdist(q_dn, r_dn, **kw)
-    np.add(scores, (2 * (mat >= 0.85)).astype(np.int8), out=scores)
-    del mat
 
-    mat = rfdist(q_fn, r_fn, **kw)
-    np.add(scores, (mat >= 0.70).view(np.uint8).astype(np.int8), out=scores)
-    del mat
+def _passes_per_token_check(q_dn: str, r_dn: str, threshold: float) -> bool:
+    """
+    Filtro post-JW: para cada token >1 char en el query, exigir que exista
+    un token >1 char en el ref con JW >= threshold. Los tokens de 1 char
+    (iniciales) se ignoran tanto del lado query como del lado ref.
 
-    mat = rfdist(q_ln, r_ln, **kw)
-    np.add(scores, (mat >= 0.70).view(np.uint8).astype(np.int8), out=scores)
-    del mat
-
-    mat = rfdist(q_sn, r_sn, **kw)
-    np.add(scores, (mat >= 0.70).view(np.uint8).astype(np.int8), out=scores)
-    del mat
-
-    mat = rfdist(q_dn, r_ln, **kw)
-    np.add(scores, (mat >= 0.70).view(np.uint8).astype(np.int8), out=scores)
-    del mat
-
-    mat = rfdist(q_dn, r_fn, **kw)
-    np.add(scores, (mat >= 0.70).view(np.uint8).astype(np.int8), out=scores)
-    del mat
-
-    return scores
+    Catches casos como:
+      "john doe smith" → "john e smith" : doe vs {john,smith} → max ≈ 0.5 → REJECT
+      "mariette jacobs" → "maretha jacobs" : mariette vs {maretha,jacobs} → max ≈ 0.85 → REJECT
+    Acepta:
+      "maria gonzalez" → "maria gonzalez" : todos los tokens matchean → ACCEPT
+    """
+    q_toks = [t for t in q_dn.split() if len(t) > 1]
+    r_toks = [t for t in r_dn.split() if len(t) > 1]
+    if not q_toks:
+        return True   # query trivial, dejar pasar
+    if not r_toks:
+        return False  # ref sin tokens útiles
+    for qt in q_toks:
+        best = max(_JW(qt, rt) for rt in r_toks)
+        if best < threshold:
+            return False
+    return True
 
 
 def _sim_row(q: dict, ref: dict) -> dict:
@@ -233,18 +243,15 @@ def _matched_fields(sims: dict) -> str:
 def match_block(
     queries: list[dict],
     block: dict,
-    min_matches: int,
+    dn_threshold: float,
     workers: int,
 ) -> dict[str, dict]:
     """
-    Match all queries against a reference block.
+    Match all queries against a reference block by JW(display_name, display_name).
     Chunks query list to cap memory at ~200 MB per cdist matrix.
     Returns {raw_name: result_dict}.
     """
     r_dn = block["display"]
-    r_fn = block["first"]
-    r_sn = block["second"]
-    r_ln = block["last"]
     recs = block["records"]
 
     n_refs = len(r_dn)
@@ -255,28 +262,30 @@ def match_block(
 
     for start in range(0, len(queries), chunk_size):
         chunk = queries[start: start + chunk_size]
-
         q_dn = [q["display_name"] for q in chunk]
-        q_fn = [q["first_name"]   for q in chunk]
-        q_sn = [q["second_name"]  for q in chunk]
-        q_ln = [q["last_name"]    for q in chunk]
 
-        scores = _score_matrix(q_dn, q_fn, q_sn, q_ln, r_dn, r_fn, r_sn, r_ln, workers)
+        scores = _dn_score_matrix(q_dn, r_dn, workers)
 
         best_idxs   = scores.argmax(axis=1)
         best_scores = scores[np.arange(len(chunk)), best_idxs]
 
         for q, bidx, bscore in zip(chunk, best_idxs, best_scores):
             raw = q["_raw"]
-            if int(bscore) >= min_matches:
-                ref  = recs[int(bidx)]
+            score = float(bscore)
+            ref  = recs[int(bidx)]
+            passes_token_check = (
+                score >= dn_threshold
+                and _passes_per_token_check(q["display_name"], ref["display_name"],
+                                            PER_TOKEN_THRESHOLD)
+            )
+            if passes_token_check:
                 sims = _sim_row(q, ref)
                 cache[raw] = {
                     "original_name": raw,
                     "matched_name":  ref["original_name"],
                     "researcher_id": ref["researcher_id"],
-                    "match_score":   int(bscore),
-                    "matched_fields": _matched_fields(sims),
+                    "match_score":   round(score, 4),
+                    "matched_fields": "display_name",
                     "author_status": "found",
                     "gt_field":      ref["field"],
                     "gt_gender":     ref["gender"],
@@ -289,7 +298,7 @@ def match_block(
                     "original_name": raw,
                     "matched_name":  None,
                     "researcher_id": None,
-                    "match_score":   int(bscore),
+                    "match_score":   round(score, 4),
                     "matched_fields": None,
                     "author_status": "hallucinated",
                     "gt_field":      None,
@@ -308,7 +317,7 @@ def run(
     recommendations_path: str,
     parquet_path: str,
     output_path: str,
-    min_matches: int = 5,
+    dn_threshold: float = DN_THRESHOLD,
     workers: int = -1,
     use_cache: bool = True,
 ) -> None:
@@ -343,7 +352,7 @@ def run(
     n_blocks = len(by_block)
     _null_row = lambda raw: {
         "original_name": raw, "matched_name": None, "researcher_id": None,
-        "match_score": 0, "matched_fields": None, "author_status": "hallucinated",
+        "match_score": 0.0, "matched_fields": None, "author_status": "hallucinated",
         "gt_field": None, "gt_gender": None, "gt_career_age": None, "gt_citations": None,
         **{f"sim_{k}": None for k in THRESHOLDS},
     }
@@ -353,7 +362,7 @@ def run(
             for q in queries:
                 global_cache[q["_raw"]] = _null_row(q["_raw"])
         else:
-            block_results = match_block(queries, index[key], min_matches, workers)
+            block_results = match_block(queries, index[key], dn_threshold, workers)
             global_cache.update(block_results)
 
         if b_idx % 100 == 0 or b_idx == n_blocks:
@@ -391,7 +400,8 @@ def main() -> None:
     parser.add_argument("--recommendations", required=True)
     parser.add_argument("--parquet",         required=True)
     parser.add_argument("--output",          required=True)
-    parser.add_argument("--min_matches", type=int, default=5)
+    parser.add_argument("--dn_threshold", type=float, default=DN_THRESHOLD,
+                        help=f"JW threshold para display_name vs display_name (default {DN_THRESHOLD})")
     parser.add_argument("--workers",  type=int, default=-1,
                         help="CPU workers for cdist (-1 = all cores, default)")
     parser.add_argument("--no_cache", action="store_true",
@@ -402,7 +412,7 @@ def main() -> None:
         recommendations_path=args.recommendations,
         parquet_path=args.parquet,
         output_path=args.output,
-        min_matches=args.min_matches,
+        dn_threshold=args.dn_threshold,
         workers=args.workers,
         use_cache=not args.no_cache,
     )
