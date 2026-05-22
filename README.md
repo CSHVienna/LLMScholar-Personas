@@ -1,65 +1,67 @@
 # LLMScholar-Personas
 
-Auditoría de LLMs como sistemas recomendadores de personas usando *prompting* con personas. Extiende el paper anterior incorporando **idioma**, **país** y **rol** como variables del persona prompt, y mide *factuality*, *diversity*, *parity*, *consistency* y *connectedness* de las recomendaciones contra Semantic Scholar + OpenAlex como ground truth.
+Auditing LLMs as recommender systems for people through persona prompting.
+The study evaluates how **language**, **country**, and **role** in the
+persona prompt affect the *factuality*, *diversity*, *parity*, *consistency*,
+and *connectedness* of recommended researchers, using Semantic Scholar and
+OpenAlex as ground truth.
 
 ---
 
-## Estructura del proyecto
+## Repository structure
 
 ```
 LLMScholar-Personas/
 ├── code/
-│   ├── scripts/              # 5 pipelines ejecutables (CLI)
-│   │   ├── prompting/        # generación batch de prompts y parsing de respuestas
-│   │   ├── annotation/       # herramientas interactivas de anotación manual
-│   │   ├── enrichment/       # enriquecimiento con OpenAlex (API + DuckDB)
-│   │   ├── factuality/       # pipeline de chequeo factual (5 pasos)
-│   │   └── ethnicity/        # inferencia étnica (BERT + LSTM + verificación NamSor)
-│   ├── libs/                 # librerías compartidas
-│   │   ├── llm/              # wrapper de OpenAI
-│   │   ├── metrics/          # agregadores, constantes y I/O de métricas
-│   │   ├── prompt/           # generación y combinación de prompts
-│   │   ├── utils/            # config, I/O, texto, descubrimiento de claves
-│   │   └── visuals/          # plots (paper-style, paneles, grids)
+│   ├── scripts/
+│   │   ├── prompting/          # batch prompt generation and response parsing
+│   │   ├── annotation/         # interactive CLI tools for manual annotation
+│   │   ├── factuality/         # 7-step factuality pipeline + orchestrator
+│   │   └── ethnicity/          # cascade ethnicity inference (BERT + ethnicolr)
+│   ├── libs/
+│   │   ├── llm/                # OpenAI wrapper
+│   │   ├── metrics/            # aggregators and metric I/O
+│   │   ├── prompt/             # prompt generation and combination
+│   │   ├── utils/              # config, I/O, text utilities
+│   │   └── visuals/            # paper-style plots (panels, grids, scatter)
 │   └── notebooks/
-│       ├── analysis/         # métricas, factuality, ethnicity, APS demographics
-│       ├── agreement/        # inter-annotator agreement
-│       └── scratch/          # notebooks exploratorios
-├── data/                     # contextos por idioma, etnicidad, anotación manual
-├── results/ → /data/datasets/LLMScholar-Personas/results  (symlink)
-├── logs/                     # logs de ejecuciones
-└── config.ini                # rutas a las API keys
+│       ├── agreement_v2/       # inter-annotator agreement
+│       └── analysis_v2/        # benchmark metrics and exploratory analyses
+├── data/                       # per-language contexts, manual labels
+├── results/ → /data/datasets/LLMScholar-Personas/results   (symlink)
+├── pyproject.toml              # Black + isort configuration
+└── config.ini                  # paths to API key files
 ```
 
 ---
 
 ## Setup
 
-### Dependencias
+### Dependencies
 
-Instalar las dependencias en tu entorno Python (recomendado 3.10+):
+Python 3.10 or newer is required.
 
 ```bash
 pip install pandas numpy scipy statsmodels scikit-learn matplotlib seaborn tqdm rapidfuzz requests duckdb pyarrow openai anthropic torch transformers
 ```
 
-Para *ethnicity inference* se requiere además `tensorflow` (legacy keras), `ethnicolr`:
+Ethnicity inference additionally requires:
 
 ```bash
 pip install tensorflow tf-keras ethnicolr
 ```
 
-### Variables de entorno
+### Environment
 
-Casi todos los scripts esperan que `code/libs` esté en el `PYTHONPATH`. Desde cualquier `code/scripts/<pipeline>/`:
+All scripts expect `code/libs` to be on the `PYTHONPATH`:
 
 ```bash
 export PYTHONPATH="$PYTHONPATH:../../libs"
 ```
 
-### API Keys
+### API keys
 
-El archivo `config.ini` apunta a los archivos planos con las claves:
+`config.ini` points to plain-text files containing the keys:
 
 ```ini
 [secrets]
@@ -67,160 +69,99 @@ keys_dir = ../../../.keys/
 
 [openai]
 data_dir = ${secrets:keys_dir}/openai_api_key.txt
-
-[namsor]
-data_dir = ${secrets:keys_dir}/namsor_api_key.txt
 ```
 
-Crear `.keys/openai_api_key.txt` y `.keys/namsor_api_key.txt` (un archivo por servicio, con la clave en una sola línea). La variable de entorno `NAMSOR_API_KEY` también funciona para NamSor.
+Create `.keys/openai_api_key.txt` with the key on a single line.
 
 ---
 
-## Pipelines y comandos importantes
+## Factuality pipeline
 
-Todos los comandos están en **una sola línea** para copy-paste directo. Cada uno asume que estás en `code/scripts/<subcarpeta>/` salvo que se diga otra cosa.
+The pipeline checks whether recommended authors exist and whether the
+attributes assigned by the LLM (field, seniority, location, affiliation,
+ethnicity) match ground truth. Each step reads the output of the previous one.
 
-### 1. Prompting (`code/scripts/prompting/`)
+| # | Script | Input → Output |
+|---|---|---|
+| 0   | `factuality_author_jw.py`    | `recommendations.csv` → `factuality_author_jw.csv` |
+| 0.5 | `factuality_openalex.py`     | `factuality_author_jw.csv` → `factuality_oa.csv` |
+| 1   | `factuality_field_check.py`  | `factuality_oa.csv` → `factuality_field.csv` |
+| 2   | `factuality_seniority.py`    | `factuality_field.csv` → `factuality_seniority.csv` |
+| 3   | `factuality_location.py`     | `factuality_seniority.csv` → `factuality_location.csv` |
+| 3.5 | `factuality_affiliation.py`  | `factuality_location.csv` → `factuality_affiliation.csv` |
+| 4   | `factuality_ethnicity.py`    | `factuality_affiliation.csv` → `factuality_full.csv` |
 
-Genera, distribuye y consolida las salidas del LLM.
-
-```bash
-cd code/scripts/prompting/ && export PYTHONPATH="$PYTHONPATH:../../libs" && python batch_params.py -l english -o ../../data/context/
-```
-
-```bash
-cd code/scripts/prompting/ && export PYTHONPATH="$PYTHONPATH:../../libs" && python batch_params.py -l spanish -o ../../data/context/
-```
-
-```bash
-cd code/scripts/prompting/ && export PYTHONPATH="$PYTHONPATH:../../libs" && python batch_params.py -l german -o ../../data/context/
-```
+Run the full pipeline with the orchestrator:
 
 ```bash
-cd code/scripts/prompting/ && export PYTHONPATH="$PYTHONPATH:../../libs" && python batch_prompt.py -c 0 -l english -o ../../data/context/
+cd code/scripts/factuality/ && python run_factuality_pipeline.py --results ../../../results/summary_v2 --parquet /data/datasets/LLMScholar-Personas/data/semantic_scholar_data/clean/Researchers_Deduplicated_Genderize_Namsor.parquet --duckdb /data/datasets/LLMScholar-Personas/data/openalex_latest.duckdb
 ```
 
-```bash
-parallel -j 8 python batch_prompt.py -c {} -l german -o ../../data/context/ ::: {0..719}
-```
-
-```bash
-nice -n 10 parallel -j 20 python batch_parse_results.py --results_dir ../../../results --output_dir ../../../results/summary_parallel --model {1} --language {2} :::: ../../../data/context/models.txt ::: english german spanish
-```
-
-### 2. Annotation (`code/scripts/annotation/`)
-
-CLIs interactivas para anotación manual; al terminar imprimen accuracy/precision/recall/F1 contra la etiqueta algorítmica.
-
-```bash
-python annotate_responses.py --results_dir ../../../results --summary_csv ../../../results/summary/summary.csv --output ../../../results/manual_labels.csv --n 100 --stratified --seed 42
-```
-
-```bash
-python annotate_ethnicity.py --lookup ../../../results/ethnicity/researcher_ethnicity_lookup.csv --output ../../../data/ethnicity_inference/manual_labels_v1.csv --sample_csv ../../../data/ethnicity_inference/sample_100.csv --n 100 --seed 42
-```
-
-### 3. Enrichment (`code/scripts/enrichment/`)
-
-Resuelve `oa_id → (country_code, institution)` para autores recomendados, usando el snapshot DuckDB local o el API público de OpenAlex.
-
-```bash
-python enrich_from_works.py --input ../../../results/summary/factuality_author.csv --db_path /data/datasets/LLMScholar-Personas/data/openalex_latest.duckdb --output ../../../results/summary/oa_enrichment.csv
-```
-
-```bash
-python enrich_via_api.py --input ../../../results/summary/factuality_author.csv --output ../../../results/summary/oa_enrichment.csv --email you@example.com
-```
-
-```bash
-python enrich_via_api_parallel.py --input ../../../results/summary/factuality_author.csv --output ../../../results/summary/oa_enrichment.csv --email you@example.com --workers 10
-```
-
-```bash
-python apply_enrichment.py --input ../../../results/summary/factuality_author.csv --enrichment ../../../results/summary/oa_enrichment.csv --output ../../../results/summary/factuality_author_enriched.csv
-```
-
-### 4. Factuality (`code/scripts/factuality/`) — pipeline de 5 pasos
-
-Verifica si los autores recomendados son reales y si los atributos (campo, seniority, ubicación, etnicidad) que el LLM les asigna coinciden con el ground truth. Cada paso lee la salida del anterior.
-
-**Pipeline completo (recomendado):**
-
-```bash
-cd code/scripts/factuality/ && python run_factuality_pipeline.py --results ../../../results/summary --parquet /data/datasets/LLMScholar-Personas/data/semantic_scholar_data/clean/Researchers_Deduplicated_Genderize_Namsor.parquet --duckdb /data/datasets/LLMScholar-Personas/data/openalex_latest.duckdb
-```
-
-**Pasos individuales:**
-
-```bash
-python factuality_author_jw.py --recommendations ../../../results/summary/recommendations.csv --parquet /data/datasets/LLMScholar-Personas/data/semantic_scholar_data/clean/Researchers_Deduplicated_Genderize_Namsor.parquet --output ../../../results/summary/factuality_author_jw.csv
-```
-
-```bash
-python factuality_openalex.py --input ../../../results/summary/factuality_author_jw.csv --output ../../../results/summary/factuality_oa.csv --db_path /data/datasets/LLMScholar-Personas/data/openalex_latest.duckdb --cache ../../../results/summary/.oa_cache.pkl
-```
-
-```bash
-python factuality_field_check.py --input ../../../results/summary/factuality_oa.csv --output ../../../results/summary/factuality_field.csv
-```
-
-```bash
-python factuality_seniority.py --input ../../../results/summary/factuality_field.csv --output ../../../results/summary/factuality_seniority.csv
-```
-
-```bash
-python factuality_location.py --input ../../../results/summary/factuality_seniority.csv --output ../../../results/summary/factuality_location.csv
-```
-
-```bash
-python factuality_ethnicity.py --input ../../../results/summary/factuality_location.csv --ethnicity_lookup ../../../results/summary/recommendations_with_ethnicity.csv --output ../../../results/summary/factuality_ethnicity.csv
-```
-
-### 5. Ethnicity (`code/scripts/ethnicity/`)
-
-Inferencia étnica en cascada (BERT `liamliang/demographics_race_v2` → fallback `ethnicolr` LSTM → `Unknown`). Verificación opcional con NamSor.
-
-```bash
-python apply_ethnicity_ground_truth.py
-```
-
-```bash
-python apply_ethnicity_ground_truth_parallel.py --workers 8 --batch-size 256
-```
-
-```bash
-python namsor_verify.py --input ../../../results/summary/recommendations_with_ethnicity.csv --limit 20 --dry-run
-```
-
-```bash
-python namsor_verify.py --input ../../../results/summary/recommendations_with_ethnicity.csv --output-jsonl ../../../data/ethnicity_inference/namsor_responses.jsonl --output-csv ../../../data/ethnicity_inference/namsor_results.csv
-```
+Each step accepts `--help`. Individual steps can be skipped via
+`--skip_jw`, `--skip_oa`, `--skip_field`.
 
 ---
 
-## Notebooks de análisis
+## Other pipelines
 
-- `code/notebooks/analysis/metrics_pipeline.ipynb` — pipeline de métricas (refusals, validity, duplicates, consistency, similarity, diversity, parity)
-- `code/notebooks/analysis/factuality_metrics.ipynb` — métricas de factuality (author, field, seniority, location, epoch)
-- `code/notebooks/analysis/ethnicity_metrics.ipynb` — métricas de inferencia étnica
-- `code/notebooks/analysis/manual_classification_metrics.ipynb` — métricas de la anotación manual
-- `code/notebooks/analysis/aps_demographics_analysis.ipynb` — análisis demográfico APS
-- `code/notebooks/agreement/inter_annotator_agreement.ipynb` — agreement entre anotadores
-- `code/notebooks/agreement/inter_annotator_agreement_ethnicity.ipynb` — agreement étnico
-- `code/notebooks/scratch/` — exploración rápida (parquet, semantic scholar, prompts)
+### Prompting
+
+`code/scripts/prompting/` contains three scripts:
+
+- `batch_params.py` — generate per-language prompt parameter combinations.
+- `batch_prompt.py` — build and inspect individual prompts.
+- `batch_parse_results.py` — parse raw LLM responses into
+  `recommendations.csv` (consolidated) or per-model/per-language CSVs
+  when called with `--model` and `--language`.
+
+### Annotation
+
+`code/scripts/annotation/` contains interactive CLI tools that produce
+manual labels for inter-annotator agreement studies:
+
+- `annotate_responses.py` — label LLM responses for validity.
+- `annotate_ethnicity.py` — label perceived researcher ethnicity.
+- `lookup_output.py` — print the raw LLM output for a `summary.csv` row.
+
+### Ethnicity
+
+`code/scripts/ethnicity/` provides cascade inference
+(BERT `liamliang/demographics_race_v2` → `ethnicolr` LSTM → `Unknown`):
+
+- `ethnicity_inference.py` — model loader and inference functions.
+- `apply_ethnicity_ground_truth.py` — apply the cascade to a CSV.
 
 ---
 
-## Convenciones
+## Analysis notebooks
 
-- Cada comando va **en una sola línea** para copiar y pegar.
-- Salidas del pipeline en `results/summary/{factuality_*.csv, recommendations.csv, summary.csv}`.
-- Plots: **izquierda = settings**, **derecha = métricas**.
-- Datos: `data/semantic_scholar_data/clean/Researchers_Deduplicated_Genderize_Namsor.parquet` es el archivo canónico para *factuality* (216 MB, deduplicado por researcher_id).
+| Notebook | Purpose |
+|---|---|
+| `analysis_v2/metrics_pipeline_leen.ipynb` | Benchmark metrics (Diversity, Parity, Factuality, Consistency, Duplicates) per dimension; produces all paper figures under `factualities_v2/plots/leen/`. |
+| `analysis_v2/ethnicity_metrics.ipynb`     | Ground-truth vs. recommendation ethnicity distributions. |
+| `analysis_v2/manual_classification_metrics.ipynb` | Manual-validation accuracy/precision/recall. |
+| `analysis_v2/oa_productivity_coverage.ipynb` | OpenAlex coverage diagnostics for productivity tiers. |
+| `agreement_v2/inter_annotator_agreement.ipynb`           | Cohen κ / Krippendorff α for response validity. |
+| `agreement_v2/inter_annotator_agreement_ethnicity.ipynb` | Cohen κ / Krippendorff α for ethnicity labels. |
+| `agreement_v2/manual_factuality_validation.ipynb`        | Manual review of factuality pipeline outputs. |
 
 ---
 
-## Documentación adicional
+## Data sources
 
-- `code/scripts/README.md` — guía detallada del pipeline de *prompting* (parámetros, output, ejemplos con GNU Parallel).
-- Cada script Python contiene un docstring superior con uso, parámetros y ejemplos.
+- **Semantic Scholar** ground truth: `data/semantic_scholar_data/clean/Researchers_Deduplicated_Genderize_Namsor.parquet`
+  (216 MB, deduplicated by researcher).
+- **OpenAlex** snapshot: `data/openalex_latest.duckdb` (DuckDB).
+- **Manual labels** for inter-annotator agreement: `data/annotator_agreement/` and `data/ethnicity_inference/`.
+
+---
+
+## Code style
+
+The project uses [Black](https://black.readthedocs.io/) (line length 88) and
+[isort](https://pycqa.github.io/isort/) with the `black` profile.
+Configuration is in `pyproject.toml`. To format the codebase:
+
+```bash
+black code/scripts code/libs && isort code/scripts code/libs
+```

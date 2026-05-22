@@ -18,8 +18,8 @@ Output columns added:
 
 Usage (from code/scripts/):
   python factuality_location.py \\
-      --input  ../../../results/summary/factuality_seniority.csv \\
-      --output ../../../results/summary/factuality_location.csv
+      --input  ../../../results/results/summary_v2/factuality_seniority.csv \\
+      --output ../../../results/results/summary_v2/factuality_location.csv
 """
 
 import argparse
@@ -28,48 +28,59 @@ import os
 
 import pandas as pd
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-STATUS_MATCH          = "location_match"
-STATUS_MISMATCH       = "location_mismatch"
-STATUS_UNKNOWN        = "location_unknown"
+STATUS_MATCH = "location_match"
+STATUS_MISMATCH = "location_mismatch"
+STATUS_UNKNOWN = "location_unknown"
 STATUS_NOT_APPLICABLE = "not_applicable"
 
 AUTHOR_HALLUCINATED = "hallucinated"
 
 # Maps every observed `location` value (EN/ES/DE) → ISO alpha-2
 LLM_COUNTRY_TO_ISO = {
-    "Ecuador":      "EC",
-    "Japan":        "JP",
-    "Japón":        "JP",
-    "Germany":      "DE",
-    "Alemania":     "DE",
-    "Deutschland":  "DE",
-    "Canada":       "CA",
-    "Canadá":       "CA",
-    "Kanada":       "CA",
+    "Ecuador": "EC",
+    "Japan": "JP",
+    "Japón": "JP",
+    "Germany": "DE",
+    "Alemania": "DE",
+    "Deutschland": "DE",
+    "Canada": "CA",
+    "Canadá": "CA",
+    "Kanada": "CA",
     "South Africa": "ZA",
-    "Sudáfrica":    "ZA",
-    "Südafrika":    "ZA",
+    "Sudáfrica": "ZA",
+    "Südafrika": "ZA",
 }
 
 
 # ── Per-row decision ───────────────────────────────────────────────────────────
 
+
 def classify_row(row: pd.Series) -> dict:
     raw_country = str(row.get("location") or "").strip()
-    llm_iso     = LLM_COUNTRY_TO_ISO.get(raw_country)
-    oa_iso      = row.get("oa_country_code")
-    oa_iso      = str(oa_iso).strip().upper() if pd.notna(oa_iso) and str(oa_iso).strip() else None
+    llm_iso = LLM_COUNTRY_TO_ISO.get(raw_country)
+    oa_iso = row.get("oa_country_code")
+    oa_iso = (
+        str(oa_iso).strip().upper()
+        if pd.notna(oa_iso) and str(oa_iso).strip()
+        else None
+    )
 
     base = {
-        "location_llm_country":    raw_country or None,
-        "location_llm_iso":        llm_iso,
-        "location_oa_iso":         oa_iso,
-        "location_oa_institution": row.get("oa_last_institution") if pd.notna(row.get("oa_last_institution")) else None,
+        "location_llm_country": raw_country or None,
+        "location_llm_iso": llm_iso,
+        "location_oa_iso": oa_iso,
+        "location_oa_institution": (
+            row.get("oa_last_institution")
+            if pd.notna(row.get("oa_last_institution"))
+            else None
+        ),
     }
 
     if row.get("author_status") == AUTHOR_HALLUCINATED:
@@ -78,10 +89,14 @@ def classify_row(row: pd.Series) -> dict:
     if not llm_iso or not oa_iso:
         return {**base, "location_status": STATUS_UNKNOWN}
 
-    return {**base, "location_status": STATUS_MATCH if llm_iso == oa_iso else STATUS_MISMATCH}
+    return {
+        **base,
+        "location_status": STATUS_MATCH if llm_iso == oa_iso else STATUS_MISMATCH,
+    }
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
+
 
 def run(input_path: str, output_path: str) -> None:
     logger.info("Loading: %s", input_path)
@@ -89,8 +104,13 @@ def run(input_path: str, output_path: str) -> None:
     logger.info("Rows: %d", len(df))
 
     records = [classify_row(row) for _, row in df.iterrows()]
-    for col in ["location_llm_country", "location_llm_iso",
-                "location_oa_iso", "location_oa_institution", "location_status"]:
+    for col in [
+        "location_llm_country",
+        "location_llm_iso",
+        "location_oa_iso",
+        "location_oa_institution",
+        "location_status",
+    ]:
         df[col] = [r[col] for r in records]
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
@@ -107,7 +127,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Step 4: verify the LLM-assigned country matches the author's last-known institution country in OpenAlex"
     )
-    parser.add_argument("--input",  required=True, help="Path to factuality_seniority.csv (output of factuality_seniority.py)")
+    parser.add_argument(
+        "--input",
+        required=True,
+        help="Path to factuality_seniority.csv (output of factuality_seniority.py)",
+    )
     parser.add_argument("--output", required=True, help="Output CSV path")
     args = parser.parse_args()
 

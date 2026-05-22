@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 from adjustText import adjust_text
 
-
 # ─── config ────────────────────────────────────────────────────────────────
 QUADRANT_COLORS = {
     "Q1": "#2ca02c",  # top-right    — high tech, high social  (green)
@@ -24,9 +23,9 @@ def assign_quadrants(df, x_col="x_technical", y_col="y_social"):
     x_med, y_med = df[x_col].median(), df[y_col].median()
     conds = [
         (df[x_col] >= x_med) & (df[y_col] >= y_med),  # Q1
-        (df[x_col] <  x_med) & (df[y_col] >= y_med),  # Q2
-        (df[x_col] <  x_med) & (df[y_col] <  y_med),  # Q3
-        (df[x_col] >= x_med) & (df[y_col] <  y_med),  # Q4
+        (df[x_col] < x_med) & (df[y_col] >= y_med),  # Q2
+        (df[x_col] < x_med) & (df[y_col] < y_med),  # Q3
+        (df[x_col] >= x_med) & (df[y_col] < y_med),  # Q4
     ]
     labels = np.select(conds, ["Q1", "Q2", "Q3", "Q4"], default="")
     return labels, x_med, y_med
@@ -45,7 +44,7 @@ def plot_quadrant_scatter(
     figsize=(16, 9),
     point_size=55,
     label_fontsize=9,
-    curve=0.2,            # 0 = straight, ~0.3 = noticeably curvy
+    curve=0.2,  # 0 = straight, ~0.3 = noticeably curvy
     show_quadrant_legend=True,
 ):
     quadrants, x_med, y_med = assign_quadrants(df, x_col, y_col)
@@ -59,9 +58,13 @@ def plot_quadrant_scatter(
 
     # points
     ax.scatter(
-        df[x_col], df[y_col],
-        c=colors, s=point_size,
-        edgecolor="white", linewidth=0.8, zorder=3,
+        df[x_col],
+        df[y_col],
+        c=colors,
+        s=point_size,
+        edgecolor="white",
+        linewidth=0.8,
+        zorder=3,
     )
 
     # text objects (colored to match the dot)
@@ -90,18 +93,27 @@ def plot_quadrant_scatter(
 
     ax.set_xlabel(
         r"Technical: validity + refusals$^c$ + duplicates$^c$ + $\sum$ factuality$_b$  "
-        #r"(author, field, seniority, location)"
+        # r"(author, field, seniority, location)"
     )
     ax.set_ylabel(
-        r"Social: $\sum$ parity$_a$" # (gender, ethnicity, publications, citations)
+        r"Social: $\sum$ parity$_a$"  # (gender, ethnicity, publications, citations)
     )
     ax.grid(True, alpha=0.25)
 
     if show_quadrant_legend:
         from matplotlib.lines import Line2D
+
         handles = [
-            Line2D([0], [0], marker="o", linestyle="", color=QUADRANT_COLORS[q],
-                   label=lbl, markersize=8, markeredgecolor="white")
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                linestyle="",
+                color=QUADRANT_COLORS[q],
+                label=lbl,
+                markersize=8,
+                markeredgecolor="white",
+            )
             for q, lbl in [
                 ("Q1", "Q1 · high tech / high social"),
                 ("Q2", "Q2 · low tech / high social"),
@@ -109,10 +121,14 @@ def plot_quadrant_scatter(
                 ("Q4", "Q4 · high tech / low social"),
             ]
         ]
-        ax.legend(handles=handles, loc="best", frameon=True, framealpha=0.9, 
-                  handlelength=0.5,    # was 2.0 — collapses the handle area to just the dot
-                  handletextpad=0.6,   # was 0.8 — tightens dot ↔ text gap
-                  )
+        ax.legend(
+            handles=handles,
+            loc="best",
+            frameon=True,
+            framealpha=0.9,
+            handlelength=0.5,  # was 2.0 — collapses the handle area to just the dot
+            handletextpad=0.6,  # was 0.8 — tightens dot ↔ text gap
+        )
 
     plt.tight_layout()
     return fig, ax

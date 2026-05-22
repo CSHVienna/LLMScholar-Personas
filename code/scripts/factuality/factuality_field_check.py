@@ -18,8 +18,8 @@ Output columns added to factuality_author.csv:
 
 Usage (from code/scripts/):
   python factuality_field_check.py \\
-      --input  ../../../results/summary/factuality_author.csv \\
-      --output ../../../results/summary/factuality_field.csv
+      --input  ../../../results/results/summary_v2/factuality_author_jw.csv \\
+      --output ../../../results/results/summary_v2/factuality_field.csv
 """
 
 import argparse
@@ -29,40 +29,43 @@ import re
 
 import pandas as pd
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-STATUS_MATCH          = "field_match"
-STATUS_MISMATCH       = "field_mismatch"
-STATUS_UNKNOWN        = "field_unknown"
+STATUS_MATCH = "field_match"
+STATUS_MISMATCH = "field_mismatch"
+STATUS_UNKNOWN = "field_unknown"
 STATUS_NOT_APPLICABLE = "not_applicable"
 
-CHECK_GT       = "gt"
+CHECK_GT = "gt"
 CHECK_CONCEPTS = "openalex_concepts"
-CHECK_NONE     = "none"
+CHECK_NONE = "none"
 
 AUTHOR_HALLUCINATED = "hallucinated"
 
 # Translates LLM field values (ES / DE) → canonical English before comparison
 FIELD_TRANSLATION = {
-    "Biología":                   "Biology",
-    "Física":                     "Physics",
+    "Biología": "Biology",
+    "Física": "Physics",
     "Ciencias de la computación": "Computer Science",
-    "Sociología":                 "Sociology",
-    "Psicología":                 "Psychology",
-    "Matemáticas":                "Mathematics",
-    "Biologie":                   "Biology",
-    "Physik":                     "Physics",
-    "Informatik":                 "Computer Science",
-    "Soziologie":                 "Sociology",
-    "Psychologie":                "Psychology",
-    "Mathematik":                 "Mathematics",
+    "Sociología": "Sociology",
+    "Psicología": "Psychology",
+    "Matemáticas": "Mathematics",
+    "Biologie": "Biology",
+    "Physik": "Physics",
+    "Informatik": "Computer Science",
+    "Soziologie": "Sociology",
+    "Psychologie": "Psychology",
+    "Mathematik": "Mathematics",
 }
 
 
 # ── Normalisation ──────────────────────────────────────────────────────────────
+
 
 def _norm_field(s: str) -> str:
     """Translate ES/DE→EN, then lowercase, replace _ with space, collapse whitespace."""
@@ -74,6 +77,7 @@ def _norm_field(s: str) -> str:
 
 
 # ── Per-row decision ───────────────────────────────────────────────────────────
+
 
 def _check_gt(llm_field: str, gt_field: str) -> tuple[str, str]:
     """Compare LLM-requested field against the GT field that matched."""
@@ -92,7 +96,9 @@ def classify_row(row: pd.Series) -> tuple[str, str, str]:
     if not llm_field:
         return STATUS_UNKNOWN, CHECK_NONE, ""
 
-    gt_field = str(row.get("gt_field") or "").strip() if pd.notna(row.get("gt_field")) else ""
+    gt_field = (
+        str(row.get("gt_field") or "").strip() if pd.notna(row.get("gt_field")) else ""
+    )
     if gt_field:
         status, evidence = _check_gt(llm_field, gt_field)
         return status, CHECK_GT, evidence
@@ -101,6 +107,7 @@ def classify_row(row: pd.Series) -> tuple[str, str, str]:
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
+
 
 def run(input_path: str, output_path: str) -> None:
     logger.info("Loading: %s", input_path)
@@ -114,9 +121,9 @@ def run(input_path: str, output_path: str) -> None:
         sources.append(src)
         evidences.append(evidence)
 
-    df["field_status"]       = statuses
+    df["field_status"] = statuses
     df["field_check_source"] = sources
-    df["field_evidence"]     = evidences
+    df["field_evidence"] = evidences
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     df.to_csv(output_path, index=False)
@@ -135,7 +142,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Step 2: verify the LLM-recommended author belongs to the requested field"
     )
-    parser.add_argument("--input",  required=True, help="Path to factuality_author.csv (output of factuality_author.py)")
+    parser.add_argument(
+        "--input",
+        required=True,
+        help="Path to factuality_author.csv (output of factuality_author.py)",
+    )
     parser.add_argument("--output", required=True, help="Output CSV path")
     args = parser.parse_args()
 

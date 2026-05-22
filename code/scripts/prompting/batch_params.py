@@ -11,8 +11,7 @@ from utils import constants as cons
 from utils import ios
 from utils.config import load_config
 
-
-DEFAULT_OUTPUT_DIR = '../../data/context/'
+DEFAULT_OUTPUT_DIR = "../../data/context/"
 
 
 def translate(obj, lang, api_key):
@@ -22,7 +21,11 @@ def translate(obj, lang, api_key):
     try:
         return raw, json.loads(raw.output_text)
     except json.JSONDecodeError as ex:
-        if 'Extra data' in ex.msg or ex.msg == 'Extra data: line 1 column 104 (char 103)' or ex.msg == 'Extra data: line 1 column 106 (char 105)':
+        if (
+            "Extra data" in ex.msg
+            or ex.msg == "Extra data: line 1 column 104 (char 103)"
+            or ex.msg == "Extra data: line 1 column 106 (char 105)"
+        ):
             return raw, json.loads(raw.output_text[:-1])
 
         raise ValueError("LLM did not return valid JSON.")
@@ -40,10 +43,10 @@ def run(api_key, language: str, output_dir: str) -> None:
 
             if language != cons.LANG_EN:
                 raw, data_translated = translate(data, language, api_key)
-                data = data_translated['data']
+                data = data_translated["data"]
 
             json.dump(data, f, ensure_ascii=False, indent=2)
-    print('Summary:\n', list(path.glob("*.json")))
+    print("Summary:\n", list(path.glob("*.json")))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -52,18 +55,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "-l", "--language",
+        "-l",
+        "--language",
         type=str,
         choices=cons.LANGUAGES,
         default=cons.LANG_EN,
-        help="Target language code/name."
+        help="Target language code/name.",
     )
 
     parser.add_argument(
-        "-o", "--output-dir",
+        "-o",
+        "--output-dir",
         type=str,
         required=True,
-        help=f"Output directory (default: {DEFAULT_OUTPUT_DIR})"
+        help=f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
     )
 
     args = parser.parse_args()
@@ -79,7 +84,7 @@ if __name__ == "__main__":
 
     # config
     cfg = load_config("../../../config.ini")
-    api_key = ios.read_text(cfg['OPENAI_API_DIR']).strip()
+    api_key = ios.read_text(cfg["OPENAI_API_DIR"]).strip()
 
     # Run
     run(api_key, args.language, args.output_dir)

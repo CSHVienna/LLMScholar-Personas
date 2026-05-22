@@ -16,9 +16,9 @@ Output columns added:
 
 Usage (from code/scripts/):
   python factuality_ethnicity.py \\
-      --input             ../../../results/summary/factuality_location.csv \\
-      --ethnicity_lookup  ../../../results/summary/recommendations_with_ethnicity.csv \\
-      --output            ../../../results/summary/factuality_ethnicity.csv
+      --input             ../../../results/results/summary_v2/factuality_affiliation.csv \\
+      --ethnicity_lookup  ../../../results/results/summary_v2/recommendations_with_ethnicity.csv \\
+      --output            ../../../results/results/summary_v2/factuality_full.csv
 """
 
 import argparse
@@ -27,7 +27,9 @@ import os
 
 import pandas as pd
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 LOOKUP_COLS = ["name", "lastname", "perceived_ethnicity"]
@@ -40,7 +42,7 @@ def _build_lookup(lookup_path: str) -> dict[tuple[str, str], str]:
     logger.info("Lookup rows: %d", len(df))
 
     df = df.dropna(subset=["name", "lastname", "perceived_ethnicity"])
-    df["name"]     = df["name"].astype(str).str.strip()
+    df["name"] = df["name"].astype(str).str.strip()
     df["lastname"] = df["lastname"].astype(str).str.strip()
 
     df = df.drop_duplicates(subset=["name", "lastname"], keep="first")
@@ -56,7 +58,7 @@ def run(input_path: str, lookup_path: str, output_path: str) -> None:
     df = pd.read_csv(input_path, low_memory=False)
     logger.info("Rows: %d", len(df))
 
-    names     = df["name"].fillna("").astype(str).str.strip()
+    names = df["name"].fillna("").astype(str).str.strip()
     lastnames = df["lastname"].fillna("").astype(str).str.strip()
 
     df["perceived_ethnicity"] = [
@@ -64,7 +66,9 @@ def run(input_path: str, lookup_path: str, output_path: str) -> None:
     ]
 
     n_unknown = (df["perceived_ethnicity"] == "Unknown").sum()
-    logger.info("Lookup hits: %d / %d  (Unknown: %d)", len(df) - n_unknown, len(df), n_unknown)
+    logger.info(
+        "Lookup hits: %d / %d  (Unknown: %d)", len(df) - n_unknown, len(df), n_unknown
+    )
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     df.to_csv(output_path, index=False)
@@ -80,9 +84,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Step 5: join pre-computed perceived_ethnicity from recommendations_with_ethnicity.csv"
     )
-    parser.add_argument("--input",            required=True, help="Path to factuality_location.csv (output of step 4)")
-    parser.add_argument("--ethnicity_lookup", required=True, help="Path to recommendations_with_ethnicity.csv")
-    parser.add_argument("--output",           required=True, help="Output CSV path (final factuality dataset)")
+    parser.add_argument(
+        "--input",
+        required=True,
+        help="Path to factuality_location.csv (output of step 4)",
+    )
+    parser.add_argument(
+        "--ethnicity_lookup",
+        required=True,
+        help="Path to recommendations_with_ethnicity.csv",
+    )
+    parser.add_argument(
+        "--output", required=True, help="Output CSV path (final factuality dataset)"
+    )
     args = parser.parse_args()
 
     run(args.input, args.ethnicity_lookup, args.output)

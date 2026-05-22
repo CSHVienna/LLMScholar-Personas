@@ -25,8 +25,8 @@ Output columns added:
 
 Usage (from code/scripts/):
   python factuality_seniority.py \\
-      --input  ../../../results/summary/factuality_field.csv \\
-      --output ../../../results/summary/factuality_seniority.csv
+      --input  ../../../results/results/summary_v2/factuality_field.csv \\
+      --output ../../../results/results/summary_v2/factuality_seniority.csv
 """
 
 import argparse
@@ -35,20 +35,22 @@ import os
 
 import pandas as pd
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-JUNIOR_MAX  = 10   # career_age <= 10 → Junior
-SENIOR_MIN  = 20   # career_age >= 20 → Senior  (11–19 → unclassifiable)
+JUNIOR_MAX = 10  # career_age <= 10 → Junior
+SENIOR_MIN = 20  # career_age >= 20 → Senior  (11–19 → unclassifiable)
 
-STATUS_MATCH          = "seniority_match"
-STATUS_MISMATCH       = "seniority_mismatch"
-STATUS_UNKNOWN        = "seniority_unknown"
+STATUS_MATCH = "seniority_match"
+STATUS_MISMATCH = "seniority_mismatch"
+STATUS_UNKNOWN = "seniority_unknown"
 STATUS_NOT_APPLICABLE = "not_applicable"
 
-SOURCE_GT   = "gt"
+SOURCE_GT = "gt"
 SOURCE_NONE = "none"
 
 # author_status values (factuality_author_jw pipeline)
@@ -64,18 +66,20 @@ def _is_not_found(row: pd.Series) -> bool:
         or row.get("factuality_status") == FIELD_NOT_FOUND
     )
 
+
 # Maps every observed `target` value (EN/ES/DE) → canonical bucket
 LLM_TARGET_TO_BUCKET = {
-    "Senior Professor":    "Senior",
-    "Profesor(a) Sénior":  "Senior",
+    "Senior Professor": "Senior",
+    "Profesor(a) Sénior": "Senior",
     "Seniorprofessor(in)": "Senior",
-    "Junior Professor":    "Junior",
-    "Profesor(a) Júnior":  "Junior",
+    "Junior Professor": "Junior",
+    "Profesor(a) Júnior": "Junior",
     "Juniorprofessor(in)": "Junior",
 }
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _resolve_career_age(row: pd.Series) -> tuple[float | None, str]:
     """Return (career_age, source). Uses gt_career_age (2025 − First_year)."""
@@ -98,21 +102,23 @@ def classify_row(row: pd.Series) -> dict:
         return {
             "seniority_career_age": None,
             "seniority_age_source": SOURCE_NONE,
-            "seniority_bucket":     None,
-            "seniority_llm_bucket": LLM_TARGET_TO_BUCKET.get(str(row.get("target") or "").strip()),
-            "seniority_status":     STATUS_NOT_APPLICABLE,
+            "seniority_bucket": None,
+            "seniority_llm_bucket": LLM_TARGET_TO_BUCKET.get(
+                str(row.get("target") or "").strip()
+            ),
+            "seniority_status": STATUS_NOT_APPLICABLE,
         }
 
     llm_bucket = LLM_TARGET_TO_BUCKET.get(str(row.get("target") or "").strip())
-    age, src   = _resolve_career_age(row)
+    age, src = _resolve_career_age(row)
 
     if age is None or llm_bucket is None:
         return {
             "seniority_career_age": age,
             "seniority_age_source": src,
-            "seniority_bucket":     None,
+            "seniority_bucket": None,
             "seniority_llm_bucket": llm_bucket,
-            "seniority_status":     STATUS_UNKNOWN,
+            "seniority_status": STATUS_UNKNOWN,
         }
 
     actual_bucket = _bucket(age)
@@ -123,13 +129,14 @@ def classify_row(row: pd.Series) -> dict:
     return {
         "seniority_career_age": age,
         "seniority_age_source": src,
-        "seniority_bucket":     actual_bucket,
+        "seniority_bucket": actual_bucket,
         "seniority_llm_bucket": llm_bucket,
-        "seniority_status":     status,
+        "seniority_status": status,
     }
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
+
 
 def run(input_path: str, output_path: str) -> None:
     logger.info("Loading: %s", input_path)
@@ -137,8 +144,13 @@ def run(input_path: str, output_path: str) -> None:
     logger.info("Rows: %d", len(df))
 
     records = [classify_row(row) for _, row in df.iterrows()]
-    for col in ["seniority_career_age", "seniority_age_source",
-                "seniority_bucket", "seniority_llm_bucket", "seniority_status"]:
+    for col in [
+        "seniority_career_age",
+        "seniority_age_source",
+        "seniority_bucket",
+        "seniority_llm_bucket",
+        "seniority_status",
+    ]:
         df[col] = [r[col] for r in records]
 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
@@ -159,7 +171,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Step 3: verify the LLM-assigned seniority matches the author's actual career stage"
     )
-    parser.add_argument("--input",  required=True, help="Path to factuality_field.csv (output of factuality_field_check.py)")
+    parser.add_argument(
+        "--input",
+        required=True,
+        help="Path to factuality_field.csv (output of factuality_field_check.py)",
+    )
     parser.add_argument("--output", required=True, help="Output CSV path")
     args = parser.parse_args()
 

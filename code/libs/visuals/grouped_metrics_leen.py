@@ -58,52 +58,51 @@ Typical use (stacked):
 from __future__ import annotations
 
 import textwrap as _textwrap
-from typing import Optional, Sequence, Mapping, Any
+from typing import Any, Mapping, Optional, Sequence
 
-import numpy as np
-import pandas as pd
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
-
+import numpy as np
+import pandas as pd
 
 # ── Default style constants (mirror gridcons.py) ─────────────────────────────
-FIG_DPI         = 600
-TICK_FONT_SIZE  = 8
-TICK_FONT_COLOR = '#828282'
+FIG_DPI = 600
+TICK_FONT_SIZE = 8
+TICK_FONT_COLOR = "#828282"
 LABEL_FONT_SIZE = 11
-SPINE_LW        = 0.3
-SECTION_GAP     = 0.4  # vertical gap between sections (data units, i.e. row heights)
+SPINE_LW = 0.3
+SECTION_GAP = 0.4  # vertical gap between sections (data units, i.e. row heights)
 
 # ── Label-column layout constants (inches) ───────────────────────────────────
 # Layout: [section label]──gap──[bracket]──gap──[row labels (right-aligned)]
-_SEC_LEFT_PAD  = 0.10   # left margin for section labels
-_SEC_BX_GAP    = 0.0    # gap between section label and bracket
-_BX_ROW_GAP    = 0.7    # gap between bracket end and row labels
-_BRACKET_W_IN  = 0.10   # horizontal bracket extent
-_RIGHT_PAD     = 0.10   # margin right of row labels
+_SEC_LEFT_PAD = 0.10  # left margin for section labels
+_SEC_BX_GAP = 0.0  # gap between section label and bracket
+_BX_ROW_GAP = 0.7  # gap between bracket end and row labels
+_BRACKET_W_IN = 0.10  # horizontal bracket extent
+_RIGHT_PAD = 0.10  # margin right of row labels
 _PLAIN_SEC_ROW_GAP = 0.25  # gap between section label and row labels in 'plain' style
 
 
 DEFAULT_DIRECTIONS = {
-    'validity':                    '↑',
-    'refusals':                    '↓',
-    'factuality_author':           '↑',
-    'factuality_field':            '↑',
-    'factuality_seniority':        '↑',
-    'factuality_location':         '↑',
-    'consistency':                 None,
-    'duplicates':                  '↓',
-    'div_gender':                  None,
-    'div_ethnicity':               None,
-    'div_location':                None,
-    'div_productivity_works':      None,
-    'div_productivity_citations':  None,
-    'parity_gender':               '↑',
-    'parity_ethnicity':            '↑',
-    'parity_works':                '↑',
-    'parity_citations':            '↑',
-    'popularity_works':            None,
-    'popularity_citations':        None,
+    "validity": "↑",
+    "refusals": "↓",
+    "factuality_author": "↑",
+    "factuality_field": "↑",
+    "factuality_seniority": "↑",
+    "factuality_location": "↑",
+    "consistency": None,
+    "duplicates": "↓",
+    "div_gender": None,
+    "div_ethnicity": None,
+    "div_location": None,
+    "div_productivity_works": None,
+    "div_productivity_citations": None,
+    "parity_gender": "↑",
+    "parity_ethnicity": "↑",
+    "parity_works": "↑",
+    "parity_citations": "↑",
+    "popularity_works": None,
+    "popularity_citations": None,
 }
 
 
@@ -114,17 +113,17 @@ DEFAULT_DIRECTIONS = {
 
 def _shades(hex_color: str, n: int) -> list[tuple]:
     """Return n shades of ``hex_color``, light → dark."""
-    base  = np.array(mcolors.to_rgb(hex_color))
+    base = np.array(mcolors.to_rgb(hex_color))
     white = np.ones(3)
     if n == 1:
         return [tuple(white * 0.25 + base * 0.75)]
-    return [tuple(white * (1 - t) + base * t)
-            for t in np.linspace(0.35, 1.0, n)]
+    return [tuple(white * (1 - t) + base * t) for t in np.linspace(0.35, 1.0, n)]
 
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Pure data + layout helpers (no plotting)
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def _build_sections(
     all_calls_df: pd.DataFrame,
@@ -141,46 +140,56 @@ def _build_sections(
     """
     sections: list[dict] = []
     for gc in group_configs:
-        col    = gc['column']
+        col = gc["column"]
         src_df = all_calls_df
-        for fk, fv in gc.get('filter', {}).items():
+        for fk, fv in gc.get("filter", {}).items():
             if fk in src_df.columns:
                 src_df = src_df[src_df[fk] == fv]
         if col not in src_df.columns:
             print(f"Warning: '{col}' not found — skipping '{gc['label']}'.")
             continue
         available = set(src_df[col].dropna().unique())
-        if 'order' in gc:
-            order  = [v for v in gc['order'] if v in available]
-            order += sorted([v for v in available if v not in gc['order']], key=str)
+        if "order" in gc:
+            order = [v for v in gc["order"] if v in available]
+            order += sorted([v for v in available if v not in gc["order"]], key=str)
         else:
             order = sorted(available, key=str)
         rows: list[dict] = []
         for val in order:
             grp = src_df[src_df[col] == val]
-            row = {'label': str(val)}
+            row = {"label": str(val)}
             for m in metrics:
                 m_mean = f"{m}_mean"
-                tmp_mean = grp[m_mean].dropna() if m_mean in grp.columns else pd.Series(dtype=float)
+                tmp_mean = (
+                    grp[m_mean].dropna()
+                    if m_mean in grp.columns
+                    else pd.Series(dtype=float)
+                )
                 row[m_mean] = tmp_mean.iloc[0] if not tmp_mean.empty else np.nan
 
                 m_ci = f"{m}_ci"
-                tmp_ci = grp[m_ci].dropna() if m_ci in grp.columns else pd.Series(dtype=float)
+                tmp_ci = (
+                    grp[m_ci].dropna()
+                    if m_ci in grp.columns
+                    else pd.Series(dtype=float)
+                )
                 row[m_ci] = tmp_ci.iloc[0] if not tmp_ci.empty else np.nan
 
                 m_n = f"{m}_n"
-                cn = 'n'
+                cn = "n"
                 row[m_n] = grp[cn].dropna().iloc[0] if cn in grp.columns else np.nan
             rows.append(row)
         if rows:
-            sections.append({
-                'label': gc['label'],
-                'color': gc['color'],
-                'rows':  rows,
-                # Per-section shading flag. When False, all rows in the section
-                # use the base ``color`` uniformly (no light→dark gradient).
-                'shade': gc.get('shade', True),
-            })
+            sections.append(
+                {
+                    "label": gc["label"],
+                    "color": gc["color"],
+                    "rows": rows,
+                    # Per-section shading flag. When False, all rows in the section
+                    # use the base ``color`` uniformly (no light→dark gradient).
+                    "shade": gc.get("shade", True),
+                }
+            )
     return sections
 
 
@@ -205,12 +214,14 @@ def _compute_y_layout(
         if si > 0:
             y += section_gap
         y_top = y
-        for ri in range(len(sec['rows'])):
+        for ri in range(len(sec["rows"])):
             y_lookup[(si, ri)] = y
             y += y_sep
         sec_ranges.append((y_top, y - y_sep))
-    y_max  = y - y_sep
-    sep_ys = [(sec_ranges[i][1] + sec_ranges[i + 1][0]) / 2 for i in range(len(sections) - 1)]
+    y_max = y - y_sep
+    sep_ys = [
+        (sec_ranges[i][1] + sec_ranges[i + 1][0]) / 2 for i in range(len(sections) - 1)
+    ]
     return y_lookup, sec_ranges, y_max, sep_ys
 
 
@@ -220,7 +231,7 @@ def _label_col_geometry(
     tick_font_size: int,
     label_font_size: int,
     *,
-    section_style: str = 'bracket',
+    section_style: str = "bracket",
     section_label_width: Optional[float] = None,
     section_label_pad: Optional[float] = None,
 ) -> dict:
@@ -254,28 +265,38 @@ def _label_col_geometry(
       single_section  : True if section chrome (label + bracket) should be hidden
     """
     max_label_chars = max(
-        (len(row['label']) for sec in sections for row in sec['rows']), default=10
+        (len(row["label"]) for sec in sections for row in sec["rows"]), default=10
     )
     max_sec_chars = max(
-        max((len(line) for line in _textwrap.fill(sec['label'], width=textwrap_width,
-                                                  break_long_words=True).split('\n')),
-            default=8)
+        max(
+            (
+                len(line)
+                for line in _textwrap.fill(
+                    sec["label"], width=textwrap_width, break_long_words=True
+                ).split("\n")
+            ),
+            default=8,
+        )
         for sec in sections
     )
 
     # /72  → points-to-inches conversion (1 in = 72 pt).
     # 0.50 → average glyph width as a fraction of font size (em).
-    row_label_in = max_label_chars * tick_font_size         * 0.50 / 72
-    sec_label_in = (section_label_width
-                    if section_label_width is not None
-                    else max_sec_chars * label_font_size * 0.72 * 0.50 / 72)
-    sec_row_gap  = section_label_pad if section_label_pad is not None else _PLAIN_SEC_ROW_GAP
+    row_label_in = max_label_chars * tick_font_size * 0.50 / 72
+    sec_label_in = (
+        section_label_width
+        if section_label_width is not None
+        else max_sec_chars * label_font_size * 0.72 * 0.50 / 72
+    )
+    sec_row_gap = (
+        section_label_pad if section_label_pad is not None else _PLAIN_SEC_ROW_GAP
+    )
 
     single_section = len(sections) == 1
     if single_section:
         # Section chrome hidden either way → reclaim that horizontal space.
         natural_w = max(1.0, _SEC_LEFT_PAD + row_label_in + _RIGHT_PAD)
-    elif section_style == 'plain':
+    elif section_style == "plain":
         # No bracket: section label sits left-aligned next to row labels.
         natural_w = max(
             1.2,
@@ -284,15 +305,20 @@ def _label_col_geometry(
     else:  # 'bracket'
         natural_w = max(
             1.8,
-            _SEC_LEFT_PAD + _SEC_BX_GAP + _BX_ROW_GAP +
-            _BRACKET_W_IN + _RIGHT_PAD + sec_label_in + row_label_in,
+            _SEC_LEFT_PAD
+            + _SEC_BX_GAP
+            + _BX_ROW_GAP
+            + _BRACKET_W_IN
+            + _RIGHT_PAD
+            + sec_label_in
+            + row_label_in,
         )
 
     return {
-        'row_label_in':   row_label_in,
-        'sec_label_in':   sec_label_in,
-        'natural_w':      natural_w,
-        'single_section': single_section,
+        "row_label_in": row_label_in,
+        "sec_label_in": sec_label_in,
+        "natural_w": natural_w,
+        "single_section": single_section,
     }
 
 
@@ -302,7 +328,7 @@ def _bx_for_width(geom: dict, width: float) -> float:
     (inches). Bracket sits ``_BX_ROW_GAP`` to the left of the row labels (whose
     right edge is at x≈0.98).
     """
-    row_label_left = 0.98 - geom['row_label_in'] / width
+    row_label_left = 0.98 - geom["row_label_in"] / width
     return row_label_left - _BX_ROW_GAP / width - _BRACKET_W_IN / width
 
 
@@ -310,12 +336,14 @@ def _bx_for_width(geom: dict, width: float) -> float:
 # Drawing primitives (operate on already-created axes)
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def _draw_label_column(
     lax: plt.Axes,
     sections: list[dict],
     sec_ranges: list,
     y_lookup: dict,
-    y_lo: float, y_hi: float,
+    y_lo: float,
+    y_hi: float,
     label_col_w: float,
     BX: Optional[float],
     *,
@@ -325,9 +353,9 @@ def _draw_label_column(
     label_font_size: int,
     spine_lw: float,
     textwrap_width: int,
-    section_style: str = 'bracket',
+    section_style: str = "bracket",
     section_label_align: Optional[str] = None,
-    row_label_align: str = 'right',
+    row_label_align: str = "right",
     row_label_pad: float = 0.05,
 ) -> None:
     """
@@ -347,31 +375,36 @@ def _draw_label_column(
     and the first metric panel. Increase to push row labels left (toward the
     section labels); decrease for tight packing.
     """
-    lax.set_xlim(0, 1); lax.set_ylim(y_lo, y_hi)
-    lax.invert_yaxis(); lax.axis('off')
+    lax.set_xlim(0, 1)
+    lax.set_ylim(y_lo, y_hi)
+    lax.invert_yaxis()
+    lax.axis("off")
 
     # Resolve mode-appropriate default for the section-label alignment.
     if section_label_align is None:
-        section_label_align = 'right' if section_style == 'bracket' else 'left'
+        section_label_align = "right" if section_style == "bracket" else "left"
 
     # Single-section figures hide section chrome (label + bracket) entirely —
     # it'd be visual noise without conveying any grouping information.
-    multi_section  = len(sections) > 1
-    sec_label_in   = geom['sec_label_in']
-    row_label_in   = geom['row_label_in']
+    multi_section = len(sections) > 1
+    sec_label_in = geom["sec_label_in"]
+    row_label_in = geom["row_label_in"]
     bracket_w_norm = _BRACKET_W_IN / label_col_w
 
     # Section-label anchor: x position + ha. In bracket mode we keep the
     # legacy right-anchored-at-SEC_LEFT_PAD placement (the text overflows
     # leftward into the figure margin); the 'left' alignment uses a zone
     # immediately to the right of SEC_LEFT_PAD.
-    if section_label_align == 'right':
-        sec_anchor_x = (_SEC_LEFT_PAD if section_style == 'bracket'
-                        else (_SEC_LEFT_PAD + sec_label_in)) / label_col_w
-        sec_ha       = 'right'
+    if section_label_align == "right":
+        sec_anchor_x = (
+            _SEC_LEFT_PAD
+            if section_style == "bracket"
+            else (_SEC_LEFT_PAD + sec_label_in)
+        ) / label_col_w
+        sec_ha = "right"
     else:  # 'left'
         sec_anchor_x = _SEC_LEFT_PAD / label_col_w
-        sec_ha       = 'left'
+        sec_ha = "left"
 
     # Row-label anchor: text always fits inside [row_zone_left, row_zone_right];
     # we anchor at one end of that zone and match ha. ``row_label_pad`` is the
@@ -379,30 +412,60 @@ def _draw_label_column(
     # panel — fixed in inches rather than as a fraction of label_col_w so the
     # layout doesn't drift as the column widens.
     row_zone_right = (label_col_w - row_label_pad) / label_col_w
-    row_zone_left  = row_zone_right - row_label_in / label_col_w
-    if row_label_align == 'left':
-        row_anchor_x, row_ha = row_zone_left, 'left'
+    row_zone_left = row_zone_right - row_label_in / label_col_w
+    if row_label_align == "left":
+        row_anchor_x, row_ha = row_zone_left, "left"
     else:  # 'right'
-        row_anchor_x, row_ha = row_zone_right, 'right'
+        row_anchor_x, row_ha = row_zone_right, "right"
 
     for si, (sec, (y_top, y_bot)) in enumerate(zip(sections, sec_ranges)):
         y_c = (y_top + y_bot) / 2
 
         if multi_section:
-            wrapped = _textwrap.fill(sec['label'], width=textwrap_width, break_long_words=True)
-            lax.text(sec_anchor_x, y_c, wrapped,
-                     ha=sec_ha, va='center', multialignment=sec_ha,
-                     fontsize=label_font_size * 0.72, fontweight='bold')
-            if section_style == 'bracket':
-                lax.plot([BX, BX],                  [y_top - 0.3, y_bot + 0.3], color='#444', lw=spine_lw * 3)
-                lax.plot([BX, BX + bracket_w_norm], [y_top - 0.3, y_top - 0.3], color='#444', lw=spine_lw * 3)
-                lax.plot([BX, BX + bracket_w_norm], [y_bot + 0.3, y_bot + 0.3], color='#444', lw=spine_lw * 3)
+            wrapped = _textwrap.fill(
+                sec["label"], width=textwrap_width, break_long_words=True
+            )
+            lax.text(
+                sec_anchor_x,
+                y_c,
+                wrapped,
+                ha=sec_ha,
+                va="center",
+                multialignment=sec_ha,
+                fontsize=label_font_size * 0.72,
+                fontweight="bold",
+            )
+            if section_style == "bracket":
+                lax.plot(
+                    [BX, BX], [y_top - 0.3, y_bot + 0.3], color="#444", lw=spine_lw * 3
+                )
+                lax.plot(
+                    [BX, BX + bracket_w_norm],
+                    [y_top - 0.3, y_top - 0.3],
+                    color="#444",
+                    lw=spine_lw * 3,
+                )
+                lax.plot(
+                    [BX, BX + bracket_w_norm],
+                    [y_bot + 0.3, y_bot + 0.3],
+                    color="#444",
+                    lw=spine_lw * 3,
+                )
 
-        for ri, row in enumerate(sec['rows']):
-            wrapped = _textwrap.fill(row['label'], width=textwrap_width, break_long_words=True)
-            lax.text(row_anchor_x, y_lookup[(si, ri)], wrapped,
-                     ha=row_ha, va='center', multialignment=row_ha,
-                     fontsize=tick_font_size, color=tick_font_color)
+        for ri, row in enumerate(sec["rows"]):
+            wrapped = _textwrap.fill(
+                row["label"], width=textwrap_width, break_long_words=True
+            )
+            lax.text(
+                row_anchor_x,
+                y_lookup[(si, ri)],
+                wrapped,
+                ha=row_ha,
+                va="center",
+                multialignment=row_ha,
+                fontsize=tick_font_size,
+                color=tick_font_color,
+            )
 
 
 def _draw_metric_panel(
@@ -410,7 +473,8 @@ def _draw_metric_panel(
     metric: str,
     sections: list[dict],
     y_lookup: dict,
-    y_lo: float, y_hi: float,
+    y_lo: float,
+    y_hi: float,
     dirs: Mapping[str, Optional[str]],
     labels: Mapping[str, str],
     panel_width: float,
@@ -435,53 +499,64 @@ def _draw_metric_panel(
     *positions* drive the grid, so dropping the 0.5 tick drops its gridline.
     """
     direction = dirs.get(metric)
-    arrow = f' {direction}' if direction else ''
-    nice  = labels.get(metric, metric)
+    arrow = f" {direction}" if direction else ""
+    nice = labels.get(metric, metric)
 
     if show_title:
-        ax.set_title(f'{nice}{arrow}', fontsize=tick_font_size, fontweight='bold', pad=4)
-    ax.set_xlim(0, 1); ax.set_ylim(y_lo, y_hi)
-    ax.invert_yaxis(); ax.set_yticks([])
+        ax.set_title(
+            f"{nice}{arrow}", fontsize=tick_font_size, fontweight="bold", pad=4
+        )
+    ax.set_xlim(0, 1)
+    ax.set_ylim(y_lo, y_hi)
+    ax.invert_yaxis()
+    ax.set_yticks([])
 
     # X-tick positions also drive the vertical grid (drawn via ax.grid),
     # so dropping the 0.5 tick is the cleanest way to hide its gridline.
     if show_mid_gridline:
         ax.set_xticks([0, 0.5, 1])
-        tick_labels = ['0', '', '1']  # blank middle label avoids "1.00.0" overlap
+        tick_labels = ["0", "", "1"]  # blank middle label avoids "1.00.0" overlap
     else:
         ax.set_xticks([0, 1])
-        tick_labels = ['0', '1']
+        tick_labels = ["0", "1"]
 
     if show_xaxis:
         ax.set_xticklabels(tick_labels)
-        ax.tick_params(axis='x', labelsize=tick_font_size, labelcolor=tick_font_color, width=spine_lw)
-        ax.spines['bottom'].set_linewidth(spine_lw)
+        ax.tick_params(
+            axis="x",
+            labelsize=tick_font_size,
+            labelcolor=tick_font_color,
+            width=spine_lw,
+        )
+        ax.spines["bottom"].set_linewidth(spine_lw)
     else:
         ax.set_xticklabels([])
-        ax.tick_params(axis='x', length=0)
-        ax.spines['bottom'].set_visible(False)
-    ax.spines[['left', 'right', 'top']].set_visible(False)
-    ax.grid(axis='x', linewidth=0.4, alpha=0.3, zorder=0)
+        ax.tick_params(axis="x", length=0)
+        ax.spines["bottom"].set_visible(False)
+    ax.spines[["left", "right", "top"]].set_visible(False)
+    ax.grid(axis="x", linewidth=0.4, alpha=0.3, zorder=0)
 
     # Estimate label text width in data-coord units (panel spans [0, 1] mapped
     # onto ``panel_width`` inches).
     CHAR_W_DATA = (tick_font_size - 1) / 72 * 0.65 / panel_width  # data units per char
-    MARGIN      = 0.97                                            # don't let labels overflow
+    MARGIN = 0.97  # don't let labels overflow
 
     for si, sec in enumerate(sections):
-        n_rows = len(sec['rows'])
+        n_rows = len(sec["rows"])
         # Flat color when sec['shade'] is False, light→dark gradient otherwise.
-        colors = (_shades(sec['color'], n_rows)
-                  if sec.get('shade', True)
-                  else [sec['color']] * n_rows)
-        vals   = [row[f'{metric}_mean'] for row in sec['rows']]
-        cis    = [row[f'{metric}_ci']   for row in sec['rows']]
-        ns     = [row[f'{metric}_n']    for row in sec['rows']]
+        colors = (
+            _shades(sec["color"], n_rows)
+            if sec.get("shade", True)
+            else [sec["color"]] * n_rows
+        )
+        vals = [row[f"{metric}_mean"] for row in sec["rows"]]
+        cis = [row[f"{metric}_ci"] for row in sec["rows"]]
+        ns = [row[f"{metric}_n"] for row in sec["rows"]]
 
         good = [(i, v) for i, v in enumerate(vals) if np.isfinite(v)]
-        if direction == '↑' and good:
+        if direction == "↑" and good:
             best = max(v for _, v in good)
-        elif direction == '↓' and good:
+        elif direction == "↓" and good:
             best = min(v for _, v in good)
         else:
             best = None
@@ -491,29 +566,53 @@ def _draw_metric_panel(
             if not np.isfinite(val):
                 continue
             is_best = best is not None and abs(val - best) < 1e-9
-            low_n   = n < 3
+            low_n = n < 3
             ax.barh(yv, val, height=0.55, color=color, alpha=0.92, zorder=2)
             ci_val = ci if (np.isfinite(ci) and not low_n) else 0.0
             if ci_val:
-                ax.errorbar(val, yv, xerr=ci_val, fmt='none',
-                            color='#333', lw=0.9, capsize=2, zorder=3)
+                ax.errorbar(
+                    val,
+                    yv,
+                    xerr=ci_val,
+                    fmt="none",
+                    color="#333",
+                    lw=0.9,
+                    capsize=2,
+                    zorder=3,
+                )
 
-            txt   = f'{val:.2f}{"*" if low_n else ""}'
-            fw    = 'bold' if is_best else 'normal'
-            gap   = ci_val + 0.015
-            x_out = val + gap           # outside (right of bar)
-            x_in  = val - gap           # inside  (left of bar end)
+            txt = f'{val:.2f}{"*" if low_n else ""}'
+            fw = "bold" if is_best else "normal"
+            gap = ci_val + 0.015
+            x_out = val + gap  # outside (right of bar)
+            x_in = val - gap  # inside  (left of bar end)
             txt_w = len(txt) * CHAR_W_DATA
 
             # Place outside unless it would overflow the axis margin.
             if x_out + txt_w <= MARGIN:
-                ax.text(x_out, yv, txt, ha='left', va='center',
-                        fontsize=tick_font_size - 1, fontweight=fw,
-                        zorder=4, clip_on=True)
+                ax.text(
+                    x_out,
+                    yv,
+                    txt,
+                    ha="left",
+                    va="center",
+                    fontsize=tick_font_size - 1,
+                    fontweight=fw,
+                    zorder=4,
+                    clip_on=True,
+                )
             else:
-                ax.text(x_in, yv, txt, ha='right', va='center',
-                        fontsize=tick_font_size - 1, fontweight=fw,
-                        zorder=4, clip_on=True)
+                ax.text(
+                    x_in,
+                    yv,
+                    txt,
+                    ha="right",
+                    va="center",
+                    fontsize=tick_font_size - 1,
+                    fontweight=fw,
+                    zorder=4,
+                    clip_on=True,
+                )
 
 
 def _draw_panel_label(
@@ -529,13 +628,20 @@ def _draw_panel_label(
 
     No-op (axes cleared) when ``text`` is falsy.
     """
-    plax.set_xlim(0, 1); plax.set_ylim(0, 1); plax.axis('off')
+    plax.set_xlim(0, 1)
+    plax.set_ylim(0, 1)
+    plax.axis("off")
     if text:
-        plax.text(0.5, 0.5, text,
-                  ha='center', va='center',
-                  rotation=rotation,
-                  fontsize=fontsize,
-                  fontweight=('bold' if bold else 'normal'))
+        plax.text(
+            0.5,
+            0.5,
+            text,
+            ha="center",
+            va="center",
+            rotation=rotation,
+            fontsize=fontsize,
+            fontweight=("bold" if bold else "normal"),
+        )
 
 
 def _draw_section_separators(
@@ -543,8 +649,8 @@ def _draw_section_separators(
     axes_row: Sequence[plt.Axes],
     sep_ys: Sequence[float],
     *,
-    style: str = 'solid',
-    color: str = '#888',
+    style: str = "solid",
+    color: str = "#888",
     lw: float = 0.8,
     left_pad: float = 0.0,
 ) -> None:
@@ -581,19 +687,19 @@ def _draw_section_separators(
     line's x-extent is captured from ``ax.get_position()`` at call time and
     will not auto-update if axes positions later change.
     """
-    if not sep_ys or style == 'none':
+    if not sep_ys or style == "none":
         return
 
-    if style == 'dashed':
+    if style == "dashed":
         # Legacy: per-axes dashed line inside the metric panels (skip label column).
         for ax in axes_row[1:]:
             for sy in sep_ys:
-                ax.axhline(sy, color=color, lw=lw, ls='--', zorder=1)
+                ax.axhline(sy, color=color, lw=lw, ls="--", zorder=1)
         return
 
     # 'solid' — figure-level line spanning the whole row.
-    from matplotlib.transforms import blended_transform_factory
     from matplotlib.lines import Line2D
+    from matplotlib.transforms import blended_transform_factory
 
     # Make axes patches transparent so the figure-level line shows through
     # each axes' background (otherwise each axes' white facecolor would
@@ -602,21 +708,29 @@ def _draw_section_separators(
         ax.patch.set_visible(False)
 
     ref_ax = axes_row[0]
-    trans  = blended_transform_factory(fig.transFigure, ref_ax.transData)
+    trans = blended_transform_factory(fig.transFigure, ref_ax.transData)
     # left_pad is in inches → convert to figure-fraction by dividing by fig width.
-    x0     = axes_row[0].get_position().x0 + (left_pad / fig.get_figwidth())
-    x1     = axes_row[-1].get_position().x1
+    x0 = axes_row[0].get_position().x0 + (left_pad / fig.get_figwidth())
+    x1 = axes_row[-1].get_position().x1
 
     for sy in sep_ys:
-        line = Line2D([x0, x1], [sy, sy], transform=trans,
-                      color=color, lw=lw, linestyle='-',
-                      zorder=2, clip_on=False)
+        line = Line2D(
+            [x0, x1],
+            [sy, sy],
+            transform=trans,
+            color=color,
+            lw=lw,
+            linestyle="-",
+            zorder=2,
+            clip_on=False,
+        )
         fig.add_artist(line)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Public API: single-block plot
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def plot_grouped_metrics(
     all_calls_df: pd.DataFrame,
@@ -636,14 +750,14 @@ def plot_grouped_metrics(
     show: bool = True,
     textwrap_width: int = 11,
     section_gap: float = SECTION_GAP,
-    section_style: str = 'bracket',
-    section_sep_style: str = 'solid',
+    section_style: str = "bracket",
+    section_sep_style: str = "solid",
     show_mid_gridline: bool = True,
     row_label_width: Optional[float] = None,
     section_label_width: Optional[float] = None,
     section_label_pad: Optional[float] = None,
     section_label_align: Optional[str] = None,
-    row_label_align: str = 'right',
+    row_label_align: str = "right",
     row_label_pad: float = 0.05,
     section_sep_left_pad: float = 0.0,
 ) -> plt.Figure:
@@ -727,7 +841,7 @@ def plot_grouped_metrics(
     """
     if metrics is None:
         metrics = [f"{m}_mean" for m in all_calls_df.columns if m in DEFAULT_DIRECTIONS]
-    dirs   = {**DEFAULT_DIRECTIONS, **(metric_directions or {})}
+    dirs = {**DEFAULT_DIRECTIONS, **(metric_directions or {})}
     labels = metric_labels or {}
 
     # 1. Build sections + layout.
@@ -735,12 +849,17 @@ def plot_grouped_metrics(
     if not sections or not metrics:
         raise ValueError("No valid sections or metrics.")
     y_lookup, sec_ranges, y_max, sep_ys = _compute_y_layout(sections, section_gap)
-    geom        = _label_col_geometry(sections, textwrap_width, tick_font_size,
-                                       label_font_size, section_style=section_style,
-                                       section_label_width=section_label_width,
-                                       section_label_pad=section_label_pad)
-    label_col_w = row_label_width if row_label_width is not None else geom['natural_w']
-    BX          = _bx_for_width(geom, label_col_w) if section_style == 'bracket' else None
+    geom = _label_col_geometry(
+        sections,
+        textwrap_width,
+        tick_font_size,
+        label_font_size,
+        section_style=section_style,
+        section_label_width=section_label_width,
+        section_label_pad=section_label_pad,
+    )
+    label_col_w = row_label_width if row_label_width is not None else geom["natural_w"]
+    BX = _bx_for_width(geom, label_col_w) if section_style == "bracket" else None
 
     # 2. Figure.
     n_m = len(metrics)
@@ -757,18 +876,33 @@ def plot_grouped_metrics(
         panel_width = max(0.3, (figsize[0] - label_col_w - 0.5) / n_m)
 
     fig, axes = plt.subplots(
-        1, n_m + 1, figsize=figsize,
-        gridspec_kw={'width_ratios': [label_col_w] + [panel_width] * n_m, 'wspace': 0.12},
+        1,
+        n_m + 1,
+        figsize=figsize,
+        gridspec_kw={
+            "width_ratios": [label_col_w] + [panel_width] * n_m,
+            "wspace": 0.12,
+        },
     )
     axes = np.atleast_1d(axes)
     y_lo, y_hi = -pad, y_max + pad
 
     # 3. Draw.
     _draw_label_column(
-        axes[0], sections, sec_ranges, y_lookup, y_lo, y_hi, label_col_w, BX,
+        axes[0],
+        sections,
+        sec_ranges,
+        y_lookup,
+        y_lo,
+        y_hi,
+        label_col_w,
+        BX,
         geom=geom,
-        tick_font_size=tick_font_size, tick_font_color=tick_font_color,
-        label_font_size=label_font_size, spine_lw=spine_lw, textwrap_width=textwrap_width,
+        tick_font_size=tick_font_size,
+        tick_font_color=tick_font_color,
+        label_font_size=label_font_size,
+        spine_lw=spine_lw,
+        textwrap_width=textwrap_width,
         section_style=section_style,
         section_label_align=section_label_align,
         row_label_align=row_label_align,
@@ -776,9 +910,17 @@ def plot_grouped_metrics(
     )
     for m, ax in zip(metrics, axes[1:]):
         _draw_metric_panel(
-            ax, m, sections, y_lookup, y_lo, y_hi,
-            dirs, labels, panel_width,
-            tick_font_size=tick_font_size, tick_font_color=tick_font_color,
+            ax,
+            m,
+            sections,
+            y_lookup,
+            y_lo,
+            y_hi,
+            dirs,
+            labels,
+            panel_width,
+            tick_font_size=tick_font_size,
+            tick_font_color=tick_font_color,
             spine_lw=spine_lw,
             show_mid_gridline=show_mid_gridline,
         )
@@ -786,13 +928,13 @@ def plot_grouped_metrics(
     fig.tight_layout(pad=0.3, w_pad=0.0, h_pad=0.3)
 
     # 4. Section separators — call AFTER tight_layout so axes positions are final.
-    _draw_section_separators(fig, list(axes), sep_ys,
-                             style=section_sep_style,
-                             left_pad=section_sep_left_pad)
+    _draw_section_separators(
+        fig, list(axes), sep_ys, style=section_sep_style, left_pad=section_sep_left_pad
+    )
 
     if save_path:
-        fig.savefig(save_path, bbox_inches='tight', dpi=fig_dpi)
-        print(f'Saved → {save_path}')
+        fig.savefig(save_path, bbox_inches="tight", dpi=fig_dpi)
+        print(f"Saved → {save_path}")
     if show:
         plt.show()
         plt.close()
@@ -802,6 +944,7 @@ def plot_grouped_metrics(
 # ═════════════════════════════════════════════════════════════════════════════
 # Public API: labeled variant (preprocess + delegate)
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def plot_grouped_metrics_labeled(
     all_calls_df: pd.DataFrame,
@@ -846,6 +989,7 @@ def plot_grouped_metrics_labeled(
 # Public API: NEW — stacked variant (N blocks sharing x-axis)
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 def plot_grouped_metrics_stacked(
     panels: Sequence[Mapping[str, Any]],
     *,
@@ -869,14 +1013,14 @@ def plot_grouped_metrics_stacked(
     panel_label_rotation: float = 90,
     panel_label_bold: bool = True,
     hspace: float = 0.25,
-    section_style: str = 'bracket',
-    section_sep_style: str = 'solid',
+    section_style: str = "bracket",
+    section_sep_style: str = "solid",
     show_mid_gridline: bool = True,
     row_label_width: Optional[float] = None,
     section_label_width: Optional[float] = None,
     section_label_pad: Optional[float] = None,
     section_label_align: Optional[str] = None,
-    row_label_align: str = 'right',
+    row_label_align: str = "right",
     row_label_pad: float = 0.05,
     section_sep_left_pad: float = 0.0,
 ) -> plt.Figure:
@@ -977,14 +1121,14 @@ def plot_grouped_metrics_stacked(
     if not panels:
         raise ValueError("`panels` must be non-empty.")
 
-    dirs                  = {**DEFAULT_DIRECTIONS, **(metric_directions or {})}
-    labels                = metric_labels or {}
+    dirs = {**DEFAULT_DIRECTIONS, **(metric_directions or {})}
+    labels = metric_labels or {}
     panel_label_font_size = panel_label_font_size or label_font_size
 
     # 1. Per-row: optional remap + build sections + layout primitives.
     rows_data: list[dict] = []
     for p in panels:
-        df_p, configs_p = _apply_label_remap(p['df'], p['group_configs'], row_labels)
+        df_p, configs_p = _apply_label_remap(p["df"], p["group_configs"], row_labels)
         sections = _build_sections(df_p, configs_p, metrics)
         if not sections:
             raise ValueError(
@@ -992,34 +1136,49 @@ def plot_grouped_metrics_stacked(
                 f"Check group_configs and DataFrame columns."
             )
         y_lookup, sec_ranges, y_max, sep_ys = _compute_y_layout(sections, section_gap)
-        geom = _label_col_geometry(sections, textwrap_width, tick_font_size,
-                                    label_font_size, section_style=section_style,
-                                    section_label_width=section_label_width,
-                                    section_label_pad=section_label_pad)
-        rows_data.append({
-            'panel_label':           p.get('panel_label'),
-            # Per-panel overrides fall back to the function-level defaults.
-            'panel_label_bold':      p.get('panel_label_bold',     panel_label_bold),
-            'panel_label_rotation':  p.get('panel_label_rotation', panel_label_rotation),
-            'sections':    sections,
-            'y_lookup':    y_lookup,
-            'sec_ranges':  sec_ranges,
-            'y_max':       y_max,
-            'sep_ys':      sep_ys,
-            'geom':        geom,
-        })
+        geom = _label_col_geometry(
+            sections,
+            textwrap_width,
+            tick_font_size,
+            label_font_size,
+            section_style=section_style,
+            section_label_width=section_label_width,
+            section_label_pad=section_label_pad,
+        )
+        rows_data.append(
+            {
+                "panel_label": p.get("panel_label"),
+                # Per-panel overrides fall back to the function-level defaults.
+                "panel_label_bold": p.get("panel_label_bold", panel_label_bold),
+                "panel_label_rotation": p.get(
+                    "panel_label_rotation", panel_label_rotation
+                ),
+                "sections": sections,
+                "y_lookup": y_lookup,
+                "sec_ranges": sec_ranges,
+                "y_max": y_max,
+                "sep_ys": sep_ys,
+                "geom": geom,
+            }
+        )
 
     # 2. Unify label-column width across rows so bars line up vertically.
-    label_col_w = (row_label_width if row_label_width is not None
-                   else max(r['geom']['natural_w'] for r in rows_data))
+    label_col_w = (
+        row_label_width
+        if row_label_width is not None
+        else max(r["geom"]["natural_w"] for r in rows_data)
+    )
     for rd in rows_data:
-        rd['BX'] = (_bx_for_width(rd['geom'], label_col_w)
-                    if section_style == 'bracket' else None)
+        rd["BX"] = (
+            _bx_for_width(rd["geom"], label_col_w)
+            if section_style == "bracket"
+            else None
+        )
 
     # 3. Figure.
-    n_m  = len(metrics)
-    pad  = 0.4
-    row_h = [max((rd['y_max'] + 2 * pad) * 0.65, 1.2) for rd in rows_data]
+    n_m = len(metrics)
+    pad = 0.4
+    row_h = [max((rd["y_max"] + 2 * pad) * 0.65, 1.2) for rd in rows_data]
     if figsize is None:
         # Auto-size figure from per-column widths.
         w = panel_label_width + label_col_w + panel_width * n_m + 0.5
@@ -1029,16 +1188,19 @@ def plot_grouped_metrics_stacked(
         # panel_width from the remainder so the first two columns actually
         # get (panel_label_width + label_col_w) inches and the metric
         # panels split the rest equally.
-        panel_width = max(0.3,
-                          (figsize[0] - panel_label_width - label_col_w - 0.5) / n_m)
+        panel_width = max(
+            0.3, (figsize[0] - panel_label_width - label_col_w - 0.5) / n_m
+        )
 
     fig, axes = plt.subplots(
-        len(rows_data), n_m + 2, figsize=figsize,
+        len(rows_data),
+        n_m + 2,
+        figsize=figsize,
         gridspec_kw={
-            'width_ratios':  [panel_label_width, label_col_w] + [panel_width] * n_m,
-            'height_ratios': row_h,
-            'wspace': 0.12,
-            'hspace': hspace,
+            "width_ratios": [panel_label_width, label_col_w] + [panel_width] * n_m,
+            "height_ratios": row_h,
+            "wspace": 0.12,
+            "hspace": hspace,
         },
         squeeze=False,
     )
@@ -1047,25 +1209,34 @@ def plot_grouped_metrics_stacked(
     #    on the bottom row (visual x-axis sharing).
     n_rows = len(rows_data)
     for r_i, rd in enumerate(rows_data):
-        is_top      = (r_i == 0)
-        is_bottom   = (r_i == n_rows - 1)
-        y_lo, y_hi  = -pad, rd['y_max'] + pad
+        is_top = r_i == 0
+        is_bottom = r_i == n_rows - 1
+        y_lo, y_hi = -pad, rd["y_max"] + pad
 
         # 4a. Panel label (far-left mini axes, like a row-level ylabel).
         _draw_panel_label(
-            axes[r_i, 0], rd['panel_label'],
+            axes[r_i, 0],
+            rd["panel_label"],
             fontsize=panel_label_font_size,
-            rotation=rd['panel_label_rotation'],
-            bold=rd['panel_label_bold'],
+            rotation=rd["panel_label_rotation"],
+            bold=rd["panel_label_bold"],
         )
 
         # 4b. Label column.
         _draw_label_column(
-            axes[r_i, 1], rd['sections'], rd['sec_ranges'], rd['y_lookup'],
-            y_lo, y_hi, label_col_w, rd['BX'],
-            geom=rd['geom'],
-            tick_font_size=tick_font_size, tick_font_color=tick_font_color,
-            label_font_size=label_font_size, spine_lw=spine_lw,
+            axes[r_i, 1],
+            rd["sections"],
+            rd["sec_ranges"],
+            rd["y_lookup"],
+            y_lo,
+            y_hi,
+            label_col_w,
+            rd["BX"],
+            geom=rd["geom"],
+            tick_font_size=tick_font_size,
+            tick_font_color=tick_font_color,
+            label_font_size=label_font_size,
+            spine_lw=spine_lw,
             textwrap_width=textwrap_width,
             section_style=section_style,
             section_label_align=section_label_align,
@@ -1076,9 +1247,17 @@ def plot_grouped_metrics_stacked(
         # 4c. Metric panels — spine/ticks/labels only on the bottom row.
         for m_i, m in enumerate(metrics):
             _draw_metric_panel(
-                axes[r_i, 2 + m_i], m, rd['sections'], rd['y_lookup'],
-                y_lo, y_hi, dirs, labels, panel_width,
-                tick_font_size=tick_font_size, tick_font_color=tick_font_color,
+                axes[r_i, 2 + m_i],
+                m,
+                rd["sections"],
+                rd["y_lookup"],
+                y_lo,
+                y_hi,
+                dirs,
+                labels,
+                panel_width,
+                tick_font_size=tick_font_size,
+                tick_font_color=tick_font_color,
                 spine_lw=spine_lw,
                 show_title=is_top,
                 show_xaxis=is_bottom,
@@ -1087,7 +1266,9 @@ def plot_grouped_metrics_stacked(
 
         # 4d. Section separators (within this row, spanning label col + panels).
         _draw_section_separators(
-            fig, list(axes[r_i, 1:]), rd['sep_ys'],
+            fig,
+            list(axes[r_i, 1:]),
+            rd["sep_ys"],
             style=section_sep_style,
             left_pad=section_sep_left_pad,
         )
@@ -1096,8 +1277,8 @@ def plot_grouped_metrics_stacked(
     # explicit gridspec hspace/height_ratios. ``bbox_inches='tight'`` on save
     # trims outer whitespace cleanly.
     if save_path:
-        fig.savefig(save_path, bbox_inches='tight', dpi=fig_dpi)
-        print(f'Saved → {save_path}')
+        fig.savefig(save_path, bbox_inches="tight", dpi=fig_dpi)
+        print(f"Saved → {save_path}")
     if show:
         plt.show()
         plt.close()
@@ -1107,6 +1288,7 @@ def plot_grouped_metrics_stacked(
 # ═════════════════════════════════════════════════════════════════════════════
 # Internal helpers — label remapping (shared by labeled + stacked variants)
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 def _apply_label_remap(
     df: pd.DataFrame,
@@ -1128,17 +1310,18 @@ def _apply_label_remap(
     new_configs: list[dict] = []
     for i, gc in enumerate(group_configs):
         # Strip extension keys before forwarding to plot_grouped_metrics.
-        new_gc = {k: v for k, v in gc.items()
-                  if k not in ('label_labels', 'column_labels')}
+        new_gc = {
+            k: v for k, v in gc.items() if k not in ("label_labels", "column_labels")
+        }
 
-        col_map = _merge_label_map(row_labels, gc.get('column_labels'))
-        src_col = gc.get('column')
+        col_map = _merge_label_map(row_labels, gc.get("column_labels"))
+        src_col = gc.get("column")
         if col_map and src_col and src_col in df.columns:
-            derived = f'__lbl__{src_col}__{i}'
+            derived = f"__lbl__{src_col}__{i}"
             df[derived] = _remap_series(df[src_col], col_map)
-            new_gc['column'] = derived
-            if 'order' in gc:
-                new_gc['order'] = _remap_order(gc['order'], col_map)
+            new_gc["column"] = derived
+            if "order" in gc:
+                new_gc["order"] = _remap_order(gc["order"], col_map)
             # NB: ``filter`` references its own column(s), unrelated to
             # gc['column'], so nothing to do for filters.
         new_configs.append(new_gc)

@@ -17,7 +17,7 @@ Steps:
 Usage (from code/scripts/factuality/):
   python run_factuality_pipeline.py
   python run_factuality_pipeline.py \\
-      --results  ../../../results/summary \\
+      --results  ../../../results/results/summary_v2 \\
       --parquet  /data/datasets/LLMScholar-Personas/data/semantic_scholar_data/clean/Researchers_Deduplicated_Genderize_Namsor.parquet \\
       --duckdb   /data/datasets/LLMScholar-Personas/data/openalex_latest.duckdb \\
       [--skip_jw] [--skip_oa] [--skip_field]
@@ -57,35 +57,66 @@ def run_step(name: str, cmd: list[str]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the full factuality pipeline")
-    parser.add_argument("--results",  default="../../../results/summary",
-                        help="Path to results/summary directory")
-    parser.add_argument("--parquet",  default=DEFAULT_PARQUET,
-                        help="Path to Researchers_Deduplicated parquet (for JW matching)")
-    parser.add_argument("--duckdb",   default=DEFAULT_DUCKDB,
-                        help="Path to openalex_latest.duckdb (for OpenAlex pre-lookup)")
-    parser.add_argument("--skip_jw",    action="store_true",
-                        help="Skip step 0 (JW matching) and use existing factuality_author_jw.csv")
-    parser.add_argument("--skip_oa",    action="store_true",
-                        help="Skip step 0.5 (OpenAlex) and use existing factuality_oa.csv")
-    parser.add_argument("--skip_field", action="store_true",
-                        help="Skip step 1 (field check) and use existing factuality_field.csv")
+    parser.add_argument(
+        "--results",
+        default="../../../results/results/summary_v2",
+        help="Path to results/summary_v2 directory",
+    )
+    parser.add_argument(
+        "--parquet",
+        default=DEFAULT_PARQUET,
+        help="Path to Researchers_Deduplicated parquet (for JW matching)",
+    )
+    parser.add_argument(
+        "--duckdb",
+        default=DEFAULT_DUCKDB,
+        help="Path to openalex_latest.duckdb (for OpenAlex pre-lookup)",
+    )
+    parser.add_argument(
+        "--skip_jw",
+        action="store_true",
+        help="Skip step 0 (JW matching) and use existing factuality_author_jw.csv",
+    )
+    parser.add_argument(
+        "--skip_oa",
+        action="store_true",
+        help="Skip step 0.5 (OpenAlex) and use existing factuality_oa.csv",
+    )
+    parser.add_argument(
+        "--skip_field",
+        action="store_true",
+        help="Skip step 1 (field check) and use existing factuality_field.csv",
+    )
     args = parser.parse_args()
 
     r = args.results
 
-    oa_cmd = [sys.executable, "factuality_openalex.py",
-              "--input",  f"{r}/factuality_author_jw.csv",
-              "--output", f"{r}/factuality_oa.csv",
-              "--db_path", args.duckdb,
-              "--cache",  f"{r}/.oa_cache.pkl"]
+    oa_cmd = [
+        sys.executable,
+        "factuality_openalex.py",
+        "--input",
+        f"{r}/factuality_author_jw.csv",
+        "--output",
+        f"{r}/factuality_oa.csv",
+        "--db_path",
+        args.duckdb,
+        "--cache",
+        f"{r}/.oa_cache.pkl",
+    ]
 
     steps = [
         (
             "0/4    factuality_author_jw  (global JW matching)",
-            [sys.executable, "factuality_author_jw.py",
-             "--recommendations", f"{r}/recommendations.csv",
-             "--parquet",         args.parquet,
-             "--output",          f"{r}/factuality_author_jw.csv"],
+            [
+                sys.executable,
+                "factuality_author_jw.py",
+                "--recommendations",
+                f"{r}/recommendations.csv",
+                "--parquet",
+                args.parquet,
+                "--output",
+                f"{r}/factuality_author_jw.csv",
+            ],
             args.skip_jw,
         ),
         (
@@ -95,42 +126,68 @@ def main() -> None:
         ),
         (
             "1/4    factuality_field_check  (field match vs gt_field)",
-            [sys.executable, "factuality_field_check.py",
-             "--input",  f"{r}/factuality_oa.csv",
-             "--output", f"{r}/factuality_field.csv"],
+            [
+                sys.executable,
+                "factuality_field_check.py",
+                "--input",
+                f"{r}/factuality_oa.csv",
+                "--output",
+                f"{r}/factuality_field.csv",
+            ],
             args.skip_field,
         ),
         (
             "2/4    factuality_seniority",
-            [sys.executable, "factuality_seniority.py",
-             "--input",  f"{r}/factuality_field.csv",
-             "--output", f"{r}/factuality_seniority.csv"],
+            [
+                sys.executable,
+                "factuality_seniority.py",
+                "--input",
+                f"{r}/factuality_field.csv",
+                "--output",
+                f"{r}/factuality_seniority.csv",
+            ],
             False,
         ),
         (
             "3/5    factuality_location",
-            [sys.executable, "factuality_location.py",
-             "--input",  f"{r}/factuality_seniority.csv",
-             "--output", f"{r}/factuality_location.csv"],
+            [
+                sys.executable,
+                "factuality_location.py",
+                "--input",
+                f"{r}/factuality_seniority.csv",
+                "--output",
+                f"{r}/factuality_location.csv",
+            ],
             False,
         ),
-        # PLAN.md Tarea 2 — nuevo step de factuality de afiliación,
-        # insertado entre location y ethnicity (Hallazgo 4).
+        # PLAN.md Task 2 — new affiliation factuality step,
+        # inserted between location and ethnicity (Finding 4).
         (
             "3.5/5  factuality_affiliation",
-            [sys.executable, "factuality_affiliation.py",
-             "--input",  f"{r}/factuality_location.csv",
-             "--output", f"{r}/factuality_affiliation.csv"],
+            [
+                sys.executable,
+                "factuality_affiliation.py",
+                "--input",
+                f"{r}/factuality_location.csv",
+                "--output",
+                f"{r}/factuality_affiliation.csv",
+            ],
             False,
         ),
         (
-            # PLAN.md Tarea 2 — el step de ethnicity ahora lee del CSV de
-            # afiliación (antes leía de factuality_location.csv).
+            # PLAN.md Task 2 — the ethnicity step now reads from the affiliation
+            # CSV (previously it read from factuality_location.csv).
             "4/5    factuality_ethnicity → factuality_full",
-            [sys.executable, "factuality_ethnicity.py",
-             "--input",            f"{r}/factuality_affiliation.csv",
-             "--ethnicity_lookup", f"{r}/recommendations_with_ethnicity.csv",
-             "--output",           f"{r}/factuality_full.csv"],
+            [
+                sys.executable,
+                "factuality_ethnicity.py",
+                "--input",
+                f"{r}/factuality_affiliation.csv",
+                "--ethnicity_lookup",
+                f"{r}/recommendations_with_ethnicity.csv",
+                "--output",
+                f"{r}/factuality_full.csv",
+            ],
             False,
         ),
     ]

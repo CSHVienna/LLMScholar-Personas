@@ -17,9 +17,13 @@ def load_config(path: Path | str = "config.ini") -> dict:
     parser.read(cfg_path, encoding="utf-8")
 
     # --- required field(s) ---
-    keys_dir = os.environ.get("LLM_KEYS_DIR") or parser.get("secrets", "keys_dir", fallback="")
+    keys_dir = os.environ.get("LLM_KEYS_DIR") or parser.get(
+        "secrets", "keys_dir", fallback=""
+    )
     if not keys_dir:
-        raise ValueError("Keys Dir key is missing. Set env var LLM_KEYS_DIR or fill [secrets].keys_dir in config.ini")
+        raise ValueError(
+            "Keys Dir key is missing. Set env var LLM_KEYS_DIR or fill [secrets].keys_dir in config.ini"
+        )
 
     # --- typed reads with defaults ---
     openai_api_dir = parser.get("openai", "data_dir", fallback="")
