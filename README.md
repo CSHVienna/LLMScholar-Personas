@@ -1,2 +1,2 @@
-# LLMScholar-Personas
-Auditing LLMs as people recommender systems with personas
+# Persona Prompting Effects in LLM-Based Scholar Recommendation
+Auditing LLMs as people recommender systems with personas prompting
