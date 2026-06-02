@@ -1,6 +1,41 @@
-from libs.metrics.constants import ALL_METRICS
+# Re-exported so callers can `from libs.visuals.constants import FIG_DPI`.
+try:
+    from libs.metrics.constants import ALL_METRICS, FIG_DPI  # noqa: F401
+except ImportError:  # PYTHONPATH=code/libs/
+    from metrics.constants import ALL_METRICS, FIG_DPI  # noqa: F401
 
 PROMPT_VAR_COLORS = {"context": "#7ab0d3", "persona": "#efaf76"}
+
+# Long-form ethnicity labels used in plots (BERT/ethnicolr cascade output,
+# kept distinct from the short labels in libs.metrics.constants.ETHNICITY_ORDER
+# which feed metric aggregation).
+ETHNICITY_PLOT_ORDER = [
+    "White",
+    "Asian",
+    "Hispanic or Latino",
+    "Black or African American",
+    "Unknown",
+]
+ETHNICITY_PLOT_COLORS = ["#4878CF", "#6ACC65", "#D65F5F", "#B47CC7", "#aaaaaa"]
+ETHNICITY_PLOT_COLOR_MAP = dict(zip(ETHNICITY_PLOT_ORDER, ETHNICITY_PLOT_COLORS))
+
+# Paper-figure dimensions used by the analysis notebooks.
+FIG_WIDTH_PAPER = 15
+FIG_HEIGHT_PAPER = 0.8
+
+# Layout constants extracted from grouped_metrics.py.
+TICK_FONT_SIZE = 8
+LABEL_FONT_SIZE = 11
+SPINE_LW = 0.3
+SECTION_GAP = 0.4
+
+# Quadrant scatter colors (moved from quadrant_scatter.py).
+QUADRANT_COLORS = {
+    "Q1": "#2ca02c",  # top-right    — high tech, high social  (green)
+    "Q2": "#1f77b4",  # top-left     — low  tech, high social  (blue)
+    "Q3": "#a5a5a5",  # bottom-left  — low  tech, low  social  (red)
+    "Q4": "#ff7f0e",  # bottom-right — high tech, low  social  (orange)
+}
 
 ETHNICITY_MAP = {
     "White": "White",

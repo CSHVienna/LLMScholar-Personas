@@ -1,10 +1,40 @@
 # LLMScholar-Personas
 
-Auditing LLMs as recommender systems for people through persona prompting.
-The study evaluates how **language**, **country**, and **role** in the
-persona prompt affect the *factuality*, *diversity*, *parity*, *consistency*,
-and *connectedness* of recommended researchers, using Semantic Scholar and
-OpenAlex as ground truth.
+> Auditing how the **persona** in a prompt shapes which researchers an LLM recommends.
+
+When you ask an LLM for "5 senior Physics professors", does the answer change if you ask **in Spanish from Ecuador** vs **in English from Germany**? Does it change if the persona is a **PhD student looking for an advisor** vs a **recruiter scouting hires**? **LLMScholar-Personas** runs the same prompt across every combination of those three persona variables — **language**, **country**, **role** — and measures what shifts in the recommendations:
+
+- **Factuality** — do the recommended people actually exist? Are their field, seniority, and country correct?
+- **Diversity** — gender, ethnicity, country, productivity tier of the recommended set.
+- **Parity** — distance from the Semantic Scholar / OpenAlex ground-truth distribution.
+- **Consistency** — overlap between repeated runs of the same prompt.
+
+The result is one CSV per LLM call with every metric attached, plus a notebook that turns that table into the figures used in the paper.
+
+---
+
+## Quick start
+
+```bash
+git clone <repo-url>
+cd LLMScholar-Personas
+
+# 1. Install dependencies (Python 3.10+).
+pip install -r requirements.txt
+
+# 2. Point the project at your local data.
+cp config.ini.example config.ini
+$EDITOR config.ini    # fill in [secrets].keys_dir and every [data].* path
+
+# 3. Run the pipeline from code/.
+cd code
+export PYTHONPATH=.
+python scripts/factuality/run_factuality_pipeline.py    # 7-step factuality cascade
+python scripts/metrics/build_valid_calls.py             # per-call metrics table
+jupyter nbconvert --execute notebooks/analysis/metrics_pipeline.ipynb
+```
+
+The end-to-end pipeline (collect responses → factuality → metrics → figures) lives in **[`code/README.md`](code/README.md)**.
 
 ---
 
@@ -12,156 +42,50 @@ OpenAlex as ground truth.
 
 ```
 LLMScholar-Personas/
-├── code/
-│   ├── scripts/
-│   │   ├── prompting/          # batch prompt generation and response parsing
-│   │   ├── annotation/         # interactive CLI tools for manual annotation
-│   │   ├── factuality/         # 7-step factuality pipeline + orchestrator
-│   │   └── ethnicity/          # cascade ethnicity inference (BERT + ethnicolr)
-│   ├── libs/
-│   │   ├── llm/                # OpenAI wrapper
-│   │   ├── metrics/            # aggregators and metric I/O
-│   │   ├── prompt/             # prompt generation and combination
-│   │   ├── utils/              # config, I/O, text utilities
-│   │   └── visuals/            # paper-style plots (panels, grids, scatter)
-│   └── notebooks/
-│       ├── agreement_v2/       # inter-annotator agreement
-│       └── analysis_v2/        # benchmark metrics and exploratory analyses
-├── data/                       # per-language contexts, manual labels
-├── results/ → /data/datasets/LLMScholar-Personas/results   (symlink)
-├── pyproject.toml              # Black + isort configuration
-└── config.ini                  # paths to API key files
+├── code/                 see code/README.md
+│   ├── libs/             Reusable libraries (LLM clients, prompts, metrics, plots).
+│   ├── scripts/          CLI entry points — one folder per pipeline stage.
+│   └── notebooks/        Plot-only notebooks (analysis/, agreement/).
+├── data/                 see data/README.md
+│   ├── context/          Per-language prompt scaffolding.
+│   ├── models/           List of LLMs and their metadata.
+│   └── annotator_agreement/, ethnicity_inference/   Manual labels.
+├── results/              Pipeline outputs. Path configurable in config.ini.
+├── requirements.txt
+├── config.ini.example    Template — copy to config.ini and fill in your paths.
+└── REFACTOR.md           Change log for the latest refactor.
 ```
+
+Detailed instructions live in the sub-READMEs:
+
+- **[`code/README.md`](code/README.md)** — end-to-end pipeline (data flow, every step, expected outputs, troubleshooting).
+- **[`code/scripts/README.md`](code/scripts/README.md)** — per-CLI documentation for the batch-processing scripts.
+- **[`data/README.md`](data/README.md)** — what lives in each subfolder of `data/`.
 
 ---
 
-## Setup
+## How the pipeline fits together
 
-### Dependencies
-
-Python 3.10 or newer is required.
-
-```bash
-pip install pandas numpy scipy statsmodels scikit-learn matplotlib seaborn tqdm rapidfuzz requests duckdb pyarrow openai anthropic torch transformers
+```
+prompts (per language)                LLM responses              factuality + metrics            figures
+─────────────────────                ───────────────             ────────────────────            ───────
+scripts/prompting/      →  (collected externally)  →  scripts/factuality/         →  notebooks/analysis/
+batch_params, batch_prompt,                            run_factuality_pipeline       metrics_pipeline.ipynb,
+batch_parse_results                                    scripts/metrics/              ethnicity_metrics.ipynb,
+                                                       build_valid_calls,            ...
+                                                       build_ethnicity_distributions
 ```
 
-Ethnicity inference additionally requires:
-
-```bash
-pip install tensorflow tf-keras ethnicolr
-```
-
-### Environment
-
-All scripts expect `code/libs` to be on the `PYTHONPATH`:
-
-```bash
-export PYTHONPATH="$PYTHONPATH:../../libs"
-```
-
-### API keys
-
-`config.ini` points to plain-text files containing the keys:
-
-```ini
-[secrets]
-keys_dir = ../../../.keys/
-
-[openai]
-data_dir = ${secrets:keys_dir}/openai_api_key.txt
-```
-
-Create `.keys/openai_api_key.txt` with the key on a single line.
+Each stage reads what the previous one wrote. See `code/README.md` for the ordered command list, the schema of every intermediate CSV, and the optional branches (manual annotation, ethnicity inference, inter-annotator agreement).
 
 ---
 
-## Factuality pipeline
+## Related work
 
-The pipeline checks whether recommended authors exist and whether the
-attributes assigned by the LLM (field, seniority, location, affiliation,
-ethnicity) match ground truth. Each step reads the output of the previous one.
-
-| # | Script | Input → Output |
-|---|---|---|
-| 0   | `factuality_author_jw.py`    | `recommendations.csv` → `factuality_author_jw.csv` |
-| 0.5 | `factuality_openalex.py`     | `factuality_author_jw.csv` → `factuality_oa.csv` |
-| 1   | `factuality_field_check.py`  | `factuality_oa.csv` → `factuality_field.csv` |
-| 2   | `factuality_seniority.py`    | `factuality_field.csv` → `factuality_seniority.csv` |
-| 3   | `factuality_location.py`     | `factuality_seniority.csv` → `factuality_location.csv` |
-| 3.5 | `factuality_affiliation.py`  | `factuality_location.csv` → `factuality_affiliation.csv` |
-| 4   | `factuality_ethnicity.py`    | `factuality_affiliation.csv` → `factuality_full.csv` |
-
-Run the full pipeline with the orchestrator:
-
-```bash
-cd code/scripts/factuality/ && python run_factuality_pipeline.py --results ../../../results/summary_v2 --parquet /data/datasets/LLMScholar-Personas/data/semantic_scholar_data/clean/Researchers_Deduplicated_Genderize_Namsor.parquet --duckdb /data/datasets/LLMScholar-Personas/data/openalex_latest.duckdb
-```
-
-Each step accepts `--help`. Individual steps can be skipped via
-`--skip_jw`, `--skip_oa`, `--skip_field`.
+This codebase extends the auditor framework introduced in *Whose Name Comes Up? I: Auditing LLM-Based Scholar Recommendations* — [arXiv:2506.00074](https://arxiv.org/abs/2506.00074) — with the persona-prompting axis (language × country × role).
 
 ---
 
-## Other pipelines
+## Status
 
-### Prompting
-
-`code/scripts/prompting/` contains three scripts:
-
-- `batch_params.py` — generate per-language prompt parameter combinations.
-- `batch_prompt.py` — build and inspect individual prompts.
-- `batch_parse_results.py` — parse raw LLM responses into
-  `recommendations.csv` (consolidated) or per-model/per-language CSVs
-  when called with `--model` and `--language`.
-
-### Annotation
-
-`code/scripts/annotation/` contains interactive CLI tools that produce
-manual labels for inter-annotator agreement studies:
-
-- `annotate_responses.py` — label LLM responses for validity.
-- `annotate_ethnicity.py` — label perceived researcher ethnicity.
-- `lookup_output.py` — print the raw LLM output for a `summary.csv` row.
-
-### Ethnicity
-
-`code/scripts/ethnicity/` provides cascade inference
-(BERT `liamliang/demographics_race_v2` → `ethnicolr` LSTM → `Unknown`):
-
-- `ethnicity_inference.py` — model loader and inference functions.
-- `apply_ethnicity_ground_truth.py` — apply the cascade to a CSV.
-
----
-
-## Analysis notebooks
-
-| Notebook | Purpose |
-|---|---|
-| `analysis_v2/metrics_pipeline_leen.ipynb` | Benchmark metrics (Diversity, Parity, Factuality, Consistency, Duplicates) per dimension; produces all paper figures under `factualities_v2/plots/leen/`. |
-| `analysis_v2/ethnicity_metrics.ipynb`     | Ground-truth vs. recommendation ethnicity distributions. |
-| `analysis_v2/manual_classification_metrics.ipynb` | Manual-validation accuracy/precision/recall. |
-| `analysis_v2/oa_productivity_coverage.ipynb` | OpenAlex coverage diagnostics for productivity tiers. |
-| `agreement_v2/inter_annotator_agreement.ipynb`           | Cohen κ / Krippendorff α for response validity. |
-| `agreement_v2/inter_annotator_agreement_ethnicity.ipynb` | Cohen κ / Krippendorff α for ethnicity labels. |
-| `agreement_v2/manual_factuality_validation.ipynb`        | Manual review of factuality pipeline outputs. |
-
----
-
-## Data sources
-
-- **Semantic Scholar** ground truth: `data/semantic_scholar_data/clean/Researchers_Deduplicated_Genderize_Namsor.parquet`
-  (216 MB, deduplicated by researcher).
-- **OpenAlex** snapshot: `data/openalex_latest.duckdb` (DuckDB).
-- **Manual labels** for inter-annotator agreement: `data/annotator_agreement/` and `data/ethnicity_inference/`.
-
----
-
-## Code style
-
-The project uses [Black](https://black.readthedocs.io/) (line length 88) and
-[isort](https://pycqa.github.io/isort/) with the `black` profile.
-Configuration is in `pyproject.toml`. To format the codebase:
-
-```bash
-black code/scripts code/libs && isort code/scripts code/libs
-```
+Research code. APIs and intermediate CSV schemas may change between paper revisions.

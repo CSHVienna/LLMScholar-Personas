@@ -5,7 +5,10 @@ from scipy.stats import t
 from statsmodels.stats.proportion import proportion_confint
 from tqdm.auto import tqdm
 
-from libs.metrics import constants
+try:
+    from libs.metrics import constants
+except ImportError:  # PYTHONPATH=code/libs/
+    from metrics import constants
 
 tqdm.pandas()
 
@@ -27,6 +30,97 @@ def ci_wilson(series: pd.Series) -> tuple:
     k = float(s.sum())
     low, high = proportion_confint(count=k, nobs=n, alpha=0.05, method="wilson")
     return (k / n, (high - low) / 2.0)
+
+
+def classify_source_bucket(
+    df: pd.DataFrame,
+    *,
+    ss_col: str = "author_status",
+    oa_col: str = "oa_status",
+) -> pd.Series:
+    """Classify each row into a coverage bucket.
+
+    Returns a Series with values ``'SS + OA'``, ``'OA only'``,
+    ``'SS only (no OA)'``, or ``'not found'`` depending on whether the row was
+    matched in Semantic Scholar (``ss_col == 'found'``) and/or OpenAlex
+    (``oa_col == 'found'``).
+    """
+    ss = df[ss_col].eq("found")
+    oa = df[oa_col].eq("found")
+    conds = [ss & oa, ~ss & oa, ss & ~oa]
+    choices = ["SS + OA", "OA only", "SS only (no OA)"]
+    return pd.Series(np.select(conds, choices, default="not found"), index=df.index)
+
+
+def productivity_thresholds(
+    df: pd.DataFrame,
+    *,
+    field_col: str = "field_en",
+    metric_cols=None,
+) -> dict:
+    """Per-field p33/p67 of every productivity metric.
+
+    Returns ``{metric_col: DataFrame(p33, p67) indexed by field}``.
+    Used by every step that bins authors into low / med / high tiers.
+    """
+    cols = list(metric_cols or constants.PRODUCTIVITY_OA_FIELDS_MAP)
+    out = {}
+    for col in cols:
+        th = (
+            df.groupby(field_col)[col]
+            .quantile([0.33, 0.67])
+            .unstack()
+            .rename(columns={0.33: "p33", 0.67: "p67"})
+        )
+        out[col] = th
+    return out
+
+
+def assign_productivity_tier(
+    values: pd.Series, fields: pd.Series, th: pd.DataFrame
+) -> pd.Series:
+    """Bin ``values`` into ``{low, med, high}`` per-field tiers.
+
+    ``th`` is the DataFrame returned by :func:`productivity_thresholds` for
+    the same metric. Rows whose field is unknown (or whose value is NaN) get
+    ``NaN``.
+    """
+    p33 = fields.map(th["p33"])
+    p67 = fields.map(th["p67"])
+    out = pd.Series(np.nan, index=values.index, dtype=object)
+    mask = values.notna() & p33.notna() & p67.notna()
+    out.loc[mask & (values <= p33)] = "low"
+    out.loc[mask & (values > p33) & (values <= p67)] = "med"
+    out.loc[mask & (values > p67)] = "high"
+    return out
+
+
+def tier_fractions(
+    df: pd.DataFrame,
+    tier_col: str,
+    label: str,
+    *,
+    group_keys=None,
+    tier_labels=None,
+) -> pd.DataFrame:
+    """Per-call fractions of authors in each tier (low / med / high).
+
+    Returns a DataFrame with one row per group, columns
+    ``pct_low_{label}``, ``pct_med_{label}``, ``pct_high_{label}``. NaN where
+    the group has no tier-tagged authors.
+    """
+    group_keys = list(group_keys or constants.CALL_KEYS)
+    tier_labels = list(tier_labels or constants.PRODUCTIVITY_TIER_LABELS)
+    cts = (
+        df.dropna(subset=[tier_col])
+        .groupby(group_keys + [tier_col], dropna=False)
+        .size()
+        .unstack(tier_col, fill_value=0)
+        .reindex(columns=tier_labels, fill_value=0)
+    )
+    total = cts.sum(axis=1).replace(0, np.nan)
+    frac = cts.div(total, axis=0)
+    return frac.rename(columns=lambda t: f"pct_{t}_{label}").reset_index()
 
 
 def aggregate_scores(
@@ -485,29 +579,30 @@ def aggregate_parity_prominence_cit(df_factuality_author, **kwargs):
     return aggregate_parity(df_factuality_author, attribute="prominence_cit", **kwargs)
 
 
-# ── Sub-population variants (PLAN.md Tarea 3) ──────────────────────────────────
-# Wrappers que computan parity / diversity una vez por subgrupo (field,
-# location, field×location) en lugar de hacerlo sobre todo el GT.
-# No se refactorizan aggregate_parity ni aggregate_diversity (Hallazgo 8):
-# se las llama una vez por slice, con el GT ya filtrado al mismo subgrupo.
+# ── Sub-population variants ────────────────────────────────────────────────────
+# Wrappers that compute parity / diversity once per subgroup (field, location,
+# field×location) instead of once over the full GT. aggregate_parity and
+# aggregate_diversity are not refactored: they are called once per slice with
+# the GT pre-filtered to the matching subgroup.
 
 
 def _aggregate_diversity_by_subpop(df_factuality_author, attribute, subpop_cols):
-    # Sin columnas de subpop → comportamiento global (sin loop).
+    # No subpop columns → global behaviour (no loop).
     if not subpop_cols:
         return aggregate_diversity(df_factuality_author, attribute=attribute)
     pieces = []
-    # Iteramos cada combinación de valores presentes en las columnas subpop
-    # (e.g. cada field, o cada (field, location)).
+    # Iterate every combination of values present in the subpop columns
+    # (e.g. each field, or each (field, location)).
     for vals, sub in df_factuality_author.groupby(subpop_cols, dropna=False):
-        # groupby con una sola col devuelve escalar; con varias, tupla.
-        # Normalizamos a tupla para poder zip-earla abajo.
+        # groupby returns a scalar for one column and a tuple for several;
+        # normalise to a tuple so we can zip it below.
         if not isinstance(vals, tuple):
             vals = (vals,)
-        # Diversity sobre el slice — el GT no entra acá: diversity es intrínseca
-        # a las recomendaciones (entropía de Shannon de los predichos).
+        # Diversity over the slice — the GT does not enter here: diversity is
+        # intrinsic to the recommendations (Shannon entropy of the predicted
+        # categories).
         out = aggregate_diversity(sub, attribute=attribute)
-        # Anotamos qué subpop produjo esta fila para reconstruir la tabla larga.
+        # Tag the row with its subpop so the long table can be reconstructed.
         for c, v in zip(subpop_cols, vals):
             out[c] = v
         pieces.append(out)
@@ -540,11 +635,11 @@ def _aggregate_parity_by_subpop(
             gt_col = gt_col_map.get(c, c)
             if gt_col in gt_filtered.columns:
                 gt_filtered = gt_filtered[gt_filtered[gt_col] == v]
-        # Si el GT no tiene autores en este subgrupo no hay nada que comparar
-        # — saltamos en vez de devolver una parity contra distribución vacía.
+        # If the GT has no authors in this subgroup there is nothing to compare
+        # — skip instead of returning a parity against an empty distribution.
         if len(gt_filtered) == 0:
             continue
-        # aggregate_parity calcula 1 - TV(p_preds, p_gt_filtrado).
+        # aggregate_parity computes 1 − TV(p_preds, p_gt_filtered).
         out = aggregate_parity(sub, attribute=attribute, gt=gt_filtered)
         for c, v in zip(subpop_cols, vals):
             out[c] = v
@@ -556,7 +651,7 @@ def aggregate_diversity_by_subpop(df_factuality_author, attribute, subpop_cols):
     """Public wrapper. Returns a long DataFrame with one row per
     (per-attempt key × subpop value), where each row's `metric` column holds
     the normalized Shannon entropy of `attribute` within that subgroup."""
-    # Validamos el atributo demográfico antes de llamar a la versión privada
+    # Validate the demographic attribute before calling the private version
     # (gender / ethnicity / prominence_pub / prominence_cit).
     if attribute not in constants.BENCHMARK_DEMOGRAPHIC_ATTRIBUTES:
         raise ValueError(
@@ -574,7 +669,7 @@ def aggregate_parity_by_subpop(df_factuality_author, attribute, subpop_cols, **k
         raise ValueError(
             f"attribute must be one of {constants.BENCHMARK_DEMOGRAPHIC_ATTRIBUTES}"
         )
-    # gt es obligatorio: parity siempre se mide contra una distribución de referencia.
+    # gt is required: parity is always measured against a reference distribution.
     gt = kwargs.get("gt", None)
     if gt is None:
         raise ValueError("gt must be provided")

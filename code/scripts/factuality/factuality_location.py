@@ -16,47 +16,35 @@ Output columns added:
   location_status          {location_match | location_mismatch
                             | location_unknown | not_applicable}
 
-Usage (from code/scripts/):
-  python factuality_location.py \\
-      --input  ../../../results/results/summary_v2/factuality_seniority.csv \\
-      --output ../../../results/results/summary_v2/factuality_location.csv
+Usage (from code/, with PYTHONPATH=.):
+  python scripts/factuality/factuality_location.py \\
+      --input  ../results/summary/factuality_seniority.csv \\
+      --output ../results/summary/factuality_location.csv
 """
 
 import argparse
-import logging
-import os
 
 import pandas as pd
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+from libs.utils.cli import add_io_args
+from libs.utils.ios import read_input_csv, write_output_csv
+from libs.utils.logging import log_value_counts, setup_logging
+
+logger = setup_logging()
 
 # ── Constants ──────────────────────────────────────────────────────────────────
+# All factuality status flags and the LLM-country → ISO map are centralised in
+# libs.metrics.constants — re-export under the legacy names so the rest of the
+# module stays unchanged.
 
-STATUS_MATCH = "location_match"
-STATUS_MISMATCH = "location_mismatch"
-STATUS_UNKNOWN = "location_unknown"
-STATUS_NOT_APPLICABLE = "not_applicable"
-
-AUTHOR_HALLUCINATED = "hallucinated"
-
-# Maps every observed `location` value (EN/ES/DE) → ISO alpha-2
-LLM_COUNTRY_TO_ISO = {
-    "Ecuador": "EC",
-    "Japan": "JP",
-    "Japón": "JP",
-    "Germany": "DE",
-    "Alemania": "DE",
-    "Deutschland": "DE",
-    "Canada": "CA",
-    "Canadá": "CA",
-    "Kanada": "CA",
-    "South Africa": "ZA",
-    "Sudáfrica": "ZA",
-    "Südafrika": "ZA",
-}
+from libs.metrics.constants import (
+    FACTUALITY_AUTHOR_HALLUCINATED as AUTHOR_HALLUCINATED,
+    FACTUALITY_STATUS_MATCH as STATUS_MATCH,
+    FACTUALITY_STATUS_MISMATCH as STATUS_MISMATCH,
+    FACTUALITY_STATUS_NOT_APPLICABLE as STATUS_NOT_APPLICABLE,
+    FACTUALITY_STATUS_UNKNOWN as STATUS_UNKNOWN,
+    LLM_COUNTRY_TO_ISO,
+)
 
 
 # ── Per-row decision ───────────────────────────────────────────────────────────
@@ -99,9 +87,7 @@ def classify_row(row: pd.Series) -> dict:
 
 
 def run(input_path: str, output_path: str) -> None:
-    logger.info("Loading: %s", input_path)
-    df = pd.read_csv(input_path, low_memory=False)
-    logger.info("Rows: %d", len(df))
+    df = read_input_csv(input_path, logger=logger)
 
     records = [classify_row(row) for _, row in df.iterrows()]
     for col in [
@@ -113,26 +99,18 @@ def run(input_path: str, output_path: str) -> None:
     ]:
         df[col] = [r[col] for r in records]
 
-    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    df.to_csv(output_path, index=False)
-    logger.info("Saved %d rows → %s", len(df), output_path)
-
-    n = len(df)
-    logger.info("Location status distribution:")
-    for status, count in df["location_status"].value_counts().items():
-        logger.info("  %-20s %6d  (%.1f%%)", status, count, 100 * count / n)
+    write_output_csv(df, output_path, logger=logger)
+    log_value_counts(df, "location_status", title="Location status distribution", logger=logger)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Step 4: verify the LLM-assigned country matches the author's last-known institution country in OpenAlex"
     )
-    parser.add_argument(
-        "--input",
-        required=True,
-        help="Path to factuality_seniority.csv (output of factuality_seniority.py)",
+    add_io_args(
+        parser,
+        input_help="Path to factuality_seniority.csv (output of factuality_seniority.py)",
     )
-    parser.add_argument("--output", required=True, help="Output CSV path")
     args = parser.parse_args()
 
     run(args.input, args.output)

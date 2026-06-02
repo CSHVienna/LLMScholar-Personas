@@ -14,32 +14,31 @@ Steps:
                                   (LLM current_affiliations vs OA institution history)
   4.  factuality_ethnicity.py    affiliation      → factuality_full.csv  (final)
 
-Usage (from code/scripts/factuality/):
-  python run_factuality_pipeline.py
-  python run_factuality_pipeline.py \\
-      --results  ../../../results/results/summary_v2 \\
-      --parquet  /data/datasets/LLMScholar-Personas/data/semantic_scholar_data/clean/Researchers_Deduplicated_Genderize_Namsor.parquet \\
-      --duckdb   /data/datasets/LLMScholar-Personas/data/openalex_latest.duckdb \\
+Usage (from code/, with PYTHONPATH=.):
+  python scripts/factuality/run_factuality_pipeline.py
+  python scripts/factuality/run_factuality_pipeline.py \\
+      --results  ../results/summary \\
+      --parquet  <path_to_ss_parquet> \\
+      --duckdb   <path_to_oa_duckdb> \\
       [--skip_jw] [--skip_oa] [--skip_field]
+
+Defaults for --parquet and --duckdb come from [data] in config.ini.
 """
 
 import argparse
-import logging
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-logger = logging.getLogger(__name__)
+from libs.utils.config import config_default
+from libs.utils.logging import setup_logging
 
+logger = setup_logging()
 HERE = Path(__file__).parent
 
-DEFAULT_PARQUET = (
-    "/data/datasets/LLMScholar-Personas/data/semantic_scholar_data/clean"
-    "/Researchers_Deduplicated_Genderize_Namsor.parquet"
-)
-DEFAULT_DUCKDB = "/data/datasets/LLMScholar-Personas/data/openalex_latest.duckdb"
+DEFAULT_PARQUET = config_default("ss_parquet")
+DEFAULT_DUCKDB = config_default("oa_duckdb")
 
 
 def run_step(name: str, cmd: list[str]) -> None:
@@ -59,8 +58,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run the full factuality pipeline")
     parser.add_argument(
         "--results",
-        default="../../../results/results/summary_v2",
-        help="Path to results/summary_v2 directory",
+        default="../results/summary",
+        help="Path to results/summary directory",
     )
     parser.add_argument(
         "--parquet",

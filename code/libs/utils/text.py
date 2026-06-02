@@ -2,7 +2,10 @@ import ast
 import re
 import unicodedata
 
-from utils import constants as cons
+try:
+    from prompt import constants as cons
+except ImportError:  # importing as libs.utils.text (PYTHONPATH=code/)
+    from libs.prompt import constants as cons
 
 
 def clean_content(text):

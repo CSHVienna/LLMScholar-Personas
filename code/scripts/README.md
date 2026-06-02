@@ -1,128 +1,145 @@
 # Scripts
 
-Esta carpeta contiene los scripts del proyecto, organizados por dominio:
+All scripts run from the `code/` directory with `PYTHONPATH=.` so that `libs.*` imports resolve. Relative paths in defaults point at `../data/` and `../results/` (one level up from `code/`).
 
 ```
 scripts/
-├── prompting/    Genera y procesa prompts batch a los LLMs
-├── annotation/   Herramientas interactivas de anotación manual
-├── enrichment/   Enriquece resultados con datos de OpenAlex
-├── factuality/   Pipeline de chequeo factual (5 pasos)
-└── ethnicity/    Inferencia étnica sobre el ground truth
+├── prompting/    Generate and parse batch prompts sent to the LLMs.
+├── annotation/   Interactive CLIs for manual annotation.
+├── factuality/   Factuality-check pipeline (7 ordered steps + orchestrator).
+├── ethnicity/    Ethnicity inference cascade over the ground truth.
+└── metrics/      Pre-compute the aggregated tables consumed by the plotting notebooks.
 ```
 
-Para detalles de cada pipeline, ver los docstrings de los scripts dentro de cada subcarpeta.
+For per-script details, see each script's docstring.
 
 ---
 
-## Batch Processing (`prompting/`)
+## Prerequisites
 
-Tres scripts trabajan en conjunto para crear y procesar combinaciones de prompts localizados:
-
-1. **`batch_params.py`** — primero. Traduce los archivos de parámetros (instrucciones, ubicaciones, inputs) al idioma objetivo.
-2. **`batch_prompt.py`** — después de `batch_params`. Genera combinaciones de prompts a partir de los parámetros traducidos.
-3. **`batch_parse_results.py`** — después de recolectar respuestas de los LLMs. Unifica todas las respuestas en `recommendations.csv` y `summary.csv`.
-
-### Prerequisites
-
-Antes de ejecutar cualquier script, configurar `PYTHONPATH` desde `code/scripts/prompting/`:
 ```bash
-export PYTHONPATH="$PYTHONPATH:../../libs"
+cd code
+export PYTHONPATH=.
 ```
+
+That single `PYTHONPATH=.` makes `libs.*` importable from every script under `scripts/`.
+
+---
+
+## Batch processing (`prompting/`)
+
+Three scripts work together to build and parse localised prompt combinations:
+
+1. **`batch_params.py`** — first. Translates parameter files (instructions, locations, inputs) into the target language.
+2. **`batch_prompt.py`** — runs after `batch_params`. Builds all prompt combinations from the translated parameters.
+3. **`batch_parse_results.py`** — runs after responses have been collected from the LLMs. Consolidates everything into `recommendations.csv` and `summary.csv`.
 
 ### batch_params.py
 
-Genera todos los parámetros en inglés y los traduce al idioma objetivo usando la API de OpenAI.
+Generates the canonical English parameters and translates them into the target language with the OpenAI API.
 
-**Parámetros**
-- `-l, --language` (opcional): Código del idioma. Debe ser uno de los definidos en `cons.LANGUAGES`. Default: `cons.LANG_EN`.
-- `-o, --output-dir` (requerido): Directorio de salida. Default: `../../data/context/`
+**Arguments**
+- `-l, --language` (optional): language code; must match one of `cons.LANGUAGES`. Default: `cons.LANG_EN`.
+- `-o, --output-dir` (required): output directory. Default: `../data/context/`.
 
-**Configuración**
+**Configuration**
 
-Requiere un `config.ini` con credenciales de la API de OpenAI en `../../../config.ini`.
+Requires a `config.ini` (at the repo root) with the OpenAI credentials. See `config.ini.example`.
 
-**Ejemplos**
+**Examples**
+
 ```bash
-# Desde code/scripts/prompting/
-python batch_params.py -l german -o ../../data/context/
-python batch_params.py -l spanish -o ../../data/context/
+# From code/
+python scripts/prompting/batch_params.py -l german  -o ../data/context/
+python scripts/prompting/batch_params.py -l spanish -o ../data/context/
 ```
 
 ### batch_prompt.py
 
-Genera combinaciones de prompts desde los parámetros traducidos.
+Builds prompt combinations from the translated parameters.
 
-**Parámetros**
-- `-c, --combination_id` (opcional): ID de combinación a mostrar (0-indexed).
-- `-l, --language` (opcional): Idioma (debe coincidir con el usado en `batch_params.py`).
-- `-o, --output-dir` (requerido): Directorio de salida. Default: `../../data/context/`
+**Arguments**
+- `-c, --combination_id` (optional): combination ID to display (0-indexed).
+- `-l, --language` (optional): language (must match what `batch_params.py` produced).
+- `-o, --output-dir` (required): output directory. Default: `../data/context/`.
 
-**Ejemplos**
+**Examples**
+
 ```bash
-# Desde code/scripts/prompting/
-python batch_prompt.py -c 0 -l german -o ../../data/context/
-python batch_prompt.py -c 5 -l german
-python batch_prompt.py -c 42 -l spanish
+# From code/
+python scripts/prompting/batch_prompt.py -c 0  -l german  -o ../data/context/
+python scripts/prompting/batch_prompt.py -c 5  -l german
+python scripts/prompting/batch_prompt.py -c 42 -l spanish
 ```
 
 ### batch_parse_results.py
 
-**Parámetros**
-- `--results_dir` (requerido): Directorio con las respuestas (`.json`), ej. `../../../results`
-- `--output_dir` (requerido): Directorio de salida.
-- `--model` (opcional): Nombre del modelo (ver `data/context/models.txt`).
-- `--language` (opcional): Idioma (`spanish`, `english`, `german`).
+**Arguments**
+- `--results_dir` (required): directory with the LLM responses (`.json`), e.g. `../results`.
+- `--output_dir` (required): output directory.
+- `--model` (optional): model name (see `data/context/models.txt`).
+- `--language` (optional): language (`spanish`, `english`, `german`).
 
-**Ejemplo**
+**Example**
+
 ```bash
-# Desde code/scripts/prompting/, parsear en paralelo todas las combinaciones
-nice -n 10 parallel -j 20 python batch_parse_results.py \
-  --results_dir ../../../results \
-  --output_dir ../../../results/summary_parallel \
-  --model {1} --language {2} \
-  :::: ../../../data/context/models.txt ::: english german spanish
+# From code/, parse every combination in parallel
+nice -n 10 parallel -j 20 python scripts/prompting/batch_parse_results.py --results_dir ../results --output_dir ../results/summary_parallel --model {1} --language {2} :::: ../data/context/models.txt ::: english german spanish
 ```
 
-### Workflow completo
+### End-to-end workflow
 
 ```bash
-# Desde code/scripts/prompting/
-export PYTHONPATH="$PYTHONPATH:../../libs"
+# From code/
+export PYTHONPATH=.
 
-# 1. Traducir parámetros a alemán
-python batch_params.py -l german -o ../../data/context/
+# 1. Translate parameters into German
+python scripts/prompting/batch_params.py -l german -o ../data/context/
 
-# 2. Generar y visualizar combinación 0
-python batch_prompt.py -c 0 -l german -o ../../data/context/
+# 2. Build and inspect combination 0
+python scripts/prompting/batch_prompt.py -c 0 -l german -o ../data/context/
 ```
 
 ### GNU Parallel
 
 ```bash
-# Procesar combinaciones 0-719 en paralelo (8 jobs simultáneos)
-parallel -j 8 python batch_prompt.py -c {} -l german -o ../../data/context/ ::: {0..719}
+# Process combinations 0–719 in parallel (8 simultaneous jobs)
+parallel -j 8 python scripts/prompting/batch_prompt.py -c {} -l german -o ../data/context/ ::: {0..719}
 
-# Múltiples idiomas
-parallel -j 4 python batch_params.py -l {} -o ../../data/context/ ::: english german spanish
+# Multiple languages
+parallel -j 4 python scripts/prompting/batch_params.py -l {} -o ../data/context/ ::: english german spanish
 
-# Guardar salida en archivos separados
-parallel -j 8 "python batch_prompt.py -c {} -l german -o ../../data/context/ > output_{}.txt" ::: {0..719}
-
-# Con barra de progreso
-parallel --bar -j 8 python batch_prompt.py -c {} -l german -o ../../data/context/ ::: {0..719}
+# With a progress bar
+parallel --bar -j 8 python scripts/prompting/batch_prompt.py -c {} -l german -o ../data/context/ ::: {0..719}
 ```
 
-### Salida
+### Outputs
 
-- `batch_params.py` produce JSON traducidos en `{output_dir}/{language}/`:
-  - `instructions.json`, `locations.json`, `input.json`
-- `batch_prompt.py` produce:
-  - `all_prompts.txt` — todas las combinaciones generadas
-  - Output en consola con la combinación seleccionada
+- `batch_params.py` writes translated JSONs under `{output_dir}/{language}/`:
+  - `instructions.json`, `locations.json`, `input.json`.
+- `batch_prompt.py` writes:
+  - `all_prompts.txt` — every generated combination.
+  - The selected combination is printed to stdout.
 
-### Notas
+### Notes
 
-- Siempre correr `batch_params.py` antes de `batch_prompt.py` para cada idioma.
-- El `combination_id` debe estar dentro del rango válido (revisar el output total).
-- GNU Parallel no es requerido pero es altamente recomendado.
+- Always run `batch_params.py` before `batch_prompt.py` for each language.
+- `combination_id` must be within the valid range (check the total count printed by the script).
+- GNU Parallel is not required but strongly recommended for the parsing step.
+
+---
+
+## Metrics (`metrics/`)
+
+Two scripts pre-compute the aggregated tables consumed by `notebooks/analysis/`:
+
+- **`build_valid_calls.py`** — reads `summary/factuality_full.csv`, joins ground truth, derives every per-call metric (factuality, diversity, parity, consistency, duplicates, popularity), and writes `factualities/tables/valid_requests_metadata.csv`.
+- **`build_ethnicity_distributions.py`** — reads the per-field ground-truth CSVs and `recommendations_with_ethnicity.csv`, computes the distributions needed by `notebooks/analysis/ethnicity_metrics.ipynb`, and writes them under `ethnicity/distributions/`.
+
+Both scripts read their default paths from the `[data]` section of `config.ini`.
+
+```bash
+# From code/
+python scripts/metrics/build_valid_calls.py
+python scripts/metrics/build_ethnicity_distributions.py
+```

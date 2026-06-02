@@ -11,9 +11,14 @@ import argparse
 import ast
 import re
 
-from utils import constants as cons
-from utils import ios
-from utils import text as txtlib
+try:
+    from prompt import constants as cons
+    from utils import ios
+    from utils import text as txtlib
+except ImportError:  # importing as libs.utils.discover_keys
+    from libs.prompt import constants as cons
+    from libs.utils import ios
+    from libs.utils import text as txtlib
 
 # ── Raw-content extractors (mirrors annotate_responses.py) ─────────────────
 

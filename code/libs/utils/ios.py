@@ -1,9 +1,11 @@
 import hashlib
 import json
+import logging
 import os
+import pickle
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List
+from typing import Any, Callable, List
 
 import pandas as pd
 
@@ -94,6 +96,92 @@ def to_csv(df: pd.DataFrame, file_path: Path | str, **kwargs) -> None:
 def load_csv(file_path: Path | str, **kwargs) -> pd.DataFrame:
     p = Path(file_path)
     return pd.read_csv(p, **kwargs)
+
+
+def ensure_parent_dir(path: Path | str) -> Path:
+    """Create the parent directory of `path` if missing. Returns Path(path)."""
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def read_input_csv(input_path: Path | str, logger=None, **kwargs) -> pd.DataFrame:
+    """Standard input-CSV loader for pipeline scripts.
+
+    Logs the input path and the resulting row count. `low_memory=False` by
+    default to avoid pandas mixed-dtype warnings on the wide factuality CSVs.
+    """
+    kwargs.setdefault("low_memory", False)
+    if logger:
+        logger.info("Loading: %s", input_path)
+    df = pd.read_csv(input_path, **kwargs)
+    if logger:
+        logger.info("Rows: %d", len(df))
+    return df
+
+
+def write_output_csv(df: pd.DataFrame, output_path: Path | str, logger=None) -> None:
+    """Standard output-CSV writer for pipeline scripts.
+
+    Creates any missing parent directories, writes the CSV without an index,
+    and logs the row count and destination.
+    """
+    p = ensure_parent_dir(output_path)
+    df.to_csv(p, index=False)
+    if logger:
+        logger.info("Saved %d rows → %s", len(df), p)
+
+
+def load_pickle(path: Path | str | None, *, logger: logging.Logger | None = None):
+    """Load a pickle if it exists, return None otherwise. Never raises — on any
+    read error logs a warning and returns None."""
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        with open(path, "rb") as f:
+            obj = pickle.load(f)
+        if logger:
+            logger.info("Pickle: loaded %s", path)
+        return obj
+    except Exception as exc:
+        if logger:
+            logger.warning("Pickle: failed to load %s (%s) — ignoring", path, exc)
+        return None
+
+
+def save_pickle(obj, path: Path | str | None, *, logger: logging.Logger | None = None) -> None:
+    """Save `obj` as a pickle. Creates missing parent directories. Never raises
+    — on any write error logs a warning and returns."""
+    if not path:
+        return
+    try:
+        ensure_parent_dir(path)
+        with open(path, "wb") as f:
+            pickle.dump(obj, f, protocol=pickle.HIGHEST_PROTOCOL)
+        if logger:
+            logger.info("Pickle: saved → %s", path)
+    except Exception as exc:
+        if logger:
+            logger.warning("Pickle: failed to save %s (%s)", path, exc)
+
+
+def cached_pickle(
+    cache_path: Path | str,
+    compute: Callable[[], Any],
+    *,
+    logger: logging.Logger | None = None,
+):
+    """Return `compute()` cached as a pickle at `cache_path`.
+
+    On cache hit: read and return the pickle. On cache miss (or unreadable):
+    call `compute()`, persist its result, return it.
+    """
+    cached = load_pickle(cache_path, logger=logger)
+    if cached is not None:
+        return cached
+    value = compute()
+    save_pickle(value, cache_path, logger=logger)
+    return value
 
 
 def file_hash(*paths) -> str:

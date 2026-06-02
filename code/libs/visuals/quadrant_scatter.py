@@ -8,13 +8,10 @@ import numpy as np
 import pandas as pd
 from adjustText import adjust_text
 
-# ─── config ────────────────────────────────────────────────────────────────
-QUADRANT_COLORS = {
-    "Q1": "#2ca02c",  # top-right    — high tech, high social  (green)
-    "Q2": "#1f77b4",  # top-left     — low  tech, high social  (blue)
-    "Q3": "#a5a5a5",  # bottom-left  — low  tech, low  social  (red)
-    "Q4": "#ff7f0e",  # bottom-right — high tech, low  social  (orange)
-}
+try:
+    from libs.visuals.constants import QUADRANT_COLORS
+except ImportError:  # PYTHONPATH=code/libs/
+    from visuals.constants import QUADRANT_COLORS
 
 
 # ─── utils ─────────────────────────────────────────────────────────────────

@@ -16,7 +16,7 @@ carry per-researcher institution, so affiliation factuality can only be
 verified against OA.
 
 OA institution history is reconstructed from the existing year-chunk
-parquets at /data/asanchez/duckdb_enrich/oa_works_agg_chunks (built by
+parquets under [data].oa_works_tmp_dir/oa_works_agg_chunks (built by
 factuality_openalex.py). Each chunk holds one (country, inst_name) per
 (oa_id, year_chunk) via ARG_MAX over publication_year, so DISTINCT across
 all 20 chunks yields the author's institution history at chunk-granularity.
@@ -33,16 +33,15 @@ Output columns added:
   affiliation_status              {affiliation_match | affiliation_mismatch
                                    | affiliation_unknown | not_applicable}
 
-Usage (from code/scripts/factuality/):
-  python factuality_affiliation.py \\
-      --input  ../../../results/results/summary_v2/factuality_location.csv \\
-      --output ../../../results/results/summary_v2/factuality_affiliation.csv
+Usage (from code/, with PYTHONPATH=.):
+  python scripts/factuality/factuality_affiliation.py \\
+      --input  ../results/summary/factuality_location.csv \\
+      --output ../results/summary/factuality_affiliation.csv
 """
 
 import argparse
 import ast
 import json
-import logging
 import os
 
 import pandas as pd
@@ -52,19 +51,23 @@ import pandas as pd
 from factuality_openalex import normalize_name as _normalize_for_match
 from rapidfuzz import fuzz
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+from libs.metrics.constants import (
+    FACTUALITY_AUTHOR_HALLUCINATED as AUTHOR_HALLUCINATED,
+    factuality_status_flags,
 )
-logger = logging.getLogger(__name__)
+from libs.utils.cli import add_io_args
+from libs.utils.ios import read_input_csv, write_output_csv
+from libs.utils.logging import log_value_counts, setup_logging
+
+logger = setup_logging()
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-STATUS_MATCH = "affiliation_match"
-STATUS_MISMATCH = "affiliation_mismatch"
-STATUS_UNKNOWN = "affiliation_unknown"
-STATUS_NOT_APPLICABLE = "not_applicable"
-
-AUTHOR_HALLUCINATED = "hallucinated"
+_STATUS = factuality_status_flags("affiliation")
+STATUS_MATCH = _STATUS["MATCH"]
+STATUS_MISMATCH = _STATUS["MISMATCH"]
+STATUS_UNKNOWN = _STATUS["UNKNOWN"]
+STATUS_NOT_APPLICABLE = _STATUS["NOT_APPLICABLE"]
 
 # Threshold on rapidfuzz.fuzz.token_set_ratio (0-100). 85 was chosen because
 # 80 lets the shared token "University" alone produce false positives like
@@ -74,7 +77,7 @@ AUTHOR_HALLUCINATED = "hallucinated"
 TOKEN_SET_RATIO_THRESHOLD = 85
 
 # Where factuality_openalex.py wrote per-year aggregations.
-WORKS_AGG_DIR = "/data/asanchez/duckdb_enrich/oa_works_agg_chunks"
+from factuality_openalex import WORKS_AGG_DIR
 
 
 # ── Parsers ────────────────────────────────────────────────────────────────────
@@ -268,9 +271,7 @@ def _decide(
 
 
 def run(input_path: str, output_path: str) -> None:
-    logger.info("Loading: %s", input_path)
-    df = pd.read_csv(input_path, low_memory=False)
-    logger.info("Rows: %d", len(df))
+    df = read_input_csv(input_path, logger=logger)
 
     # Lookup OA → list of historical institutions (single DuckDB query
     # for all unique authors in the CSV).
@@ -352,14 +353,11 @@ def run(input_path: str, output_path: str) -> None:
     df["affiliation_best_match_oa"] = aff_best
     df["affiliation_status"] = aff_st
 
-    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    df.to_csv(output_path, index=False)
-    logger.info("Saved %d rows → %s", len(df), output_path)
-
-    n = len(df)
-    logger.info("Affiliation status distribution:")
-    for status, count in df["affiliation_status"].value_counts().items():
-        logger.info("  %-25s %6d  (%.1f%%)", status, count, 100 * count / n)
+    write_output_csv(df, output_path, logger=logger)
+    log_value_counts(
+        df, "affiliation_status",
+        title="Affiliation status distribution", width=25, logger=logger,
+    )
 
 
 def main() -> None:
@@ -367,12 +365,10 @@ def main() -> None:
         description="Step 3.5: verify LLM `current_affiliations` against the author's "
         "OpenAlex institution history"
     )
-    parser.add_argument(
-        "--input",
-        required=True,
-        help="Path to factuality_location.csv (output of step 3)",
+    add_io_args(
+        parser,
+        input_help="Path to factuality_location.csv (output of step 3)",
     )
-    parser.add_argument("--output", required=True, help="Output CSV path")
     args = parser.parse_args()
 
     run(args.input, args.output)

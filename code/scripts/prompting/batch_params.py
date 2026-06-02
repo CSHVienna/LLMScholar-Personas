@@ -5,11 +5,11 @@
 import argparse
 import json
 
-from llm import openai as llm_openai
-from prompt import generation as gen
-from utils import constants as cons
-from utils import ios
-from utils.config import load_config
+from libs.llm import openai as llm_openai
+from libs.prompt import generation as gen
+from libs.prompt import constants as cons
+from libs.utils import ios
+from libs.utils.config import load_config
 
 DEFAULT_OUTPUT_DIR = "../../data/context/"
 
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     args = build_parser()
 
     # config
-    cfg = load_config("../../../config.ini")
+    cfg = load_config()  # auto-discovers config.ini
     api_key = ios.read_text(cfg["OPENAI_API_DIR"]).strip()
 
     # Run

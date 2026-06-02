@@ -11,10 +11,10 @@ Labels:
   q = quit         (stop and compute metrics from labeled so far)
 
 Usage:
-  python annotate_responses.py \
-    --results_dir ../../../results \
-    --summary_csv ../../../results/results/summary_v2/summary.csv \
-    --output ../../../results/results/summary_v2/manual_labels_v6.csv \
+  python scripts/annotation/annotate_responses.py \
+    --results_dir ../results \
+    --summary_csv ../results/summary/summary.csv \
+    --output ../data/annotator_agreement/manual_labels_annotator2.csv \
     --n 100 \
     [--stratified] [--seed 42] [--model gpt-4.1-2025-04-14] [--language english]
 
@@ -52,16 +52,21 @@ INVALID_GROUP = {"invalid", "empty", "refused"}
 
 RESULTS_PATH_TEMPLATE = "{root}/responses/results_{source}_{language}"
 
-# Colors (ANSI)
-RESET = "\033[0m"
-BOLD = "\033[1m"
-CYAN = "\033[96m"
-YELLOW = "\033[93m"
-GREEN = "\033[92m"
-RED = "\033[91m"
-GRAY = "\033[90m"
-MAGENTA = "\033[95m"
-BLUE = "\033[94m"
+from libs.metrics.agreement import compute_classification_metrics
+from libs.utils.cli import (
+    BLUE,
+    BOLD,
+    CYAN,
+    GRAY,
+    GREEN,
+    MAGENTA,
+    RED,
+    RESET,
+    YELLOW,
+    clear_screen,
+    colorize,
+    print_separator,
+)
 
 LABEL_COLORS = {
     "invalid": RED,
@@ -74,10 +79,6 @@ LABEL_COLORS = {
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
-
-
-def colorize(text: str, color: str) -> str:
-    return f"{color}{text}{RESET}"
 
 
 def _compute_cleaned(text: str) -> tuple[str, bool]:
@@ -229,10 +230,6 @@ def sample_rows(
 # ── Display ────────────────────────────────────────────────────────────────────
 
 
-def print_separator(char="─", width=80):
-    print(colorize(char * width, GRAY))
-
-
 def display_sample(
     i: int,
     total: int,
@@ -240,7 +237,7 @@ def display_sample(
     content: str | None,
     show_algo_label: bool = False,
 ):
-    os.system("clear" if os.name == "posix" else "cls")
+    clear_screen()
     print_separator("═")
     print(colorize(f"  RESPONSE ANNOTATOR  [{i}/{total}]", BOLD + CYAN))
     print_separator("═")
@@ -324,26 +321,13 @@ def display_sample(
 
 def compute_metrics(df_labeled: pd.DataFrame):
     """Compute and print accuracy / per-class precision, recall, F1."""
-    df = df_labeled[df_labeled["manual_label"] != "skip"].copy()
-
-    if df.empty:
-        print(
-            colorize(
-                "No labeled samples (excluding skips). Cannot compute metrics.", RED
-            )
-        )
+    stats = compute_classification_metrics(df_labeled, pred_col="valid_flag")
+    if stats is None:
+        print(colorize("No labeled samples (excluding skips). Cannot compute metrics.", RED))
         return
 
-    y_true = df["manual_label"]
-    y_pred = df["valid_flag"]
-    labels = sorted(set(y_true) | set(y_pred))
-
-    acc = accuracy_score(y_true, y_pred)
-    report = classification_report(y_true, y_pred, labels=labels, zero_division=0)
-    cm = confusion_matrix(y_true, y_pred, labels=labels)
-
-    # Binary valid/invalid accuracy — 'valid','cleaned','unchanged','fixed_dict' → valid;
-    # 'invalid','empty','refused' → invalid; 'v' (generic valid label) maps to valid side.
+    # Binary valid/invalid accuracy — exact-label accuracy lives in stats already.
+    df = df_labeled[df_labeled["manual_label"] != "skip"]
     df_binary = df[df["manual_label"].isin(VALID_GROUP | INVALID_GROUP)].copy()
     if not df_binary.empty:
         to_binary = lambda s: "valid" if s in VALID_GROUP else "invalid"
@@ -356,23 +340,25 @@ def compute_metrics(df_labeled: pd.DataFrame):
     print_separator("═")
     print(colorize("  EVALUATION RESULTS", BOLD + CYAN))
     print_separator("═")
-    print(f"  Samples labeled (excl. skip): {len(df)}")
-    print(f"  Overall Accuracy (exact label): {colorize(f'{acc:.4f}', BOLD + GREEN)}")
+    acc_str = f"{stats['accuracy']:.4f}"
+    print(f"  Samples labeled (excl. skip): {stats['n']}")
+    print(f"  Overall Accuracy (exact label): {colorize(acc_str, BOLD + GREEN)}")
     if acc_b is not None:
+        acc_b_str = f"{acc_b:.4f}"
         print(
-            f"  Binary Accuracy  (valid/invalid): {colorize(f'{acc_b:.4f}', BOLD + BLUE)}  "
+            f"  Binary Accuracy  (valid/invalid): {colorize(acc_b_str, BOLD + BLUE)}  "
             f"{GRAY}(n={len(df_binary)}){RESET}"
         )
     print()
     print("  Per-class metrics (manual = truth, algo = prediction):")
     print_separator()
-    for line in report.splitlines():
+    for line in stats["classification_report"].splitlines():
         print("  " + line)
     print_separator()
     print("  Confusion matrix (rows=manual, cols=algo):")
-    print(f"  Labels: {labels}")
-    for i, row in enumerate(cm):
-        print(f"  {labels[i]:12s} | {row}")
+    print(f"  Labels: {stats['labels']}")
+    for i, row in enumerate(stats["confusion_matrix"]):
+        print(f"  {stats['labels'][i]:12s} | {row}")
     print_separator("═")
 
 

@@ -11,9 +11,9 @@ Labels:
   q = quit         (stop and compute metrics from labeled so far)
 
 Usage:
-  python annotate_ethnicity.py \
+  python scripts/annotation/annotate_ethnicity.py \
     --lookup results/ethnicity/researcher_ethnicity_lookup.csv \
-    --output data/ethnicity_inference/manual_labels_v1.csv \
+    --output data/ethnicity_inference/manual_labels_annotator1.csv \
     --sample_csv data/ethnicity_inference/sample_100.csv
 
 After labeling, computes accuracy/precision/recall/F1 vs algorithmic label.
@@ -46,16 +46,21 @@ ETHNICITY_CATEGORIES = [
     "Unknown",
 ]
 
-# Colors (ANSI)
-RESET = "\033[0m"
-BOLD = "\033[1m"
-CYAN = "\033[96m"
-YELLOW = "\033[93m"
-GREEN = "\033[92m"
-RED = "\033[91m"
-GRAY = "\033[90m"
-MAGENTA = "\033[95m"
-BLUE = "\033[94m"
+from libs.metrics.agreement import compute_classification_metrics
+from libs.utils.cli import (
+    BLUE,
+    BOLD,
+    CYAN,
+    GRAY,
+    GREEN,
+    MAGENTA,
+    RED,
+    RESET,
+    YELLOW,
+    clear_screen,
+    colorize,
+    print_separator,
+)
 
 CATEGORY_COLORS = {
     "Asian": CYAN,
@@ -75,14 +80,6 @@ SOURCE_COLORS = {
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 
-def colorize(text: str, color: str) -> str:
-    return f"{color}{text}{RESET}"
-
-
-def print_separator(char="─", width=80):
-    print(colorize(char * width, GRAY))
-
-
 def confidence_bar(conf: float, width: int = 20) -> str:
     filled = round(conf * width)
     bar = "█" * filled + "░" * (width - filled)
@@ -94,7 +91,7 @@ def confidence_bar(conf: float, width: int = 20) -> str:
 
 
 def display_sample(i: int, total: int, row: pd.Series):
-    os.system("clear" if os.name == "posix" else "cls")
+    clear_screen()
     print_separator("═")
     print(colorize(f"  ETHNICITY ANNOTATOR  [{i}/{total}]", BOLD + CYAN))
     print_separator("═")
@@ -125,39 +122,27 @@ def display_sample(i: int, total: int, row: pd.Series):
 
 
 def compute_metrics(df_labeled: pd.DataFrame):
-    df = df_labeled[df_labeled["manual_label"] != "skip"].copy()
-
-    if df.empty:
-        print(
-            colorize(
-                "No labeled samples (excluding skips). Cannot compute metrics.", RED
-            )
-        )
+    stats = compute_classification_metrics(df_labeled, pred_col="perceived_ethnicity")
+    if stats is None:
+        print(colorize("No labeled samples (excluding skips). Cannot compute metrics.", RED))
         return
-
-    y_true = df["manual_label"]
-    y_pred = df["perceived_ethnicity"]
-    labels = sorted(set(y_true) | set(y_pred))
-
-    acc = accuracy_score(y_true, y_pred)
-    report = classification_report(y_true, y_pred, labels=labels, zero_division=0)
-    cm = confusion_matrix(y_true, y_pred, labels=labels)
 
     print_separator("═")
     print(colorize("  EVALUATION RESULTS", BOLD + CYAN))
     print_separator("═")
-    print(f"  Samples labeled (excl. skip): {len(df)}")
-    print(f"  Overall Accuracy: {colorize(f'{acc:.4f}', BOLD + GREEN)}")
+    acc_str = f"{stats['accuracy']:.4f}"
+    print(f"  Samples labeled (excl. skip): {stats['n']}")
+    print(f"  Overall Accuracy: {colorize(acc_str, BOLD + GREEN)}")
     print()
     print("  Per-class metrics (manual = truth, algo = prediction):")
     print_separator()
-    for line in report.splitlines():
+    for line in stats["classification_report"].splitlines():
         print("  " + line)
     print_separator()
     print("  Confusion matrix (rows=manual, cols=algo):")
-    print(f"  Labels: {labels}")
-    for idx, row_cm in enumerate(cm):
-        print(f"  {labels[idx]:30s} | {row_cm}")
+    print(f"  Labels: {stats['labels']}")
+    for idx, row_cm in enumerate(stats["confusion_matrix"]):
+        print(f"  {stats['labels'][idx]:30s} | {row_cm}")
     print_separator("═")
 
 

@@ -4,9 +4,9 @@
 
 import argparse
 
-from prompt import generation as gen
-from utils import constants as cons
-from utils import ios
+from libs.prompt import generation as gen
+from libs.prompt import constants as cons
+from libs.utils import ios
 
 DEFAULT_OUTPUT_DIR = "../../data/context/"
 

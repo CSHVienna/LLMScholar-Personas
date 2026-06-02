@@ -19,7 +19,6 @@ Valid output categories:
   - Unknown
 """
 
-import logging
 import os
 
 # Must be set before any TensorFlow/Keras import
@@ -29,11 +28,10 @@ import numpy as np
 import pandas as pd
 import torch
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+from libs.utils.ios import read_input_csv, write_output_csv
+from libs.utils.logging import setup_logging
+
+logger = setup_logging()
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -315,10 +313,8 @@ def _apply_to_recommendations(
     """
     from tqdm import tqdm
 
-    logger.info("Loading %s …", input_path)
-    df = pd.read_csv(input_path, low_memory=False)
+    df = read_input_csv(input_path, logger=logger)
     total_rows = len(df)
-    logger.info("Loaded %d rows.", total_rows)
 
     # Build full_name column
     df["__full_name"] = (
@@ -384,9 +380,7 @@ def _apply_to_recommendations(
     # ── Drop internal helper columns and save ────────────────────────────────
     df.drop(columns=["__full_name", "__ethnicity_source"], inplace=True)
 
-    logger.info("Saving to %s …", output_path)
-    df.to_csv(output_path, index=False)
-    logger.info("Done. Saved %d rows.", len(df))
+    write_output_csv(df, output_path, logger=logger)
 
     # ── Print summary to stdout ──────────────────────────────────────────────
     print("\n=== Ethnicity Inference Summary ===")
@@ -412,15 +406,27 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Infer perceived ethnicity for LLMScholar-Personas recommendations."
     )
+    from libs.utils.config import get_results_path
+
+    try:
+        _results = get_results_path()
+        _default_input = str(_results / "summary" / "recommendations.csv")
+        _default_output = str(_results / "summary" / "recommendations_with_ethnicity.csv")
+    except (FileNotFoundError, KeyError, ValueError):
+        _default_input = None
+        _default_output = None
+
     parser.add_argument(
         "--input",
-        default="/data/datasets/LLMScholar-Personas/results/summary_v2/recommendations.csv",
-        help="Path to input recommendations CSV",
+        default=_default_input,
+        required=_default_input is None,
+        help="Path to input recommendations CSV (default from [data].results_dir).",
     )
     parser.add_argument(
         "--output",
-        default="/data/datasets/LLMScholar-Personas/results/summary_v2/recommendations_with_ethnicity.csv",
-        help="Path to output CSV (with perceived_ethnicity column added)",
+        default=_default_output,
+        required=_default_output is None,
+        help="Path to output CSV with perceived_ethnicity column added (default from [data].results_dir).",
     )
     parser.add_argument(
         "--batch-size",

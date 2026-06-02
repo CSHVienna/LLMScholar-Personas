@@ -8,26 +8,26 @@ Strategy:
   4. For each field file, merge lookup and save *_with_ethnicity.csv (chunked to handle large files)
 """
 
-import logging
 import os
-import pickle
-import sys
 
 os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
-sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
 import pandas as pd
 from ethnicity_inference import VALID_CATEGORIES, infer_ethnicity_batch
 from tqdm import tqdm
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+from libs.utils.config import get_data_path
+from libs.utils.ios import load_pickle, save_pickle
+from libs.utils.logging import setup_logging
 
-DATA_DIR = "/data/datasets/LLMScholar-Personas/data/semantic_scholar_data"
-LOOKUP_OUT = os.path.join(DATA_DIR, "researcher_ethnicity_lookup.csv")
+logger = setup_logging()
+
+try:
+    DATA_DIR = get_data_path("ss_data_dir")
+    LOOKUP_OUT = os.path.join(DATA_DIR, "researcher_ethnicity_lookup.csv")
+except (FileNotFoundError, KeyError, ValueError):
+    DATA_DIR = None
+    LOOKUP_OUT = None
 
 # Writable fallback paths (used when DATA_DIR has no write permissions)
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -95,28 +95,19 @@ def build_lookup() -> pd.DataFrame:
 
     # Resume from checkpoint if available
     start_idx = 0
-    if os.path.exists(CHECKPOINT_PATH):
-        try:
-            with open(CHECKPOINT_PATH, "rb") as f:
-                ckpt = pickle.load(f)
-            if ckpt.get("fingerprint") == fingerprint:
-                categories = ckpt["categories"]
-                sources = ckpt["sources"]
-                confidences = ckpt["confidences"]
-                start_idx = len(categories)
-                logger.info(
-                    "Resuming from checkpoint: %d / %d names already processed.",
-                    start_idx,
-                    n,
-                )
-            else:
-                logger.warning(
-                    "Checkpoint found but names don't match — starting from scratch."
-                )
-        except Exception as exc:
-            logger.warning(
-                "Could not load checkpoint (%s) — starting from scratch.", exc
+    ckpt = load_pickle(CHECKPOINT_PATH, logger=logger)
+    if ckpt is not None:
+        if ckpt.get("fingerprint") == fingerprint:
+            categories = ckpt["categories"]
+            sources = ckpt["sources"]
+            confidences = ckpt["confidences"]
+            start_idx = len(categories)
+            logger.info(
+                "Resuming from checkpoint: %d / %d names already processed.",
+                start_idx, n,
             )
+        else:
+            logger.warning("Checkpoint found but names don't match — starting from scratch.")
 
     n_batches = (n + BATCH_SIZE - 1) // BATCH_SIZE
     start_batch = start_idx // BATCH_SIZE
@@ -136,35 +127,28 @@ def build_lookup() -> pd.DataFrame:
 
         # Periodic checkpoint — only fingerprint + results, NOT the names list
         if (batch_idx + 1) % CHECKPOINT_EVERY == 0:
-            try:
-                with open(CHECKPOINT_PATH, "wb") as f:
-                    pickle.dump(
-                        {
-                            "fingerprint": fingerprint,
-                            "categories": categories,
-                            "sources": sources,
-                            "confidences": confidences,
-                        },
-                        f,
-                    )
-            except Exception as exc:
-                logger.warning("Could not save checkpoint: %s", exc)
-
-    # Final checkpoint
-    try:
-        with open(CHECKPOINT_PATH, "wb") as f:
-            pickle.dump(
+            save_pickle(
                 {
                     "fingerprint": fingerprint,
                     "categories": categories,
                     "sources": sources,
                     "confidences": confidences,
                 },
-                f,
+                CHECKPOINT_PATH,
+                logger=logger,
             )
-        logger.info("Final checkpoint saved to %s", CHECKPOINT_PATH)
-    except Exception as exc:
-        logger.warning("Could not save final checkpoint: %s", exc)
+
+    # Final checkpoint
+    save_pickle(
+        {
+            "fingerprint": fingerprint,
+            "categories": categories,
+            "sources": sources,
+            "confidences": confidences,
+        },
+        CHECKPOINT_PATH,
+        logger=logger,
+    )
 
     combined["perceived_ethnicity"] = categories
     combined["__ethnicity_source"] = sources
@@ -343,6 +327,11 @@ if __name__ == "__main__":
         help="Only run inference and save lookup, skip merging into field files",
     )
     args = parser.parse_args()
+
+    if DATA_DIR is None:
+        raise SystemExit(
+            "Set [data].ss_data_dir in config.ini (see config.ini.example)."
+        )
 
     os.makedirs(_ETHNICITY_DIR, exist_ok=True)
 

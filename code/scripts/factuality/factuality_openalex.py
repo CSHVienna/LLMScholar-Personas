@@ -21,33 +21,40 @@ Output columns added:
   oa_h_index, oa_i10_index, oa_first_pub_year, oa_last_pub_year, oa_career_age,
   oa_country_code, oa_last_institution
 
-Usage (from code/scripts/factuality/):
-  python factuality_openalex.py \\
-      --input  ../../../results/results/summary_v2/factuality_author_jw.csv \\
-      --output ../../../results/results/summary_v2/factuality_oa.csv \\
-      --db_path /data/datasets/LLMScholar-Personas/data/openalex_latest.duckdb \\
-      --cache  ../../../results/results/summary_v2/.oa_cache.pkl \\
+Usage (from code/, with PYTHONPATH=.):
+  python scripts/factuality/factuality_openalex.py \\
+      --input    ../results/summary/factuality_author_jw.csv \\
+      --output   ../results/summary/factuality_oa.csv \\
+      --db_path  <path_to_oa_duckdb> \\
+      --cache    ../results/summary/.oa_cache.pkl \\
       [--skip_works]
+
+Defaults for paths come from [data] in config.ini.
 """
 
 import argparse
-import logging
 import os
-import pickle
 import re
 import time
 import unicodedata
 
 import pandas as pd
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+from libs.utils.config import config_default
+from libs.utils.ios import (
+    load_pickle,
+    read_input_csv,
+    save_pickle,
+    write_output_csv,
 )
-logger = logging.getLogger(__name__)
+from libs.utils.logging import log_value_counts, setup_logging
+
+logger = setup_logging()
+
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-WORKS_TMP_DIR = "/data/asanchez/duckdb_enrich"
+WORKS_TMP_DIR = config_default("oa_works_tmp_dir") or "."
 JW_THRESHOLD = 0.85  # JW threshold on full normalized name
 JW_FIRST_THRESHOLD = 0.80  # JW threshold on first-name token (same person check)
 # These thresholds are combined with EXACT last-name token match in _AUTHORS_JW_QUERY.
@@ -431,7 +438,7 @@ def resolve_via_jw(db_path: str, norm_names: list[str]) -> dict[str, dict | None
 # is already inline in the struct, so we use it directly instead of looking up
 # inst_id against the institutions table.
 
-WORKS_AGG_DIR = "/data/asanchez/duckdb_enrich/oa_works_agg_chunks"
+WORKS_AGG_DIR = os.path.join(WORKS_TMP_DIR, "oa_works_agg_chunks")
 
 # Chunks are tuples of (label, sql_predicate). Predicate plugs into the
 # `WHERE inst.country_code IS NOT NULL AND <predicate>` clause. Label is used
@@ -609,28 +616,11 @@ def resolve_country_via_works(
 
 
 def load_cache(path: str | None) -> dict[str, dict | None]:
-    if not path or not os.path.exists(path):
-        return {}
-    try:
-        with open(path, "rb") as f:
-            cache = pickle.load(f)
-        logger.info("Cache: loaded %d entries from %s", len(cache), path)
-        return cache
-    except Exception as exc:
-        logger.warning("Cache: failed to load %s (%s) — starting empty", path, exc)
-        return {}
+    return load_pickle(path, logger=logger) or {}
 
 
 def save_cache(cache: dict[str, dict | None], path: str | None) -> None:
-    if not path:
-        return
-    try:
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        with open(path, "wb") as f:
-            pickle.dump(cache, f, protocol=pickle.HIGHEST_PROTOCOL)
-        logger.info("Cache: saved %d entries to %s", len(cache), path)
-    except Exception as exc:
-        logger.warning("Cache: failed to save %s (%s)", path, exc)
+    save_pickle(cache, path, logger=logger)
 
 
 # ── Main pipeline ──────────────────────────────────────────────────────────────
@@ -643,9 +633,7 @@ def run(
     cache_path: str | None = None,
     skip_works: bool = False,
 ) -> None:
-    logger.info("Loading input: %s", input_path)
-    df = pd.read_csv(input_path, low_memory=False)
-    logger.info("Rows: %d", len(df))
+    df = read_input_csv(input_path, logger=logger)
 
     norm_series = (
         (
@@ -725,14 +713,11 @@ def run(
     for col in OA_COLS:
         df[col] = [r[col] for r in records]
 
-    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    df.to_csv(output_path, index=False)
-    logger.info("Saved %d rows → %s", len(df), output_path)
-
+    write_output_csv(df, output_path, logger=logger)
+    log_value_counts(
+        df, "oa_status", title="OpenAlex status distribution", width=12, logger=logger
+    )
     n = len(df)
-    logger.info("OpenAlex status distribution:")
-    for status, count in df["oa_status"].value_counts().items():
-        logger.info("  %-12s %6d  (%.1f%%)", status, count, 100 * count / n)
     has_country = df["oa_country_code"].notna().sum()
     has_inst = df["oa_last_institution"].notna().sum()
     logger.info(

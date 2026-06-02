@@ -8,7 +8,10 @@ from matplotlib import rc
 from matplotlib.lines import Line2D
 from pandas.plotting import parallel_coordinates
 
-from libs.metrics import aggregators, constants
+try:
+    from libs.metrics import aggregators, constants
+except ImportError:  # PYTHONPATH=code/libs/
+    from metrics import aggregators, constants
 
 
 def sns_reset():

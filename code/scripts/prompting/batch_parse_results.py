@@ -4,9 +4,9 @@ import argparse
 import re
 
 import pandas as pd
-from utils import constants as cons
-from utils import ios
-from utils import text as txtlib
+from libs.prompt import constants as cons
+from libs.utils import ios
+from libs.utils import text as txtlib
 
 # Patterns for placeholder values in name/lastname fields
 _PLACEHOLDER_RE = re.compile(

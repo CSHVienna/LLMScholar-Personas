@@ -239,14 +239,14 @@ BENCHMARK_PER_REQUEST_COLS = BENCHMARK_MODEL_GROUPS + [
     "task_param",
 ]
 
-# ── Sub-population dimensions (PLAN.md Tarea 3) ────────────────────────────────
-# Consumido por aggregators.aggregate_*_by_subpop para calcular social metrics
-# por subgrupo; para cada subpop value el GT se filtra a ese subgrupo (e.g.
-# parity_gender en Japón se compara contra la distribución female/male de
-# autores en Japón, no el GT global).
+# ── Sub-population dimensions ──────────────────────────────────────────────────
+# Consumed by aggregators.aggregate_*_by_subpop to compute social metrics per
+# subgroup; for each subpop value the GT is filtered to that subgroup (e.g.
+# parity_gender in Japan is compared against the female/male distribution of
+# authors in Japan, not the global GT).
 
-# Orden canónico de los 6 fields del experimento — usado para ordenar ejes
-# de plots y columnas de tablas.
+# Canonical order of the 6 fields in the experiment — used to sort plot axes
+# and table columns.
 FIELD_ORDER = [
     "Biology",
     "Computer Science",
@@ -255,18 +255,18 @@ FIELD_ORDER = [
     "Psychology",
     "Sociology",
 ]
-# Códigos ISO-2 de los 5 países del experimento (Ecuador, Japón, Alemania,
-# Canadá, Sudáfrica) — mismo formato que oa_country_code en factuality_full.csv.
+# ISO-2 codes of the 5 countries in the experiment (Ecuador, Japan, Germany,
+# Canada, South Africa) — same format as oa_country_code in factuality_full.csv.
 LOCATION_ORDER = ["EC", "JP", "DE", "CA", "ZA"]
-# Orden canónico de los idiomas del persona prompting — siempre English,
-# Spanish, German en plots/tablas. Lower-case porque así viven en los CSV.
+# Canonical order of the persona-prompting languages — always English, Spanish,
+# German in plots/tables. Lower-case because that's how they live in the CSV.
 LANGUAGE_ORDER = ["english", "spanish", "german"]
 LANGUAGE_LABELS = {"english": "English", "spanish": "Spanish", "german": "German"}
 
-# Dimensiones individuales por las que se puede sub-poblacionar.
+# Individual dimensions available for sub-populating.
 BENCHMARK_SUBPOPULATION_DIMS = ["field", "location"]
-# Combinaciones a iterar en el notebook: por field solo, por location solo,
-# y cruzado field × location.
+# Combinations iterated by the notebook: field only, location only, and crossed
+# field × location.
 BENCHMARK_SUBPOPULATION_COMBOS = [["field"], ["location"], ["field", "location"]]
 
 
@@ -311,3 +311,79 @@ ROLE_NORM_MAP = {
 
 FIG_DPI = 600
 FONT_SCALE = 1.55
+
+
+#######################################################################################################################
+# FACTUALITY STATUS FLAGS
+#######################################################################################################################
+# Values emitted by the per-step factuality scripts in the `location_status`,
+# `seniority_status`, `field_status` columns. Kept here so downstream notebooks
+# and metrics aggregators reference a single source of truth.
+
+FACTUALITY_AUTHOR_HALLUCINATED = "hallucinated"
+FACTUALITY_STATUS_NOT_APPLICABLE = "not_applicable"
+
+
+def factuality_status_flags(prefix: str) -> dict:
+    """Return the {MATCH,MISMATCH,UNKNOWN,NOT_APPLICABLE} flags used by a
+    per-attribute factuality script (e.g. prefix='field' → 'field_match',
+    'field_mismatch', 'field_unknown', 'not_applicable').
+    """
+    return {
+        "MATCH": f"{prefix}_match",
+        "MISMATCH": f"{prefix}_mismatch",
+        "UNKNOWN": f"{prefix}_unknown",
+        "NOT_APPLICABLE": FACTUALITY_STATUS_NOT_APPLICABLE,
+    }
+
+
+# Legacy aliases (location is the original consumer).
+FACTUALITY_LOCATION_STATUS = factuality_status_flags("location")
+FACTUALITY_STATUS_MATCH = FACTUALITY_LOCATION_STATUS["MATCH"]
+FACTUALITY_STATUS_MISMATCH = FACTUALITY_LOCATION_STATUS["MISMATCH"]
+FACTUALITY_STATUS_UNKNOWN = FACTUALITY_LOCATION_STATUS["UNKNOWN"]
+
+
+#######################################################################################################################
+# SENIORITY
+#######################################################################################################################
+# Short-form (used in tables/plots) of the canonical Senior/Junior Professor
+# values produced by TARGET_NORM_MAP.
+
+SENIORITY_SHORT_MAP = {
+    "Senior Professor": "Senior",
+    "Junior Professor": "Junior",
+}
+
+# Same idea as SENIORITY_SHORT_MAP but also accepts the ES/DE variants of the
+# LLM `target` column (used by factuality_seniority.py).
+LLM_TARGET_TO_BUCKET = {
+    "Senior Professor": "Senior",
+    "Profesor(a) Sénior": "Senior",
+    "Seniorprofessor(in)": "Senior",
+    "Junior Professor": "Junior",
+    "Profesor(a) Júnior": "Junior",
+    "Juniorprofessor(in)": "Junior",
+}
+
+
+#######################################################################################################################
+# COUNTRY ISO-2 CODES
+#######################################################################################################################
+# Maps every observed `location` value from the LLM (EN/ES/DE variants) to its
+# ISO alpha-2 code so downstream code can compare against oa_country_code.
+
+LLM_COUNTRY_TO_ISO = {
+    "Ecuador": "EC",
+    "Japan": "JP",
+    "Japón": "JP",
+    "Germany": "DE",
+    "Alemania": "DE",
+    "Deutschland": "DE",
+    "Canada": "CA",
+    "Canadá": "CA",
+    "Kanada": "CA",
+    "South Africa": "ZA",
+    "Sudáfrica": "ZA",
+    "Südafrika": "ZA",
+}

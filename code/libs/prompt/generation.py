@@ -2,8 +2,12 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Generator, Iterator, List, Tuple
 
-from utils import constants as cons
-from utils import ios
+try:
+    from prompt import constants as cons
+    from utils import ios
+except ImportError:  # importing as libs.prompt.generation
+    from libs.prompt import constants as cons
+    from libs.utils import ios
 
 # ---------------------------
 # Constants

@@ -25,21 +25,22 @@ Output columns:
   sim_display_name, sim_longest_name, sim_first_name, sim_last_name,
   sim_second_name, sim_dn_vs_last, sim_dn_vs_first, sim_alternative_names
 
-Usage (from code/scripts/):
-  python factuality_author_jw.py \\
-      --recommendations ../../../results/results/summary_v2/recommendations.csv \\
-      --parquet /data/datasets/LLMScholar-Personas/data/semantic_scholar_data/clean/Researchers_Deduplicated_Genderize_Namsor.parquet \\
-      --output  ../../../results/results/summary_v2/factuality_author_jw.csv \\
-      [--dn_threshold 0.85] [--workers -1]
+Usage (from code/, with PYTHONPATH=.):
+  python scripts/factuality/factuality_author_jw.py \\
+      --recommendations ../results/summary/recommendations.csv \\
+      --parquet <path_to_ss_parquet> \\
+      --output  ../results/summary/factuality_author_jw.csv \\
+      [--dn_threshold 0.85] [--workers -1] [--reference-year 2025]
+
+The --parquet default comes from [data].ss_parquet in config.ini.
 """
 
 import argparse
 import hashlib
-import logging
-import pickle
 import re
 import unicodedata
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -47,8 +48,10 @@ import pandas as pd
 from rapidfuzz.distance import JaroWinkler
 from rapidfuzz.process import cdist as rfdist
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-logger = logging.getLogger(__name__)
+from libs.utils.ios import load_pickle, save_pickle, write_output_csv
+from libs.utils.logging import log_value_counts, setup_logging
+
+logger = setup_logging()
 
 DN_THRESHOLD = 0.85  # JW threshold for (display_name, display_name)
 PER_TOKEN_THRESHOLD = (
@@ -131,10 +134,9 @@ def build_index(parquet_path: str, use_cache: bool = True) -> dict[str, dict]:
     """
     if use_cache:
         cp = _cache_path(parquet_path)
-        if cp.exists():
-            logger.info("Loading cached index: %s", cp)
-            with open(cp, "rb") as f:
-                return pickle.load(f)
+        cached = load_pickle(cp, logger=logger)
+        if cached is not None:
+            return cached
 
     logger.info("Loading parquet: %s", parquet_path)
     df = pd.read_parquet(
@@ -148,7 +150,7 @@ def build_index(parquet_path: str, use_cache: bool = True) -> dict[str, dict]:
             "Citations",
         ],
     )
-    df["gt_career_age"] = (2025 - df["First_year"]).clip(lower=0)
+    df["gt_career_age"] = (datetime.now().year - df["First_year"]).clip(lower=0)
     logger.info("Parquet rows: %d", len(df))
 
     raw_blocks: dict[str, list] = defaultdict(list)
@@ -202,10 +204,7 @@ def build_index(parquet_path: str, use_cache: bool = True) -> dict[str, dict]:
     logger.info("Index built: %d blocks", len(index))
 
     if use_cache:
-        cp = _cache_path(parquet_path)
-        logger.info("Saving index cache: %s", cp)
-        with open(cp, "wb") as f:
-            pickle.dump(index, f, protocol=pickle.HIGHEST_PROTOCOL)
+        save_pickle(index, _cache_path(parquet_path), logger=logger)
 
     return index
 
@@ -428,13 +427,8 @@ def run(
         axis=1,
     )
 
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    out.to_csv(output_path, index=False)
-    logger.info("Saved %d rows → %s", len(out), output_path)
-
-    n = len(out)
-    for status, count in out["author_status"].value_counts().items():
-        logger.info("  %-20s %7d  (%.1f%%)", status, count, 100 * count / n)
+    write_output_csv(out, output_path, logger=logger)
+    log_value_counts(out, "author_status", title="Author status distribution", logger=logger)
 
 
 def main() -> None:
