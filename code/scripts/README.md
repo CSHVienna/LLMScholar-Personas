@@ -10,6 +10,12 @@ These scripts work together to create localized prompt combinations:
 2. **`batch_prompt.py`** - Run after params. Generates prompt combinations from the translated parameters.
 3. **`batch_parse_results.py`** - Run after collecting data from LLMs. Unifies all responses into a `recommendations.csv` and `summary.csv` files.
 
+4. **`ollama_requests_multiprocessing.py`** - Calling oLLama API to access multiple LLMs
+5. **`gpt_gemini_01_create_batch_files.py`** - 
+6. **`gpt_gemini_02_create_batches.py`** - 
+7. **`gpt_gemini_03_retrieve_results.py`** - 
+
+
 ## Prerequisites
 `
 Before running either script, set the `PYTHONPATH`. If you are inside `code/scripts` then:
@@ -75,6 +81,24 @@ python batch_prompt.py -c 42 -l spanish
 # Load and parse all results across sources/models and languages in parallel
 nice -n 10 parallel -j 20 python batch_parse_results.py --results_dir ../../results --output_dir ../../results/summary_parallel --model {1} --language {2} :::: ../../data/context/models.txt ::: english german spanish
 ```
+
+
+## LLMs Caller
+
+### Requirements
+* Data must be available at `data/context/...`.
+* Add API keys for gpt an gemini in `.env`.
+* Install packages (see requirements.txt).
+
+### Execution
+* Run ollama: `ollama_requests_multiprocessing.py` (see args for details)
+* Run gpt/gemini:
+  1. `gpt_gemini_01_create_batch_files.py` (modify language using args; uncomment models ony by one)
+  2. `gpt_gemini_02_create_batches.py` (modify language and model family using args)
+  3. `gpt_gemini_03_retrieve_results.py` (modify model family using args)
+
+
+
 
 
 ## Complete Workflow Example

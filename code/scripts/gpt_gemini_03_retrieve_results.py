@@ -1,13 +1,18 @@
-import argparse
-import datetime
-from dotenv import load_dotenv
-from google import genai
-import json
-from logger import debug_msg, DebugLevel
-from openai import OpenAI
+# cd scripts
+# export PYTHONPATH="${PYTHONPATH}:../" 
+# python gpt_gemini_03_retrieve_results.py ...
+
 import os
 import sys
-from utils import (add_temp_data,
+import json
+import argparse
+import datetime
+from google import genai
+from openai import OpenAI
+from dotenv import load_dotenv
+
+from libs.utils.logger import debug_msg, DebugLevel
+from libs.utils.utils import (add_temp_data,
                    get_duration_string,
                    load_all_responses_from_file,
                    read_and_delete_temp_files,

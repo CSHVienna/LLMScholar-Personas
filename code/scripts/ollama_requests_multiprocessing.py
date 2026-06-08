@@ -1,18 +1,23 @@
+# cd scripts
+# export PYTHONPATH="${PYTHONPATH}:../" 
+# python gpt_gemini_03_retrieve_results.py ...
+
+import os
+import sys
+import socket
+import random
 import argparse
 import datetime
-import multiprocessing
-import http.client
-from itertools import repeat
-import logger
-from logger import debug_msg, DebugLevel
-from ollama._types import ResponseError
-from ollama import Client
-import os
-import random
-import socket
-import sys
 import threading
-from utils import (add_temp_data,
+import http.client
+import multiprocessing
+from ollama import Client
+from itertools import repeat
+from ollama._types import ResponseError
+
+from libs.utils import logger
+from libs.utils.logger import debug_msg, DebugLevel
+from libs.utils.utils import (add_temp_data,
                    check_prompt_already_processed,
                    create_folder,
                    get_duration_string,

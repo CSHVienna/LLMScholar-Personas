@@ -1,10 +1,15 @@
+# cd scripts
+# export PYTHONPATH="${PYTHONPATH}:../" 
+# python gpt_gemini_01_create_batch_files.py ...
+
 import argparse
 import datetime
 import json
-from logger import debug_msg, DebugLevel
 import os
 import sys
-from utils import (add_temp_data,
+
+from libs.utils.logger import debug_msg, DebugLevel
+from libs.utils.utils import (add_temp_data,
                    check_prompt_already_processed,
                    create_folder,
                    get_duration_string,

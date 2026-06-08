@@ -1,8 +1,8 @@
-import json
-from logger import debug_msg, DebugLevel
 import os
+import json
 import time
 
+from libs.utils.logger import debug_msg, DebugLevel
 
 def get_duration_string(start_time, end_time):
     duration = end_time - start_time

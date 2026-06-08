@@ -1,14 +1,20 @@
-import argparse
-import glob
-import datetime
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
-from logger import debug_msg, DebugLevel
-from openai import OpenAI
+# cd scripts
+# export PYTHONPATH="${PYTHONPATH}:../" 
+# python gpt_gemini_02_create_batches.py ...
+
 import os
 import sys
-from utils import get_duration_string
+import glob
+import argparse
+import datetime
+from google import genai
+from openai import OpenAI
+from google.genai import types
+from dotenv import load_dotenv
+
+from libs.utils.logger import debug_msg, DebugLevel
+from libs.utils.utils import get_duration_string
+
 from gpt_gemini_01_create_batch_files import MODEL_LIST
 
 load_dotenv()

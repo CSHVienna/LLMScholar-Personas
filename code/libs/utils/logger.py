@@ -1,7 +1,7 @@
-from datetime import datetime
-import logging
 import os
 import sys
+import logging
+from datetime import datetime
 
 PID = str(os.getpid())
 ROTATE_LOGGER = None
