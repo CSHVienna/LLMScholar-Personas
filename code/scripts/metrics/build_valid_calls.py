@@ -409,9 +409,9 @@ def main() -> None:
         div[total < 2] = np.nan
         return pd.DataFrame(
             {
-                f"pct_low_{label}": frac["low"],
-                f"pct_med_{label}": frac["med"],
-                f"pct_high_{label}": frac["high"],
+                f"pct_{label}_low": frac["low"],
+                f"pct_{label}_med": frac["med"],
+                f"pct_{label}_high": frac["high"],
                 f"div_productivity_{label}": div,
             }
         )
@@ -428,16 +428,16 @@ def main() -> None:
     uniform_tier = 1.0 / len(PRODUCTIVITY_TIER_LABELS)
     for lab in PRODUCTIVITY_OA_FIELDS_MAP.values():
         tv = 0.5 * sum(
-            (df_valid_calls[f"pct_{t}_{lab}"].fillna(0) - uniform_tier).abs()
+            (df_valid_calls[f"pct_{lab}_{t}"].fillna(0) - uniform_tier).abs()
             for t in PRODUCTIVITY_TIER_LABELS
         )
         no_data = df_valid_calls[
-            [f"pct_{t}_{lab}" for t in PRODUCTIVITY_TIER_LABELS]
+            [f"pct_{lab}_{t}" for t in PRODUCTIVITY_TIER_LABELS]
         ].isna().all(axis=1)
         df_valid_calls[f"parity_{lab}"] = (1 - tv).where(~no_data)
 
-    df_valid_calls["popularity_works"] = df_valid_calls["pct_high_works"]
-    df_valid_calls["popularity_citations"] = df_valid_calls["pct_high_citations"]
+    df_valid_calls["popularity_works"] = df_valid_calls["pct_works_high"]
+    df_valid_calls["popularity_citations"] = df_valid_calls["pct_citations_high"]
 
     # ── 9. Expand calls to include invalid/refused (for Wilson CIs) ──────────
     extra_model_cols = MODEL_ARCHITECTURE_COLS + MODEL_EXTRA_COLS + [
