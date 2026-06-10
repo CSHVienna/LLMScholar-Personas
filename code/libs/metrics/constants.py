@@ -77,16 +77,27 @@ ALL_METRICS = [
     "parity_works",
     "parity_citations",
     # Productivity
-    "pct_low_works",
-    "pct_med_works",
-    "pct_high_works",
-    "pct_low_citations",
-    "pct_med_citations",
-    "pct_high_citations",
+    'pct_works_low', 
+    'pct_works_med', 
+    'pct_works_high', 
+    'pct_citations_low', 
+    'pct_citations_med', 
+    'pct_citations_high',
+    
     # popularity
     "popularity_works",
     "popularity_citations",
 ]
+
+PREFIX_GROUPS_METRICS = {
+        'factuality_': 'Factuality',
+        'parity_':     'Parity',
+        'div_':        'Diversity',
+        'pct_works_':        'Publications tertile',
+        'pct_citations_':        'Citations tertile',
+        'popularity_': 'Popularity'
+    }
+
 
 # Bernoulli (binary 0/1) metrics — paper uses Wilson score CI here.
 BINARY_METRICS = {"validity", "refusals"}
@@ -97,39 +108,108 @@ PRODUCTIVITY_OA_FIELDS_MAP = {
 }
 PRODUCTIVITY_TIER_LABELS = ["low", "med", "high"]
 PRODUCTIVITY_METRIC_COLS = [
-    "parity_works",
-    "parity_citations",
-    "popularity_works",
-    "popularity_citations",
-    "pct_low_works",
-    "pct_med_works",
-    "pct_high_works",
-    "div_productivity_works",
-    "pct_low_citations",
-    "pct_med_citations",
-    "pct_high_citations",
-    "div_productivity_citations",
+    'parity_works', 
+    'parity_citations',
+    'popularity_works', 
+    'popularity_citations',
+    'pct_works_low',  
+    'pct_works_med',  
+    'pct_works_high',  
+    'div_productivity_works',
+    'pct_citations_low', 
+    'pct_citations_med', 
+    'pct_citations_high', 
+    'div_productivity_citations',
 ]
 
-FACTUALITY_METRICS = [
-    "factuality_author",
-    "factuality_field",
-    "factuality_seniority",
-    "factuality_location",
-]
-PARITY_METRICS = [
-    "parity_ethnicity",
-    "parity_gender",
-    "parity_works",
-    "parity_citations",
-]
+FACTUALITY_METRICS   = ['factuality_author', 
+                        'factuality_field', 
+                        'factuality_seniority', 
+                        'factuality_location']
 
-TECHNICAL_METRICS = ["validity", "refusals_c", "duplicates_c"] + FACTUALITY_METRICS
-SOCIAL_METRICS = PARITY_METRICS
+PARITY_METRICS = ['parity_gender', 
+                  'parity_ethnicity', 
+                  'parity_works', 
+                  'parity_citations']
 
-PERSONA_VARIABLES = ["language_en", "location_en", "role_en"]
-CONTEXT_VARIABLES = ["k", "field_en", "target_en"]
+DIVERSITY_METRICS = ['div_gender', 
+                     'div_ethnicity', 
+                     'div_location', 
+                     'div_productivity_works', 
+                     'div_productivity_citations']
 
+POPULARITY_METRICS = ['popularity_works', 
+                      'popularity_citations']
+
+PROMINENCE_METRICS = ['pct_works_low', 
+                      'pct_works_med', 
+                      'pct_works_high', 
+                      'pct_citations_low', 
+                      'pct_citations_med', 
+                      'pct_citations_high']
+
+TECHNICAL_METRICS = ['validity','refusals','consistency','duplicates'] + FACTUALITY_METRICS
+SOCIAL_METRICS = PARITY_METRICS + DIVERSITY_METRICS + PROMINENCE_METRICS + POPULARITY_METRICS
+
+TECHNICAL_METRICS_NORM = ['validity','refusals_c','duplicates_c'] + FACTUALITY_METRICS
+
+PERSONA_VARIABLES = ['language_en', 'location_en', 'role_en']
+CONTEXT_VARIABLES = ['k', 'field_en', 'subfield_en', 'target_en']
+
+MAIN_CONTEXT_VARIABLES = CONTEXT_VARIABLES.copy()
+MAIN_CONTEXT_VARIABLES.remove('subfield_en') 
+
+PROMPT_VAR_GROUPS = {'persona': PERSONA_VARIABLES, 
+                    'context': CONTEXT_VARIABLES,
+                    'llm':['model'],
+                    }
+
+EVALUATION_METRIC_GROUPS = {'technical': TECHNICAL_METRICS, 
+                            'social': SOCIAL_METRICS}
+
+PROMPT_TYPE_MAP = {
+    "language_en": "persona",
+    "role_en": "persona",
+    "location_en": "persona",
+    
+    "field_en": "context",
+    "subfield_en": "context",
+    "k": "context",
+    "target_en": "context",
+}
+
+
+NESTED_METRIC_PAIRS = {
+    'consistency': 'validity',
+    'duplicates': 'validity',
+    'factuality_author': 'validity',
+
+    'factuality_field': 'factuality_author',
+    'factuality_seniority': 'factuality_author',
+    'factuality_location': 'factuality_author',
+    
+    'div_gender': 'factuality_author',
+    'div_ethnicity': 'factuality_author',
+    'div_location': 'factuality_author',
+    'div_productivity_works': 'factuality_author',
+    'div_productivity_citations': 'factuality_author',
+    
+    'parity_gender': 'factuality_author',
+    'parity_ethnicity': 'factuality_author',
+    'parity_works': 'factuality_author',
+    'parity_citations': 'factuality_author',
+    
+    'popularity_works': 'factuality_author',
+    'popularity_citations': 'factuality_author',
+    
+    'pct_works_low': 'factuality_author',
+    'pct_works_med': 'factuality_author',
+    'pct_works_high': 'factuality_author',
+    'pct_citations_low': 'factuality_author',
+    'pct_citations_med': 'factuality_author',
+    'pct_citations_high': 'factuality_author',
+    # add other nested pairs here
+}
 
 #######################################################################################################################
 # NORMALIZATION (TO ENGLISH)
