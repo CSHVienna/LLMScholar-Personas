@@ -5,6 +5,7 @@ All scripts run from the `code/` directory with `PYTHONPATH=.` so that `libs.*` 
 ```
 scripts/
 ├── prompting/    Generate and parse batch prompts sent to the LLMs.
+├── llmcaller/    Data collection using Ollama, OpenAI, and Vertex APIs.
 ├── annotation/   Interactive CLIs for manual annotation.
 ├── factuality/   Factuality-check pipeline (7 ordered steps + orchestrator).
 ├── ethnicity/    Ethnicity inference cascade over the ground truth.
@@ -14,6 +15,12 @@ scripts/
 For per-script details, see each script's docstring.
 
 ---
+
+4. **`ollama_requests_multiprocessing.py`** - Calling oLLama API to access multiple LLMs
+5. **`gpt_gemini_01_create_batch_files.py`** - 
+6. **`gpt_gemini_02_create_batches.py`** - 
+7. **`gpt_gemini_03_retrieve_results.py`** - 
+
 
 ## Prerequisites
 
@@ -87,6 +94,21 @@ python scripts/prompting/batch_prompt.py -c 42 -l spanish
 nice -n 10 parallel -j 20 python scripts/prompting/batch_parse_results.py --results_dir ../results --output_dir ../results/summary_parallel --model {1} --language {2} :::: ../data/context/models.txt ::: english german spanish
 ```
 
+## LLMs Caller
+
+### Requirements
+* Data must be available at `data/context/...`.
+* Add API keys for gpt an gemini in `.env`.
+* Install packages (see requirements.txt).
+
+### Execution
+* Run ollama: `scripts/llmcaller/ollama_requests_multiprocessing.py` (see args for details)
+* Run gpt/gemini:
+  1. `scripts/llmcaller/gpt_gemini_01_create_batch_files.py` (modify language using args; uncomment models ony by one)
+  2. `scripts/llmcaller/gpt_gemini_02_create_batches.py` (modify language and model family using args)
+  3. `scripts/llmcaller/gpt_gemini_03_retrieve_results.py` (modify model family using args)
+
+
 ### End-to-end workflow
 
 ```bash
@@ -98,6 +120,13 @@ python scripts/prompting/batch_params.py -l german -o ../data/context/
 
 # 2. Build and inspect combination 0
 python scripts/prompting/batch_prompt.py -c 0 -l german -o ../data/context/
+
+# 3. Data collection (querying LLMs via Ollama, OpenAI, and Vertex APIs)
+python scripts/llmcaller/ollama_requests_multiprocessing.py -m <model>  -r <repetitions> -l <language>
+python scripts/llmcaller/gpt_gemini_01_create_batch_files.py -m <model> -r <repetitions> -l <language>
+python scripts/llmcaller/gpt_gemini_02_create_batches.py -mf <model_familiy> -r <repetitions> -l <language>
+python scripts/llmcaller/gpt_gemini_03_retrieve_results.py -mf <model_familiy>
+
 ```
 
 ### GNU Parallel

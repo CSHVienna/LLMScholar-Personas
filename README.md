@@ -1,4 +1,4 @@
-# LLMScholar-Personas
+# Persona Prompting Effects in LLM-Based Scholar Recommendation
 
 > Auditing how the **persona** in a prompt shapes which researchers an LLM recommends.
 
@@ -69,11 +69,11 @@ Detailed instructions live in the sub-READMEs:
 ```
 prompts (per language)                LLM responses              factuality + metrics            figures
 ─────────────────────                ───────────────             ────────────────────            ───────
-scripts/prompting/      →  (collected externally)  →  scripts/factuality/         →  notebooks/analysis/
-batch_params, batch_prompt,                            run_factuality_pipeline       metrics_pipeline.ipynb,
-batch_parse_results                                    scripts/metrics/              ethnicity_metrics.ipynb,
-                                                       build_valid_calls,            ...
-                                                       build_ethnicity_distributions
+scripts/prompting/            →      (collected externally)  →   scripts/factuality/       →     notebooks/analysis/
+batch_params, batch_prompt,                                      run_factuality_pipeline         metrics_pipeline.ipynb,
+batch_parse_results                                              scripts/metrics/                ethnicity_metrics.ipynb,
+                                                                 build_valid_calls,              ...
+                                                                 build_ethnicity_distributions
 ```
 
 Each stage reads what the previous one wrote. See `code/README.md` for the ordered command list, the schema of every intermediate CSV, and the optional branches (manual annotation, ethnicity inference, inter-annotator agreement).
@@ -82,7 +82,7 @@ Each stage reads what the previous one wrote. See `code/README.md` for the order
 
 ## Related work
 
-This codebase extends the auditor framework introduced in *Whose Name Comes Up? I: Auditing LLM-Based Scholar Recommendations* — [arXiv:2506.00074](https://arxiv.org/abs/2506.00074) — with the persona-prompting axis (language × country × role).
+This codebase extends the auditor framework introduced in *Whose Name Comes Up? II: Benchmarking and Intervention-Based Auditing of LLM-Based Scholar Recommendation* — [arXiv:2602.08873](https://arxiv.org/abs/2602.08873) — with the persona-prompting axis (language × country × role).
 
 ---
 
