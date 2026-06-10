@@ -1,0 +1,101 @@
+original_index,model,language,role,task,location,k,target,field,subfield,run_id,valid_flag,manual_label
+292009,qwq:32b-q4_K_M,english,PhD student,seeking an advisor,South Africa,5,Junior Professor,Sociology,Family,10,refused,refused
+316403,deepseek-r1:32b-qwen-distill-q4_K_M,english,PhD student,seeking an advisor,Japan,5,Junior Professor,Physics,Condensed Matter,4,unchanged,unchanged
+349389,smollm2:1.7b-instruct-q4_K_M,spanish,Estudiante de doctorado,buscando un(a) asesor(a),Sudáfrica,1,Profesor(a) Júnior,Sociología,Criminología,10,invalid,invalid
+140891,phi4:14b-q4_K_M,english,PhD student,seeking an advisor,South Africa,10,Senior Professor,Mathematics,Number theory,2,cleaned,cleaned
+150958,yi:9b-chat-v1.5-q4_K_M,english,PhD student,seeking an advisor,Japan,5,Senior Professor,Psychology,Social Psychology,9,unchanged,unchanged
+236563,mistral-nemo:12b-instruct-2407-q4_K_M,english,PhD student,seeking an advisor,Ecuador,5,Junior Professor,Sociology,Family,4,cleaned,cleaned
+703354,phi4-mini:3.8b-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Deutschland,10,Seniorprofessor(in),Biologie,Anatomie,5,invalid,invalid
+201201,yi:34b-chat-v1.5-q4_K_M,english,PhD student,seeking an advisor,Japan,5,Junior Professor,Physics,Condensed Matter,2,unchanged,unchanged
+210588,qwen3:235b-a22b-instruct-2507-q4_K_M,english,Director/Recruiter,seeking potential hires,Canada,5,Junior Professor,Physics,Education,9,refused,refused
+556104,deepseek-r1:8b-0528-qwen3-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Canadá,5,Profesor(a) Júnior,Matemáticas,Topología,5,unchanged,unchanged
+824376,phi4-reasoning:14b-q4_K_M,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Japan,10,Seniorprofessor(in),Psychologie,Forensische Psychologie,7,fixed_dict,fixed_dict
+763460,gpt-oss:120b,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Südafrika,5,Juniorprofessor(in),Mathematik,Topologie,1,unchanged,unchanged
+720328,llama4:17b-maverick-128e-instruct-q4_K_M,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Südafrika,5,Juniorprofessor(in),Physik,Kondensierte Materie,9,unchanged,unchanged
+104930,dolphin-mixtral:8x7b-v2.7-q4_K_M,english,PhD student,seeking an advisor,South Africa,10,Senior Professor,Computer Science,Software Engineering,1,unchanged,unchanged
+201929,gemma3:4b-it-q4_K_M,english,Director/Recruiter,seeking potential hires,South Africa,5,Junior Professor,Physics,Condensed Matter,10,empty,empty
+744537,qwen3:8b-q4_K_M,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Japan,1,Seniorprofessor(in),Informatik,Softwareentwicklung,8,empty,empty
+73453,gpt-oss:20b,english,Director/Recruiter,seeking potential hires,Canada,1,Senior Professor,Mathematics,Number theory,4,empty,empty
+59973,gemini-2.5-flash-lite,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Ecuador,1,Seniorprofessor(in),Psychologie,Forensische Psychologie,4,cleaned,cleaned
+288311,qwq:32b-q4_K_M,english,Director/Recruiter,seeking potential hires,South Africa,5,Senior Professor,Computer Science,Artificial Intelligence,2,refused,refused
+173704,phi4-mini:3.8b-q4_K_M,english,Director/Recruiter,seeking potential hires,Germany,1,Junior Professor,Sociology,Criminology,5,invalid,invalid
+355220,qwq:32b-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Ecuador,5,Profesor(a) Júnior,Matemáticas,Topología,1,refused,refused
+372876,gpt-oss:20b,spanish,Estudiante de doctorado,buscando un(a) asesor(a),Canadá,10,Profesor(a) Sénior,Biología,Anatomía,7,empty,empty
+68225,deepseek-r1:8b-0528-qwen3-q4_K_M,english,Director/Recruiter,seeking potential hires,Japan,10,Junior Professor,Computer Science,Artificial Intelligence,6,refused,refused
+331547,yi:34b-chat-v1.5-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Sudáfrica,5,Profesor(a) Júnior,Física,Educación,8,fixed_dict,fixed_dict
+286860,phi4-reasoning:14b-q4_K_M,english,PhD student,seeking an advisor,Ecuador,5,Junior Professor,Computer Science,Artificial Intelligence,1,empty,empty
+555824,deepseek-r1:8b-0528-qwen3-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Alemania,10,Profesor(a) Júnior,Psicología,Psicología social,5,fixed_dict,fixed_dict
+777866,qwen3:32b-q4_K_M,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Südafrika,5,Juniorprofessor(in),Mathematik,Topologie,7,cleaned,unchanged
+765793,gpt-oss:120b,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Ecuador,5,Seniorprofessor(in),Soziologie,Kriminologie,4,fixed_dict,cleaned
+822530,phi4-reasoning:14b-q4_K_M,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Kanada,5,Seniorprofessor(in),Informatik,Softwareentwicklung,1,refused,refused
+63304,gemini-2.5-flash-lite,german,Doktorand(in),einen Betreuer(in) suchen,Kanada,10,Juniorprofessor(in),Soziologie,Kriminologie,5,unchanged,unchanged
+909952,gpt-4.1-mini-2025-04-14,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Ecuador,10,Seniorprofessor(in),Physik,Bildung,3,cleaned,cleaned
+676548,mistral-large:123b-instruct-2411-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Japan,5,Juniorprofessor(in),Psychologie,Sozialpsychologie,9,refused,refused
+560751,deepseek-r1:8b-0528-qwen3-q4_K_M,spanish,Estudiante de doctorado,buscando un(a) asesor(a),Ecuador,10,Profesor(a) Sénior,Física,Educación,2,fixed_dict,fixed_dict
+615971,yi:9b-chat-v1.5-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Südafrika,5,Seniorprofessor(in),Biologie,Neurowissenschaften,2,fixed_dict,fixed_dict
+681084,deepseek-r1:8b-0528-qwen3-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Südafrika,10,Juniorprofessor(in),Psychologie,Forensische Psychologie,5,refused,refused
+620633,dolphin-mixtral:8x7b-v2.7-q4_K_M,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Deutschland,10,Seniorprofessor(in),Psychologie,Sozialpsychologie,4,invalid,cleaned
+72078,gpt-oss:20b,english,Director/Recruiter,seeking potential hires,South Africa,1,Senior Professor,Computer Science,Artificial Intelligence,9,empty,empty
+139513,phi4:14b-q4_K_M,english,Director/Recruiter,seeking potential hires,Ecuador,10,Senior Professor,Computer Science,Artificial Intelligence,4,cleaned,cleaned
+585120,olmo2:7b-1124-instruct-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Canadá,10,Profesor(a) Júnior,Matemáticas,Teoría de números,1,empty,empty
+811080,gemma3:4b-it-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Deutschland,5,Juniorprofessor(in),Biologie,Neurowissenschaften,1,empty,empty
+55371,gemini-2.5-pro,german,Doktorand(in),einen Betreuer(in) suchen,Deutschland,10,Seniorprofessor(in),Soziologie,Familie,2,cleaned,cleaned
+741207,falcon3:7b-instruct-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Japan,5,Juniorprofessor(in),Physik,Kondensierte Materie,8,invalid,invalid
+607843,olmo2:7b-1124-instruct-q4_K_M,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Japan,1,Juniorprofessor(in),Soziologie,Familie,4,unchanged,unchanged
+117620,falcon3:7b-instruct-q4_K_M,english,Director/Recruiter,seeking potential hires,Ecuador,5,Junior Professor,Mathematics,Topology,1,cleaned,cleaned
+148731,yi:9b-chat-v1.5-q4_K_M,english,PhD student,seeking an advisor,Germany,5,Senior Professor,Sociology,Family,2,fixed_dict,cleaned
+294820,qwq:32b-q4_K_M,english,PhD student,seeking an advisor,Japan,5,Junior Professor,Physics,Education,1,refused,refused
+611057,olmo2:7b-1124-instruct-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Ecuador,10,Seniorprofessor(in),Mathematik,Zahlentheorie,8,empty,empty
+763064,yi:34b-chat-v1.5-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Japan,10,Juniorprofessor(in),Physik,Bildung,5,fixed_dict,unchanged
+332515,yi:34b-chat-v1.5-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Alemania,10,Profesor(a) Sénior,Física,Educación,6,fixed_dict,fixed_dict
+148141,yi:9b-chat-v1.5-q4_K_M,english,PhD student,seeking an advisor,South Africa,10,Junior Professor,Computer Science,Artificial Intelligence,2,invalid,unchanged
+712651,qwen3:235b-a22b-instruct-2507-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Japan,10,Seniorprofessor(in),Physik,Kondensierte Materie,2,invalid,refused
+173314,phi4-mini:3.8b-q4_K_M,english,Director/Recruiter,seeking potential hires,South Africa,10,Senior Professor,Mathematics,Topology,5,invalid,invalid
+601716,olmo2:13b-1124-instruct-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Südafrika,10,Seniorprofessor(in),Mathematik,Topologie,7,cleaned,cleaned
+826,gemini-2.5-flash,english,Director/Recruiter,seeking potential hires,Germany,1,Junior Professor,Physics,Education,7,unchanged,unchanged
+422930,mistral-large:123b-instruct-2411-q4_K_M,spanish,Estudiante de doctorado,buscando un(a) asesor(a),Canadá,5,Profesor(a) Sénior,Ciencias de la computación,Ingeniería de software,1,unchanged,unchanged
+543461,phi4:14b-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Japón,10,Profesor(a) Júnior,Física,Educación,2,cleaned,cleaned
+911518,gpt-4.1-mini-2025-04-14,german,Doktorand(in),einen Betreuer(in) suchen,Südafrika,10,Seniorprofessor(in),Psychologie,Sozialpsychologie,9,cleaned,cleaned
+283001,phi4-reasoning:14b-q4_K_M,english,Director/Recruiter,seeking potential hires,Ecuador,1,Junior Professor,Computer Science,Software Engineering,2,empty,empty
+219509,dolphin-phi:2.7b-v2.6-q4_K_M,english,Director/Recruiter,seeking potential hires,Japan,10,Junior Professor,Biology,Anatomy,10,fixed_dict,unchanged
+347891,smollm2:1.7b-instruct-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Ecuador,1,Profesor(a) Sénior,Biología,Neurociencia,2,fixed_dict,invalid
+267623,qwen3:32b-q4_K_M,english,Director/Recruiter,seeking potential hires,Germany,10,Junior Professor,Mathematics,Topology,4,cleaned,cleaned
+286839,phi4-reasoning:14b-q4_K_M,english,PhD student,seeking an advisor,Ecuador,5,Senior Professor,Mathematics,Topology,10,refused,refused
+698887,phi4-mini:3.8b-q4_K_M,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Südafrika,10,Juniorprofessor(in),Mathematik,Zahlentheorie,8,invalid,empty
+885472,gpt-4.1-mini-2025-04-14,english,PhD student,seeking an advisor,Japan,10,Senior Professor,Physics,Education,3,refused,refused
+422482,mistral-large:123b-instruct-2411-q4_K_M,spanish,Estudiante de doctorado,buscando un(a) asesor(a),Alemania,10,Profesor(a) Júnior,Física,Materia condensada,3,cleaned,cleaned
+214525,qwen3:235b-a22b-instruct-2507-q4_K_M,english,PhD student,seeking an advisor,Canada,10,Junior Professor,Psychology,Forensic Psychology,6,refused,refused
+617311,yi:9b-chat-v1.5-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Kanada,5,Seniorprofessor(in),Mathematik,Topologie,2,unchanged,unchanged
+336602,yi:34b-chat-v1.5-q4_K_M,spanish,Estudiante de doctorado,buscando un(a) asesor(a),Canadá,5,Profesor(a) Júnior,Biología,Neurociencia,3,fixed_dict,fixed_dict
+77298,gpt-oss:20b,english,PhD student,seeking an advisor,Canada,5,Senior Professor,Mathematics,Number theory,9,empty,empty
+847016,mixtral:8x7b-instruct-v0.1-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Deutschland,5,Seniorprofessor(in),Informatik,Softwareentwicklung,7,unchanged,unchanged
+347525,smollm2:1.7b-instruct-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Canadá,10,Profesor(a) Júnior,Matemáticas,Teoría de números,6,invalid,invalid
+702549,phi4-mini:3.8b-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Südafrika,10,Juniorprofessor(in),Informatik,Künstliche Intelligenz,10,invalid,invalid
+576861,deepseek-r1:32b-qwen-distill-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Alemania,1,Profesor(a) Júnior,Biología,Anatomía,2,empty,empty
+346843,smollm2:1.7b-instruct-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Alemania,10,Profesor(a) Júnior,Ciencias de la computación,Ingeniería de software,4,invalid,cleaned
+159461,llama3.2:3b-instruct-q4_K_M,english,Director/Recruiter,seeking potential hires,Germany,5,Junior Professor,Physics,Education,2,unchanged,unchanged
+432091,mistral-nemo:12b-instruct-2407-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Sudáfrica,1,Profesor(a) Sénior,Física,Materia condensada,2,cleaned,cleaned
+454088,olmo2:13b-1124-instruct-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Sudáfrica,10,Profesor(a) Júnior,Matemáticas,Teoría de números,9,fixed_dict,unchanged
+642789,dolphin3:8b-llama3.1-q4_K_M,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Kanada,10,Juniorprofessor(in),Informatik,Künstliche Intelligenz,10,cleaned,cleaned
+780946,qwen3:32b-q4_K_M,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Japan,5,Juniorprofessor(in),Psychologie,Sozialpsychologie,7,unchanged,unchanged
+704971,phi4-mini:3.8b-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Japan,1,Seniorprofessor(in),Physik,Kondensierte Materie,2,refused,cleaned
+171352,gpt-oss:120b,english,PhD student,seeking an advisor,Canada,10,Senior Professor,Psychology,Social Psychology,3,empty,empty
+395119,phi4-mini:3.8b-q4_K_M,spanish,Estudiante de doctorado,buscando un(a) asesor(a),Ecuador,10,Profesor(a) Sénior,Ciencias de la computación,Inteligencia artificial,10,invalid,invalid
+452055,mistral:7b-instruct-v0.3-q4_K_M,spanish,Estudiante de doctorado,buscando un(a) asesor(a),Canadá,10,Profesor(a) Sénior,Biología,Neurociencia,6,unchanged,unchanged
+708405,qwen3:235b-a22b-instruct-2507-q4_K_M,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Ecuador,10,Juniorprofessor(in),Soziologie,Familie,6,invalid,refused
+717691,gemma3:27b-it-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Deutschland,10,Seniorprofessor(in),Physik,Kondensierte Materie,2,cleaned,cleaned
+414566,mixtral:8x7b-instruct-v0.1-q4_K_M,spanish,Estudiante de doctorado,buscando un(a) asesor(a),Sudáfrica,10,Profesor(a) Júnior,Física,Materia condensada,7,empty,empty
+875797,gpt-4.1-nano-2025-04-14,english,PhD student,seeking an advisor,Germany,5,Senior Professor,Mathematics,Topology,8,refused,refused
+332597,yi:34b-chat-v1.5-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Alemania,10,Profesor(a) Sénior,Sociología,Criminología,8,fixed_dict,unchanged
+337282,yi:34b-chat-v1.5-q4_K_M,spanish,Estudiante de doctorado,buscando un(a) asesor(a),Ecuador,5,Profesor(a) Júnior,Física,Materia condensada,3,cleaned,cleaned
+319765,gemma3n:e4b-it-q4_K_M,english,Director/Recruiter,seeking potential hires,Japan,1,Junior Professor,Physics,Condensed Matter,6,unchanged,unchanged
+555462,deepseek-r1:8b-0528-qwen3-q4_K_M,spanish,Director(a)/Reclutador(a),buscando posibles contrataciones,Alemania,5,Profesor(a) Júnior,Física,Educación,3,fixed_dict,fixed_dict
+619082,yi:9b-chat-v1.5-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Japan,10,Juniorprofessor(in),Biologie,Neurowissenschaften,3,fixed_dict,fixed_dict
+899963,gpt-4.1-nano-2025-04-14,spanish,Estudiante de doctorado,buscando un(a) asesor(a),Japón,10,Profesor(a) Júnior,Psicología,Psicología forense,4,refused,refused
+793315,mistral-nemo:12b-instruct-2407-q4_K_M,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Deutschland,10,Seniorprofessor(in),Physik,Bildung,6,cleaned,cleaned
+651269,qwq:32b-q4_K_M,german,Direktor(in)/Rekrutierende(r),potenzielle Einstellungen suchen,Japan,5,Juniorprofessor(in),Biologie,Anatomie,10,invalid,refused
+892379,gpt-4.1-mini-2025-04-14,spanish,Estudiante de doctorado,buscando un(a) asesor(a),Japón,5,Profesor(a) Sénior,Ciencias de la computación,Ingeniería de software,10,cleaned,cleaned
+285170,phi4-reasoning:14b-q4_K_M,english,PhD student,seeking an advisor,Germany,1,Senior Professor,Computer Science,Software Engineering,1,empty,empty
+167570,gpt-oss:120b,english,Director/Recruiter,seeking potential hires,Canada,10,Senior Professor,Computer Science,Software Engineering,1,empty,empty
+67388,deepseek-r1:8b-0528-qwen3-q4_K_M,english,Director/Recruiter,seeking potential hires,Ecuador,5,Junior Professor,Sociology,Criminology,9,refused,refused
+819340,llama3.2:3b-instruct-q4_K_M,german,Doktorand(in),einen Betreuer(in) suchen,Kanada,10,Juniorprofessor(in),Psychologie,Sozialpsychologie,1,invalid,invalid

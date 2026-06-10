@@ -1,3 +1,23 @@
+pandas
+numpy
+scipy
+statsmodels
+scikit-learn
+matplotlib
+seaborn
+tqdm
+rapidfuzz
+duckdb
+pyarrow
+anthropic
+torch
+transformers
+
+# Optional: ethnicity inference (BERT + ethnicolr cascade)
+# tensorflow
+# tf-keras
+# ethnicolr
+
 annotated-types==0.7.0
 anyio==4.13.0
 certifi==2026.5.20

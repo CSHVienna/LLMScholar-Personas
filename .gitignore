@@ -215,4 +215,22 @@ __marimo__/
 
 # own
 results/
+logs/
+.cache/
+
+# Local configuration (paths to data, keys, etc.)
+config.ini
+
+# Generated prompt files (output of scripts/prompting/batch_prompt.py)
+data/context/*/all_prompts.txt
+
+*.pkl
+
+data/semantic_scholar_data
+data/data
+data/*.duckdb
+data/*.parquet
+.old
+
+
 

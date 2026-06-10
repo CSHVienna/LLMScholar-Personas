@@ -1,23 +1,35 @@
-from sre_constants import IN
-from utils import ios
-from pathlib import Path
-from typing import Dict, Iterator, List, Tuple, Any, Generator
 import json
+from pathlib import Path
+from typing import Any, Dict, Generator, Iterator, List, Tuple
 
-from utils import constants as cons
+try:
+    from prompt import constants as cons
+    from utils import ios
+except ImportError:  # importing as libs.prompt.generation
+    from libs.prompt import constants as cons
+    from libs.utils import ios
 
 # ---------------------------
 # Constants
 # ---------------------------
 
 
-INSTRUCTION = {cons.LANG_EN: cons.INSTRUCTION_EN, cons.LANG_ES: cons.INSTRUCTION_ES, cons.LANG_DE: cons.INSTRUCTION_DE}
-INPUT = {cons.LANG_EN: cons.INPUT_EN, cons.LANG_ES: cons.INPUT_ES, cons.LANG_DE: cons.INPUT_DE}
+INSTRUCTION = {
+    cons.LANG_EN: cons.INSTRUCTION_EN,
+    cons.LANG_ES: cons.INSTRUCTION_ES,
+    cons.LANG_DE: cons.INSTRUCTION_DE,
+}
+INPUT = {
+    cons.LANG_EN: cons.INPUT_EN,
+    cons.LANG_ES: cons.INPUT_ES,
+    cons.LANG_DE: cons.INPUT_DE,
+}
 
 
 # ---------------------------
 # Reading utilities
 # ---------------------------
+
 
 def read_instructions(path: Path | str) -> List[Dict[str, Any]]:
     """
@@ -31,6 +43,7 @@ def read_instructions(path: Path | str) -> List[Dict[str, Any]]:
         raise ValueError("instructions JSON must be a list")
     return data
 
+
 def read_locations(path: Path | str) -> List[str]:
     """
     Returns a list of location strings.
@@ -42,10 +55,13 @@ def read_locations(path: Path | str) -> List[str]:
     elif isinstance(data, list):
         locs = data
     else:
-        raise ValueError("locations JSON must be either a list or a dict with key 'locations'")
+        raise ValueError(
+            "locations JSON must be either a list or a dict with key 'locations'"
+        )
     if not isinstance(locs, list):
         raise ValueError("'locations' must be a list")
     return [str(x) for x in locs]
+
 
 def read_inputs(path: Path | str) -> Dict[str, Any]:
     """
@@ -61,14 +77,17 @@ def read_inputs(path: Path | str) -> Dict[str, Any]:
         raise ValueError("input JSON must contain 'k' and 'fields' keys")
     return data
 
+
 # ---------------------------
 # Iterators
 # ---------------------------
+
 
 def iter_all_k(inputs: Dict[str, Any]) -> Iterator[str]:
     """Yield each k as a string (matches your desired output)."""
     for k in inputs.get("k", []):
         yield str(k)
+
 
 def iter_fields(inputs: Dict[str, Any]) -> Iterator[Tuple[str, str]]:
     """
@@ -84,19 +103,23 @@ def iter_fields(inputs: Dict[str, Any]) -> Iterator[Tuple[str, str]]:
         else:
             yield (field, None)
 
+
 def iter_instructions(instructions: List[Dict[str, Any]]) -> Iterator[Dict[str, Any]]:
     """Yield each instruction dict as-is."""
     for inst in instructions:
         yield inst
+
 
 def iter_locations(locs: List[str]) -> Iterator[str]:
     """Yield each location string."""
     for loc in locs:
         yield loc
 
+
 # ---------------------------
 # Combination generator
 # ---------------------------
+
 
 def combine_all(
     instructions: List[Dict[str, Any]],
@@ -149,7 +172,7 @@ def combine_all(
 def create_prompt(persona_context, user_request, language=cons.LANG_EN):
     """
     Create a parameterizable prompt for auditing LLMs.
-    
+
     Parameters:
         persona_context (str): The context describing the persona (e.g., role, task, location).
         user_request (str): The specific user request to be included in the prompt (e.g., k, target, field, subfield).
@@ -159,17 +182,22 @@ def create_prompt(persona_context, user_request, language=cons.LANG_EN):
         str: A formatted prompt string.
     """
     instructions = (
-        INSTRUCTION[language].replace("<ROLE>", persona_context['role'])
-        .replace("<TASK>", persona_context['task'])
-        .replace("<LOCATION>", persona_context['location'])
+        INSTRUCTION[language]
+        .replace("<ROLE>", persona_context["role"])
+        .replace("<TASK>", persona_context["task"])
+        .replace("<LOCATION>", persona_context["location"])
     )
 
-    input = (INPUT[language]
-        .replace("<K>", str(user_request['k']))
-        .replace("<PLURAL>", "s" if user_request['k'] > 1 else "")
-        .replace("<TARGET>", user_request['target'])
-        .replace("<FIELD>", user_request['field'])
-        .replace("<SUBFIELD>", user_request['subfield'] if user_request['subfield'] else "N/A")
+    input = (
+        INPUT[language]
+        .replace("<K>", str(user_request["k"]))
+        .replace("<PLURAL>", "s" if user_request["k"] > 1 else "")
+        .replace("<TARGET>", user_request["target"])
+        .replace("<FIELD>", user_request["field"])
+        .replace(
+            "<SUBFIELD>",
+            user_request["subfield"] if user_request["subfield"] else "N/A",
+        )
     )
     return instructions, input
 
@@ -180,7 +208,6 @@ def create_prompt(persona_context, user_request, language=cons.LANG_EN):
 
 
 def create_translate_param_prompt(obj: dict, lang: str) -> dict:
-    
     """
     Translate all string values in `obj` to the target `lang` while preserving
     the exact JSON structure and keys. Non-strings are left unchanged.
@@ -205,13 +232,6 @@ def create_translate_param_prompt(obj: dict, lang: str) -> dict:
         "- Keep inclusivity compact and readable. Do not expand to long paraphrases.\n"
     )
 
-    llm_input = json.dumps(
-        {
-            "language": lang,
-            "data": obj
-        },
-        ensure_ascii=False
-    )
+    llm_input = json.dumps({"language": lang, "data": obj}, ensure_ascii=False)
 
     return instructions, llm_input
-    
