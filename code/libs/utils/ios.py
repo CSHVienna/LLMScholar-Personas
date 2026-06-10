@@ -73,6 +73,11 @@ def load_json(path: Path | str) -> Any:
     with p.open("r", encoding="utf-8") as f:
         return json.load(f)
 
+def save_json(data: Any, path: Path | str) -> None:
+    p = Path(path)
+    with p.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+        
 
 def list_files_in_folder(folder_path: Path | str, pattern: str = "*") -> List[Path]:
     p = Path(folder_path)

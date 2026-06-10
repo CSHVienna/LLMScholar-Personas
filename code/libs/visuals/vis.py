@@ -11,6 +11,8 @@ from pandas.plotting import parallel_coordinates
 from libs.metrics import aggregators
 from libs.metrics import constants
 
+FIG_DPI = 600
+
 def sns_reset():
     sns.reset_orig()
 
@@ -19,12 +21,13 @@ def sns_paper_style(font_scale=1.51):
     rc('font', family = 'DejaVu Sans')
     mpl.rcParams["axes.spines.right"] = False
     mpl.rcParams["axes.spines.top"] = False
+    mpl.rcParams["axes.labelsize"] = 10   # axis label font size
 
 def _finish_plot(fig, fn = None):
     plt.tight_layout()
     
     if fn is not None:
-        fig.savefig(fn, dpi=constants.FIG_DPI, bbox_inches='tight')
+        fig.savefig(fn, dpi=FIG_DPI, bbox_inches='tight')
 
     plt.show()
     plt.close()
@@ -1233,7 +1236,7 @@ def plot_temperature_consistency(df, fn=None, **kwargs):
 
     # save
     if fn is not None:
-        plt.savefig(fn, dpi=constants.FIG_DPI, bbox_inches='tight')
+        plt.savefig(fn, dpi=FIG_DPI, bbox_inches='tight')
 
     # close
     plt.show()
@@ -1286,7 +1289,7 @@ def plot_temperature_factuality_per_task(df, fn=None, **kwargs):
 
     # save
     if fn is not None:
-        plt.savefig(fn, dpi=constants.FIG_DPI, bbox_inches='tight')
+        plt.savefig(fn, dpi=FIG_DPI, bbox_inches='tight')
 
     # close
     plt.show()
@@ -1334,7 +1337,7 @@ def plot_temperature_factuality_per_model(df, fn=None, **kwargs):
 
     # save
     if fn is not None:
-        plt.savefig(fn, dpi=constants.FIG_DPI, bbox_inches='tight')
+        plt.savefig(fn, dpi=FIG_DPI, bbox_inches='tight')
     
     # close
     plt.show()
@@ -1385,7 +1388,7 @@ def plot_temperature_by_size(df, fn=None, **kwargs):
 
     # save
     if fn is not None:
-        plt.savefig(fn, dpi=constants.FIG_DPI, bbox_inches='tight')
+        plt.savefig(fn, dpi=FIG_DPI, bbox_inches='tight')
         
     # close
     plt.show()
@@ -1452,7 +1455,7 @@ def plot_temperature_vs_bias(df_authors, df_all_authors_demographics, cat_col='g
 
     # save
     if fn is not None:
-        plt.savefig(fn, dpi=constants.FIG_DPI, bbox_inches='tight')
+        plt.savefig(fn, dpi=FIG_DPI, bbox_inches='tight')
     
     # final
     plt.show()
@@ -1515,7 +1518,7 @@ def plot_temperature_vs_bias_by_size(df_authors, df_all_authors_demographics, ca
 
     # save
     if fn is not None:
-        plt.savefig(fn, dpi=constants.FIG_DPI, bbox_inches='tight')
+        plt.savefig(fn, dpi=FIG_DPI, bbox_inches='tight')
     
     # final
     plt.show()
@@ -1672,7 +1675,7 @@ def plot_infrastructural_conditions(per_attempt, fn=None, continuous=True, **kwa
     plt.subplots_adjust(wspace=0.05)
     
     if fn is not None:
-        fig.savefig(fn, dpi=constants.FIG_DPI, bbox_inches='tight')
+        fig.savefig(fn, dpi=FIG_DPI, bbox_inches='tight')
 
     plt.show()
     plt.close()
@@ -1923,7 +1926,7 @@ def plot_infrastructural_conditions_comparison_intervention(per_attempt, per_att
     plt.subplots_adjust(wspace=0.05, top=0.80)
 
     if fn is not None:
-        fig.savefig(fn, dpi=constants.FIG_DPI, bbox_inches='tight')
+        fig.savefig(fn, dpi=FIG_DPI, bbox_inches='tight')
 
     plt.show()
     plt.close()
@@ -1971,7 +1974,7 @@ def plot_infrastructural_conditions_by_intervention(per_attempt, xvar, fn=None, 
     plt.subplots_adjust(wspace=0.05)
     
     if fn is not None:
-        fig.savefig(fn, dpi=constants.FIG_DPI, bbox_inches='tight')
+        fig.savefig(fn, dpi=FIG_DPI, bbox_inches='tight')
 
     plt.show()
     plt.close()
@@ -2063,7 +2066,7 @@ def plot_metric_bars_by_groups(df, x_col='task_name', hue_col="model", metric_co
     plt.subplots_adjust(wspace=0.05)
     
     if fn is not None:
-        fig.savefig(fn, dpi=constants.FIG_DPI, bbox_inches='tight')
+        fig.savefig(fn, dpi=FIG_DPI, bbox_inches='tight')
 
     plt.show()
     plt.close()

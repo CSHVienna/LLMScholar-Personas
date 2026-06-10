@@ -14,6 +14,7 @@ neutral grey above each block.
 from __future__ import annotations
 
 import colorsys
+import stat
 import warnings
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -26,6 +27,8 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import MaxNLocator
 import seaborn as sns
+
+from libs.sensitivity.base import SensitivityModel
 
 
 # ---------------------------------------------------------------------------
@@ -44,6 +47,16 @@ def sequential_cmap_from_color(base: str, name: str) -> LinearSegmentedColormap:
     dark  = _hls_adjust(base, lightness=0.28, sat_scale=1.15)
     return LinearSegmentedColormap.from_list(name, [light, base, dark], N=256)
 
+def _get_cbar_label(label):
+        if label == 'omega2':
+            return r'$\omega^2$'
+        elif label == 'eta2':
+            return r'$\eta^2$'
+        elif label == 'partial_eta2':
+            return r'Partial $\eta^2$'
+        else:
+            return label
+        
 
 # ---------------------------------------------------------------------------
 # Plot
@@ -72,7 +85,7 @@ class GroupedSensitivityHeatmap:
         Figure margins. None auto-picks values that depend on which
         elements are shown.
     """
-
+    ols_results: Dict[str, SensitivityModel]
     df: pd.DataFrame
     row_groups: Dict[str, List[str]]
     col_groups: Dict[str, List[str]]
@@ -99,13 +112,14 @@ class GroupedSensitivityHeatmap:
     title: Optional[str] = 'Prompt-variable sensitivity by metric'
     xlabel: Optional[str] = 'Evaluation metric'
     ylabel: Optional[str] = 'Prompt variable'
-    colorbar_label: Optional[str] = r'Partial $\eta^2$'
+    colorbar_label: Optional[str] = None
 
     # toggles
     show_colorbar_labels: bool = True
     show_col_group_labels: bool = True
     show_row_group_bands: bool = True
     show_colorbars: bool = True
+    show_residual_row: bool = True   # uncoloured 1 - R^2 band below the LLM row
 
     # layout (None -> auto)
     left: Optional[float] = None
@@ -132,7 +146,7 @@ class GroupedSensitivityHeatmap:
     significance_style: Optional[str] = None
     significance_threshold: float = 0.05
     star_thresholds: Tuple[float, float, float] = (0.05, 0.01, 0.001)
-    dim_color: str = '#a8a8a8'         # muted grey for 'dim' style (light bg)
+    dim_color: str = "#cecece"         # muted grey for 'dim' style (light bg)
     dim_color_on_dark: str = '#d0d0d0' # muted near-white for 'dim' on dark bg
     underline_linewidth: float = 0.55  # used for 'underline' style
 
@@ -156,6 +170,18 @@ class GroupedSensitivityHeatmap:
     cbar_title_pad: float = 0.028      # extra room for the shared colorbar label
     col_box_color: str = '#eaecef'    # light grey fill for col-group boxes
     col_box_text_color: str = '#555'
+
+    # Residual row (uncoloured 1 - R^2 band). Drawn below the LLM block;
+    # NOT part of `_data`, so it never affects vmin/vmax. Cells have a faint
+    # border and the value as text only — no fill.
+    residual_label: str = 'Residual'      # y-tick label for the band
+    residual_row_height: float = 0.030    # band height in figure coords
+    residual_gap: float = 0.010           # gap between LLM block and the band
+    residual_edge_color: str = '#d9d9d9'  # very light cell border
+    residual_edge_width: float = 0.6
+    residual_text_color: str = '#777'     # muted, since cells are uncoloured
+    residual_label_color: str = '#6e6e6e' # y-tick label color (matches LLM grey)
+    residual_fmt: str = '.2f'
 
     # Prefix-group bracket tier (only used when tick_prefix_groups is set)
     prefix_group_room: float = 0.034     # vertical room for the bracket tier
@@ -210,9 +236,11 @@ class GroupedSensitivityHeatmap:
         }
 
     # -- constructors ------------------------------------------------------
-
+    
     @classmethod
-    def from_long(cls, anova_df: pd.DataFrame, *,
+    def from_long(cls, 
+                  ols_results: Dict[str, SensitivityModel],
+                  anova_df: pd.DataFrame, *,
                   row_col: str = 'prompt_var',
                   col_col: str = 'metric',
                   value_col: str = 'partial_eta2',
@@ -227,6 +255,7 @@ class GroupedSensitivityHeatmap:
 
         Parameters
         ----------
+        ols_results : dict[str, SensitivityModel]
         anova_df : pd.DataFrame
             Long-format results. Must contain `row_col`, `col_col`,
             `value_col`, and (optionally) `pvalue_col`.
@@ -247,7 +276,10 @@ class GroupedSensitivityHeatmap:
                                     values=pvalue_col)
                      if pvalue_col is not None else None)
 
-        return cls(df=value_df, pvalue_df=pvalue_df, **kwargs)
+        colorbar_label = kwargs.get('colorbar_label', _get_cbar_label(value_col))
+        kwargs['colorbar_label'] = colorbar_label
+
+        return cls(ols_results=ols_results, df=value_df, pvalue_df=pvalue_df, **kwargs)
 
     # -- helpers -----------------------------------------------------------
 
@@ -347,6 +379,27 @@ class GroupedSensitivityHeatmap:
             return None
         return self._pvals.loc[self.row_groups[row_g], self.col_groups[col_g]]
 
+    def _residual_for_metric(self, metric: str) -> Optional[float]:
+        """Return 1 - R^2 for `metric`, or None if unavailable.
+
+        R^2 is read from the fitted model:
+            ols_results[metric]['m1'].r2_values['r2']
+        Any missing key / attribute yields None so the cell is left blank
+        rather than raising — keeps the band robust to partial results.
+        """
+        try:
+            r2 = self.ols_results[metric]['m1'].r2_values['r2']
+        except (KeyError, AttributeError, TypeError):
+            return None
+        if r2 is None or pd.isna(r2):
+            return None
+        return 1.0 - float(r2)
+
+    def _residual_block(self, col_g: str) -> List[Optional[float]]:
+        """Ordered list of residuals for the columns of col-group `col_g`,
+        in the same order the heatmap blocks render them."""
+        return [self._residual_for_metric(c) for c in self.col_groups[col_g]]
+
     def _star_suffix(self, p: float) -> str:
         """Stars by descending strictness: ***  **  *."""
         t = sorted(self.star_thresholds)  # ascending [strict, ..., lax]
@@ -395,6 +448,7 @@ class GroupedSensitivityHeatmap:
             kwargs['fontweight'] = 'bold'
         elif style == 'italic' and is_sig:
             kwargs['fontstyle'] = 'italic'
+        
         elif style == 'dim' and is_ns:
             kwargs['color'] = dim_color
         elif style == 'underline' and is_ns:
@@ -455,17 +509,13 @@ class GroupedSensitivityHeatmap:
             if self.title:
                 top -= 0.07
 
-        # bottom: x-tick labels + (prefix-group bracket) + col-group box + xlabel + edge
+        # bottom: residual band + x-tick labels + (prefix bracket) + col box + xlabel + edge
         if self.bottom is not None:
             bottom = self.bottom
         else:
-            bottom = self.edge_pad + self.tick_label_room_x
-            if self.tick_prefix_groups:
-                bottom += self.prefix_group_room
-            if self.show_col_group_labels:
-                bottom += self._col_box_height + self.band_gap
-            if self.xlabel:
-                bottom += self.xlabel_room
+            bottom = self._residual_y0()
+            if self._residual_active:
+                bottom += self.residual_row_height + self.residual_gap
 
         return left, right, top, bottom
 
@@ -557,6 +607,25 @@ class GroupedSensitivityHeatmap:
             y += self._col_box_height + self.band_gap
         return y
 
+    @property
+    def _residual_active(self) -> bool:
+        """Residual band is drawn only when toggled on AND we actually have
+        models to read R^2 from. Keeps the demo / no-model paths unchanged."""
+        return self.show_residual_row and bool(self.ols_results)
+
+    def _residual_y0(self) -> float:
+        """Bottom edge (figure coords) of the residual band.
+
+        This is exactly the stack of decorations below the band — bracket
+        tier + x-tick label room — so the band sits directly on top of the
+        x-tick labels, mirroring how a normal bottom block row would.
+        """
+        y = self._prefix_group_y_bottom()
+        if self.tick_prefix_groups:
+            y += self.prefix_group_room
+        y += self.tick_label_room_x
+        return y
+
     def _xlabel_y(self) -> float:
         return self.edge_pad + 0.015
 
@@ -572,6 +641,56 @@ class GroupedSensitivityHeatmap:
         box.text(0.5, 0.5, label.upper(), ha='center', va='center',
                  color=self.col_box_text_color, fontweight='bold',
                  fontsize=9.5, transform=box.transAxes)
+
+    def _add_residual_band(self, fig, ax, cg, show_ylabel):
+        """Draw the uncoloured residual strip under col-group `cg`.
+
+        One cell per metric in the group: faint border, NO fill (so it
+        never enters vmin/vmax), and the `1 - R^2` value printed as text.
+        This band also carries the x-tick labels, since it is now the
+        lowest row of cells in the figure.
+        """
+        from matplotlib.patches import Rectangle
+
+        cols = self.col_groups[cg]
+        n = len(cols)
+        bb = ax.get_position()
+        band = fig.add_axes([bb.x0, self._residual_y0(),
+                             bb.width, self.residual_row_height])
+        band.set_xlim(0, n)
+        band.set_ylim(0, 1)
+
+        for j, val in enumerate(self._residual_block(cg)):
+            band.add_patch(Rectangle(
+                (j, 0), 1, 1, facecolor='none',
+                edgecolor=self.residual_edge_color,
+                linewidth=self.residual_edge_width,
+                clip_on=False,
+            ))
+            if val is not None and not pd.isna(val):
+                band.text(j + 0.5, 0.5, format(val, self.residual_fmt),
+                          ha='center', va='center', fontsize=7.5,
+                          color=self.residual_text_color)
+
+        # x-tick labels live on the band (it is the lowest cell row now)
+        tick_labels = [self._split_tick(c)[0] for c in cols]
+        band.set_xticks([j + 0.5 for j in range(n)])
+        self._style_xticks(band, tick_labels)
+
+        # y-tick label only on the leftmost col-group
+        if show_ylabel:
+            band.set_yticks([0.5])
+            band.set_yticklabels([self.residual_label], rotation=0,
+                                 fontsize=10)
+            for t in band.get_yticklabels():
+                t.set_color(self.residual_label_color)
+                # t.set_fontweight('semibold')
+            band.tick_params(axis='y', length=0, pad=4)
+        else:
+            band.set_yticks([])
+
+        for sp in band.spines.values():
+            sp.set_visible(False)
 
     def _add_prefix_group_brackets(self, fig, ax, cg):
         """For each contiguous prefix-group run inside col-group `cg`,
@@ -660,6 +779,7 @@ class GroupedSensitivityHeatmap:
         # blocks
         block_axes: Dict[Tuple[str, str], plt.Axes] = {}
         last_row = len(row_keys) - 1
+        resid_active = self._residual_active
         for i, rg in enumerate(row_keys):
             for j, cg in enumerate(col_keys):
                 ax = fig.add_subplot(gs[i, j])
@@ -667,7 +787,8 @@ class GroupedSensitivityHeatmap:
                 self._draw_block(
                     ax, self._block(rg, cg), self._pvalue_block(rg, cg),
                     self.cmaps[rg], vmin, vmax,
-                    show_xticks=(i == last_row),
+                    # when the residual band is shown it owns the x-ticks
+                    show_xticks=(i == last_row and not resid_active),
                     show_yticks=(j == 0),
                     row_group=rg,
                 )
@@ -690,6 +811,15 @@ class GroupedSensitivityHeatmap:
                     fig, block_axes[(rg, col_keys[-1])],
                     self.cmaps[rg], vmin, vmax, right,
                     label=rg, label_color=self.row_group_colors[rg],
+                )
+
+        # residual band (uncoloured 1 - R^2 strip, directly under the
+        # bottom block row; owns the x-ticks when present)
+        if resid_active:
+            for j, cg in enumerate(col_keys):
+                self._add_residual_band(
+                    fig, block_axes[(row_keys[-1], cg)], cg,
+                    show_ylabel=(j == 0),
                 )
 
         # column decorations (below the last row)
@@ -820,6 +950,8 @@ def _make_demo_anova_df(seed: int = 7) -> pd.DataFrame:
                 rows.append({
                     'metric': metric,
                     'prompt_var': var,
+                    'omega2': eta2,
+                    'eta2': eta2,
                     'partial_eta2': eta2,
                     'p_value': p,
                     'prompt_type': group_name,
@@ -830,6 +962,7 @@ def _make_demo_anova_df(seed: int = 7) -> pd.DataFrame:
 def main():
     anova_df = _make_demo_anova_df()
     plot = GroupedSensitivityHeatmap.from_long(
+        ols_results,
         anova_df,
         row_col='prompt_var',
         col_col='metric',

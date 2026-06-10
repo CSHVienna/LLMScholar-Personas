@@ -83,6 +83,16 @@ PLOT_LABELS = {
     'pct_works_low':              '% L pub.',
 }
 
+PLOT_LABELS |= {'role_en': 'Role', 
+                'location_en': 'Location', 
+                'language_en': 'Language',
+                'k': 'k', 
+                'field_en': 'Field', 
+                'subfield_en': 'Subfield',
+                'target_en': 'Seniority',
+                'model': 'Model'
+                }
+
 PLOT_METRICS = [
     # Output quality (response-level)
     'validity',
@@ -229,3 +239,39 @@ ORDER_MAP = {'language_en': LANGUAGE_ORDER,
              'field_en': FIELD_ORDER, 
              'target_en': SENIORITY_ORDER, 
              'k': K_ORDER}
+
+
+METRICS_NAME_MAP = {'parity_ethnicity':'Ethinicity parity',
+                    'div_ethnicity':'Ethinicity diversity',
+
+                    'parity_gender':'Gender parity',
+                    'div_gender':'Gender diversity',
+                    
+                    'parity_works':'Works parity',
+                    'pct_works_high':'Works upper tertile',
+                    'popularity_works':'Popularity-based works',
+
+                    'parity_citations':'Citations parity',
+                    'pct_citations_high':'Citations upper tertile',
+                    'popularity_citations':'Popularity-based citations',
+
+                    'pct_works_med':'Works middle tertile',
+                    'pct_works_low':'Works lower tertile',
+                    'pct_citations_med':'Citations middle tertile',
+                    'pct_citations_low':'Citations lower tertile',
+
+                    'div_location':'Location diversity',
+                    'div_productivity_citations':'Citations diversity',
+                    'div_productivity_works':'Works diversity',
+
+                    'factuality_author':'Author factuality',
+                    'factuality_field':'Field factuality',
+                    'factuality_seniority':'Seniority factuality',
+                    'factuality_location':'Location factuality',
+
+                    'validity':'Validity',
+                    'refusals':'Refusals',
+                    'consistency':'Consistency',    
+                    'duplicates':'Duplicates',
+
+                    }

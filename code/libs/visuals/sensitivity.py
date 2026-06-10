@@ -1,18 +1,14 @@
 """Plotting for sensitivity analysis. Persona vs context is the visual anchor."""
 
-from tkinter import font
-
-from matplotlib import axes
+import re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-import re
-from itertools import product
 
 from libs.sensitivity.spec import ModelSpec
 from libs.visuals.constants import PROMPT_VAR_COLORS as PALETTE
-
+from libs.visuals.vis import FIG_DPI
 
 def create_grid(fe_models, metrics=None, figsize_per_panel=(5, 6), nrows=1, sharey=True):
     if metrics is None:
@@ -153,6 +149,27 @@ def _strip_patsy(term: str, prompt_var: str) -> str:
     return m.group(1) if m else term
 
 
+def _level_sort_key(term: str, prompt_var: str, df: pd.DataFrame | None):
+    """Stable, metric-INDEPENDENT ordering key for a level term.
+
+    The y-axis order must be identical across every panel of a shared-y grid,
+    so it must NOT depend on the fitted coefficient (which differs per metric).
+    Order preference:
+      1. categorical -> follow the dataframe's declared category order
+      2. numeric-looking levels (e.g. '5.0', '10.0') -> by numeric value
+      3. everything else -> alphabetical
+    """
+    level = _strip_patsy(term, prompt_var)
+    if df is not None and prompt_var in df.columns and hasattr(df[prompt_var], 'cat'):
+        cats = list(map(str, df[prompt_var].cat.categories))
+        if level in cats:
+            return (0, cats.index(level), '')
+    try:
+        return (1, float(level), '')
+    except (TypeError, ValueError):
+        return (2, 0.0, level)
+
+
 def _pretty(var_name: str) -> str:
     """role_en -> Role, popularity_citations -> Popularity citations.
     Customize this dict for paper-ready labels."""
@@ -262,8 +279,11 @@ def plot_main_effects(model, spec, df=None, ax=None,
             'estimate': None, 'ci_low': None, 'ci_high': None,
         })
 
-        # Level rows
-        for term in sorted(terms, key=lambda t: params[t]):
+        # Level rows.
+        # NOTE: order by the variable's natural level order (metric-INDEPENDENT),
+        # never by params[t] (metric-dependent) -- otherwise a shared-y grid
+        # shows mismatched labels vs dots across panels.
+        for term in sorted(terms, key=lambda t: _level_sort_key(t, pv, df)):
             raw_level = _strip_patsy(term, pv)
             level_label = '    ' + relabel(raw_level)
             plot_rows.append({
@@ -332,7 +352,7 @@ def plot_main_effects(model, spec, df=None, ax=None,
             tick_label.set_fontweight('bold')
 
     ax.margins(x=0.05)
-    ax.set_xlabel('Standardized effect on metric')
+    ax.set_xlabel('Effect on metric')
     ax.set_title(title)
     ax.legend(handles=[
         Line2D([0], [0], marker='o', color=PALETTE['persona'], lw=0, label='Persona'),
@@ -441,3 +461,71 @@ def plot_robustness_comparison(m2, m2_by_attr: dict, spec: ModelSpec):
     ax.set_title('Robustness: do single- and full-moderator models agree?')
     ax.legend(frameon=False)
     return fig
+
+def get_star_suffix(p: float) -> str:
+        """Stars by descending strictness: ***  **  *."""
+        t = sorted((0.05, 0.01, 0.001))  # ascending [strict, ..., lax]
+        if p < t[0]:
+            return '***'
+        if p < t[1]:
+            return '**'
+        if p < t[2]:
+            return '*'
+        return ''
+
+def plot_residuals_diagnostic(analysis, metrics_name_map, fn_summary_table, fn_plot):
+    import statsmodels.stats.api as sms
+    import statsmodels.api as sm
+    import scipy.stats as stats
+
+    nmetrics = len(analysis.results.items())
+    ncols = 6
+    nrows = (nmetrics + ncols - 1) // ncols
+    width = 3
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(ncols*width, nrows*width), sharex=True, sharey=True)
+
+    df_summary_table = pd.DataFrame(columns=['metric', 'shapiro_stat', 'shapiro_p', 'bp_stat', 'bp_p', 'outside_0_1_pct'])
+
+    for index, (metric, obj) in enumerate(analysis.results.items()):
+        nrow = index // ncols
+        ncol = index % ncols
+        ax = axes[nrow][ncol]
+
+        model = analysis.results[metric]['m1'].result
+
+        resid = model.resid
+        sm.qqplot(resid, line='45', fit=True, ax=ax)
+        stat, p = stats.shapiro(resid)   # use the plot as the primary evidence at large N
+        ax.text(0.02, 0.98, f'Shapiro-Wilk: {stat:.3f} {get_star_suffix(p)}', transform=ax.transAxes, ha='left', va='top')
+        
+        bp = sms.het_breuschpagan(model.resid, model.model.exog)
+        ax.text(0.02, 0.90, f'Breusch-Pagan: {bp[0]:.3f} {get_star_suffix(bp[1])}', transform=ax.transAxes, ha='left', va='top')
+        ax.text(0.98, 0.02, metrics_name_map[metric], transform=ax.transAxes, ha='right', va='bottom', fontsize='large',)
+        ax.set_xlabel('' if nrow < nrows - 1 else 'Theoretical quantiles')
+        ax.set_ylabel('Sample quantiles' if ncol == 0 else '')
+
+        obj = {
+            'metric': metric,
+            'shapiro_stat': stat,
+            'shapiro_p': p,
+            'bp_stat': bp[0],
+            'bp_p': bp[1],
+            'outside_0_1_pct': obj['m1'].model_info['outside_0_1_pct']}
+        df_summary_table = pd.concat([df_summary_table, pd.DataFrame([obj])], ignore_index=True)
+        df_summary_table.to_csv(fn_summary_table, index=False)
+
+    if nmetrics < ncols * nrows:
+        for index in range(nmetrics, ncols * nrows):
+            nrow = index // ncols
+            ncol = index % ncols
+            fig.delaxes(axes[nrow][ncol])
+            axes[nrow-1][ncol].set_xlabel('Theoretical quantiles')
+
+    plt.tight_layout()
+    plt.subplots_adjust(wspace=0.04, hspace=0.04)
+    fig.savefig(fn_plot, dpi=FIG_DPI)
+    plt.show()
+    plt.close()
+
+    return df_summary_table
+

@@ -12,6 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Iterable
 import json
+from statsmodels.stats.multitest import multipletests
 
 import pandas as pd
 
@@ -38,7 +39,7 @@ class SensitivityAnalysis:
     # Construction
     # ------------------------------------------------------------------
 
-    def __init__(self, all_metrics: Iterable[str], metrics_to_exclude: Iterable[str], base_spec: ModelSpec):
+    def __init__(self, all_metrics: Iterable[str], base_spec: ModelSpec, metrics_to_exclude: Iterable[str] = None):
         """
         Args:
             all_metrics: every metric column you intend to model. Drives
@@ -49,7 +50,7 @@ class SensitivityAnalysis:
                          (the metric will be overridden per iteration).
         """
         self.all_metrics = set(all_metrics)
-        self.metrics_to_exclude = set(metrics_to_exclude)
+        self.metrics_to_exclude = set(metrics_to_exclude) if metrics_to_exclude is not None else set()
         self.available_metrics = self.all_metrics - self.metrics_to_exclude
         self.base_spec = base_spec
         self.df: pd.DataFrame | None = None
@@ -84,7 +85,8 @@ class SensitivityAnalysis:
             data:                  the raw dataframe.
             nested_pairs:        {child_var: parent_var} for structural NaN handling.
             nested_strategy:     the strategy to use for handling nested missingness.
-            categorical_refs:    {column: reference_level} for as_categorical().
+            categorical_llm_group_refs:    {column: reference_level} for as_categorical().
+            categorical_prompt_var_refs:   {column: reference_level} for as_categorical().
             standardize_numeric: whether to z-score numeric prompt vars.
             dropna:              whether to drop remaining NaN values.
             verbose:             print row counts before/after.
@@ -125,22 +127,27 @@ class SensitivityAnalysis:
 
         # 4. Standardize numeric prompt vars (no-op on categoricals)
         if standardize_numeric:
+            if verbose:
+                print(f'Standardizing numeric prompt vars.')
             df = standardize(df, spec.prompt_vars)
 
         self.df = df
+        
         if verbose:
             print(f'\nPrepared dataframe: N = {len(df):,} rows, '
                   f'{len(self.available_metrics)} metrics, '
                   f'{len(spec.prompt_vars)} prompt vars '
                   f'{len(spec.structural_vars)} structural vars.'
                   )
-        return df
+            
+        return self.df
 
     # ------------------------------------------------------------------
     # Model fitting
     # ------------------------------------------------------------------
 
     def fixed_effects_model(self,
+                            cluster_se: bool = False,
                             verbose: bool = True) -> dict:
         """Fit Model 1 (OLS with LLM fixed effects) for each metric.
 
@@ -160,61 +167,62 @@ class SensitivityAnalysis:
             if verbose:
                 print(f'  [m1] fitting fixed-effects model for: {metric}')
             spec = replace(self.base_spec, metric=metric)
-            m1 = FixedEffectsModel(spec).fit(self.df, verbose=verbose, cluster_se=False)
+            m1 = FixedEffectsModel(spec).fit(self.df, verbose=verbose, cluster_se=cluster_se)
             self.results[metric]['spec'] = spec
             self.results[metric]['m1'] = m1
+            self.results[metric]['N'] = m1.N
             fits[metric] = m1
         return fits
 
-    def mixed_effects_model(self,
-                            moderators: list[str] | None = None,
-                            single_moderator: bool = True,
-                            verbose: bool = True) -> dict:
-        """Fit Model 2 (mixed model with random LLM intercept + moderators).
+    # def mixed_effects_model(self,
+    #                         moderators: list[str] | None = None,
+    #                         single_moderator: bool = True,
+    #                         verbose: bool = True) -> dict:
+    #     """Fit Model 2 (mixed model with random LLM intercept + moderators).
 
-        By default fits one model PER moderator (single_moderator=True) under
-        self.results[metric]['m2_by_attr'][attr]. Set single_moderator=False
-        to additionally fit a fully-interacted model at self.results[metric]['m2'].
-        (Note: full m2 often fails to identify if some attribute combinations
-        are missing in the data, e.g. XL × proprietary.)
+    #     By default fits one model PER moderator (single_moderator=True) under
+    #     self.results[metric]['m2_by_attr'][attr]. Set single_moderator=False
+    #     to additionally fit a fully-interacted model at self.results[metric]['m2'].
+    #     (Note: full m2 often fails to identify if some attribute combinations
+    #     are missing in the data, e.g. XL × proprietary.)
 
-        Args:
-            moderators:         which LLM attributes to use. Defaults to
-                                base_spec.llm_attrs.
-            single_moderator:   if True, fit one model per moderator (safer).
-                                If False, also fit one model with all moderators.
-            verbose:            print progress per metric.
+    #     Args:
+    #         moderators:         which LLM attributes to use. Defaults to
+    #                             base_spec.llm_attrs.
+    #         single_moderator:   if True, fit one model per moderator (safer).
+    #                             If False, also fit one model with all moderators.
+    #         verbose:            print progress per metric.
 
-        Returns:
-            {metric: {'m2_by_attr': {...}, 'm2': ...}}
-        """
-        self._require_data()
-        moderators = moderators or self.base_spec.llm_attrs
+    #     Returns:
+    #         {metric: {'m2_by_attr': {...}, 'm2': ...}}
+    #     """
+    #     self._require_data()
+    #     moderators = moderators or self.base_spec.llm_attrs
 
-        fits = {}
-        for metric in self.available_metrics:
-            spec = self.results[metric].get('spec') or replace(self.base_spec, metric=metric)
-            self.results[metric]['spec'] = spec
-            entry = {}
+    #     fits = {}
+    #     for metric in self.available_metrics:
+    #         spec = self.results[metric].get('spec') or replace(self.base_spec, metric=metric)
+    #         self.results[metric]['spec'] = spec
+    #         entry = {}
 
-            if single_moderator:
-                entry['m2_by_attr'] = {}
-                for attr in moderators:
-                    if verbose:
-                        print(f'  [m2/{attr}] fitting for: {metric}')
-                    entry['m2_by_attr'][attr] = (
-                        MixedEffectsModel(spec, moderators=[attr]).fit(self.df, verbose=verbose)
-                    )
-                self.results[metric]['m2_by_attr'] = entry['m2_by_attr']
-            else:
-                if verbose:
-                    print(f'  [m2/full] fitting for: {metric}')
-                full = MixedEffectsModel(spec, moderators=moderators).fit(self.df)
-                self.results[metric]['m2'] = full
-                entry['m2'] = full
+    #         if single_moderator:
+    #             entry['m2_by_attr'] = {}
+    #             for attr in moderators:
+    #                 if verbose:
+    #                     print(f'  [m2/{attr}] fitting for: {metric}')
+    #                 entry['m2_by_attr'][attr] = (
+    #                     MixedEffectsModel(spec, moderators=[attr]).fit(self.df, verbose=verbose)
+    #                 )
+    #             self.results[metric]['m2_by_attr'] = entry['m2_by_attr']
+    #         else:
+    #             if verbose:
+    #                 print(f'  [m2/full] fitting for: {metric}')
+    #             full = MixedEffectsModel(spec, moderators=moderators).fit(self.df)
+    #             self.results[metric]['m2'] = full
+    #             entry['m2'] = full
 
-            fits[metric] = entry
-        return fits
+    #         fits[metric] = entry
+    #     return fits
 
     # ------------------------------------------------------------------
     # Aggregated outputs
@@ -240,18 +248,28 @@ class SensitivityAnalysis:
                 rows.append(c)
         return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
-    def effect_sizes(self) -> pd.DataFrame:
+    def effect_sizes(self, method: str = 'fdr_bh', alpha: float = 0.05) -> pd.DataFrame:
         """Long-format partial η² per (metric, variable) — for the heatmap.
         Requires FixedEffectsModel.effect_sizes() to be available."""
-        if self.effects is None:
+        
+        if self.effects is None or self.effects.empty:
             rows = []
             for metric, r in self.results.items():
                 if 'm1' not in r or not hasattr(r['m1'], 'effects'):
                     continue
                 es = r['m1'].effects
                 # es['metric'] = metric
+                es['N'] = r['N']
                 rows.append(es)
             self.effects = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+
+        # correct p-values for multiple testing (across variables, per metric)
+        if 'p_value_adj' not in self.effects.columns:
+            corrected = multipletests(self.effects['p_value'], method=method, alpha=alpha)
+            self.effects['p_value_adj'] = corrected[1]
+            self.effects['significant'] = corrected[0]
+            self.effects['correction_method'] = method
+
         return self.effects
 
     # ------------------------------------------------------------------
@@ -273,8 +291,9 @@ class SensitivityAnalysis:
 
         # effcts size
         effects = self.effect_sizes()
+        for col in ['sum_sq', 'df', 'F', 'p_value', 'omega2', 'eta2', 'partial_eta2', 'p_value_adj']:
+            effects[col] = pd.to_numeric(effects[col], errors='coerce')
         effects.to_parquet(dirpath / FN_EFFECTS, index=False)
-        
         
         # Top-level metadata
         with open(dirpath / FN_ANALYSIS, 'w') as f:

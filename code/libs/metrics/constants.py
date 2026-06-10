@@ -83,11 +83,12 @@ PRODUCTIVITY_METRIC_COLS = [
 
 FACTUALITY_METRICS   = ['factuality_author', 'factuality_field', 'factuality_seniority', 'factuality_location']
 PARITY_METRICS = ['parity_gender', 'parity_ethnicity', 'parity_works', 'parity_citations']
-DIVERSITY_METRICS = ['div_gender', 'div_ethnicity', 'div_location'] # 'div_productivity_works', 'div_productivity_citations']
-POPULARITY_METRICS = ['pct_works_low', 'pct_works_med', 'pct_works_high', 'pct_citations_low', 'pct_citations_med', 'pct_citations_high', 'popularity_works', 'popularity_citations']
+DIVERSITY_METRICS = ['div_gender', 'div_ethnicity', 'div_location', 'div_productivity_works', 'div_productivity_citations']
+POPULARITY_METRICS = ['popularity_works', 'popularity_citations']
+PROMINENCE_METRICS = ['pct_works_low', 'pct_works_med', 'pct_works_high', 'pct_citations_low', 'pct_citations_med', 'pct_citations_high']
 
 TECHNICAL_METRICS = ['validity','refusals','consistency','duplicates'] + FACTUALITY_METRICS
-SOCIAL_METRICS = PARITY_METRICS + DIVERSITY_METRICS + POPULARITY_METRICS
+SOCIAL_METRICS = PARITY_METRICS + DIVERSITY_METRICS + PROMINENCE_METRICS + POPULARITY_METRICS
 
 TECHNICAL_METRICS_NORM = ['validity','refusals_c','duplicates_c'] + FACTUALITY_METRICS
 
