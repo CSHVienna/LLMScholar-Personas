@@ -10,12 +10,7 @@ Pipeline (each step only handles items not already resolved):
   2. DuckDB authors EXACT        — single scan, normalized match against
                                     display_name AND display_name_alternatives;
                                     best author per name by citations. Fast.
-  3. DuckDB authors JW           — for names not resolved by exact match,
-                                    Jaro-Winkler similarity (≥0.85) against
-                                    candidates pre-blocked by the first 2
-                                    chars of the last name. Catches LLM
-                                    name variants ("J Smith" vs "John Smith").
-  4. DuckDB works    (--db_path) — for resolved oa_ids, derive country and
+  3. DuckDB works    (--db_path) — for resolved oa_ids, derive country and
                                     institution from the most-recent paper
                                     (the `authors.last_known_institution` field
                                     in the snapshot is empty, so we use
@@ -26,47 +21,63 @@ Output columns added:
   oa_h_index, oa_i10_index, oa_first_pub_year, oa_last_pub_year, oa_career_age,
   oa_country_code, oa_last_institution
 
-Usage (from code/scripts/factuality/):
-  python factuality_openalex.py \\
-      --input  ../../../results/summary/factuality_author_jw.csv \\
-      --output ../../../results/summary/factuality_oa.csv \\
-      --db_path /data/datasets/LLMScholar-Personas/data/openalex_latest.duckdb \\
-      --cache  ../../../results/summary/.oa_cache.pkl \\
+Usage (from code/, with PYTHONPATH=.):
+  python scripts/factuality/factuality_openalex.py \\
+      --input    ../results/summary/factuality_author_jw.csv \\
+      --output   ../results/summary/factuality_oa.csv \\
+      --db_path  <path_to_oa_duckdb> \\
+      --cache    ../results/summary/.oa_cache.pkl \\
       [--skip_works]
+
+Defaults for paths come from [data] in config.ini.
 """
 
 import argparse
-import logging
 import os
-import pickle
 import re
 import time
 import unicodedata
 
 import pandas as pd
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+from libs.utils.config import config_default
+from libs.utils.ios import (
+    load_pickle,
+    read_input_csv,
+    save_pickle,
+    write_output_csv,
+)
+from libs.utils.logging import log_value_counts, setup_logging
+
+logger = setup_logging()
+
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-WORKS_TMP_DIR    = "/data/asanchez/duckdb_enrich"
-JW_THRESHOLD          = 0.85   # JW threshold on full normalized name
-JW_FIRST_THRESHOLD    = 0.80   # JW threshold on first-name token (same person check)
+WORKS_TMP_DIR = config_default("oa_works_tmp_dir") or "."
+JW_THRESHOLD = 0.85  # JW threshold on full normalized name
+JW_FIRST_THRESHOLD = 0.80  # JW threshold on first-name token (same person check)
 # These thresholds are combined with EXACT last-name token match in _AUTHORS_JW_QUERY.
 # The actual JW score is preserved in the `oa_match_score` output column so downstream
 # notebooks can filter further (e.g. >=0.95 for stricter match).
 
-STATUS_FOUND     = "found"
+STATUS_FOUND = "found"
 STATUS_NOT_FOUND = "not_found"
 
 OA_COLS: list[str] = [
-    "oa_status", "oa_id", "oa_display_name",
-    "oa_works_count", "oa_cited_by_count",
-    "oa_h_index", "oa_i10_index",
-    "oa_first_pub_year", "oa_last_pub_year", "oa_career_age",
-    "oa_country_code", "oa_last_institution",
-    "oa_match_score",   # 1.0 = exact normalized match; <1.0 = JW fuzzy match
+    "oa_status",
+    "oa_id",
+    "oa_display_name",
+    "oa_works_count",
+    "oa_cited_by_count",
+    "oa_h_index",
+    "oa_i10_index",
+    "oa_first_pub_year",
+    "oa_last_pub_year",
+    "oa_career_age",
+    "oa_country_code",
+    "oa_last_institution",
+    "oa_match_score",  # 1.0 = exact normalized match; <1.0 = JW fuzzy match
 ]
 
 
@@ -87,7 +98,10 @@ def normalize_name(name: str) -> str:
 
 # ── Career age helper ──────────────────────────────────────────────────────────
 
-def _career_age(counts_by_year: list[dict]) -> tuple[int | None, int | None, int | None]:
+
+def _career_age(
+    counts_by_year: list[dict],
+) -> tuple[int | None, int | None, int | None]:
     years = [int(e["year"]) for e in counts_by_year if e.get("works_count", 0) > 0]
     if not years:
         return None, None, None
@@ -100,8 +114,10 @@ def _empty_record() -> dict:
 
 # ── DuckDB connection helper ───────────────────────────────────────────────────
 
+
 def _open_duckdb(db_path: str):
     import duckdb  # noqa: F401  (import error handled by callers)
+
     con = duckdb.connect(db_path, read_only=True)
     cores = os.cpu_count() or 8
     try:
@@ -189,7 +205,9 @@ def resolve_via_authors(db_path: str, norm_names: list[str]) -> dict[str, dict |
         logger.info("DuckDB authors: scanning (%d unique queries) …", len(unique))
         t0 = time.time()
         rows = con.execute(_AUTHORS_QUERY).fetchall()
-        logger.info("DuckDB authors: %d rows returned (%.0fs)", len(rows), time.time() - t0)
+        logger.info(
+            "DuckDB authors: %d rows returned (%.0fs)", len(rows), time.time() - t0
+        )
     except Exception as exc:
         logger.warning("DuckDB authors query failed: %s", exc)
         con.close()
@@ -206,22 +224,25 @@ def resolve_via_authors(db_path: str, norm_names: list[str]) -> dict[str, dict |
             continue
         counts = counts_by_year or []
         first_year, last_year, age = _career_age(
-            [{"year": e["year"], "works_count": e.get("works_count", 0)} for e in counts]
+            [
+                {"year": e["year"], "works_count": e.get("works_count", 0)}
+                for e in counts
+            ]
         )
         out[norm] = {
-            "oa_status":           STATUS_FOUND,
-            "oa_id":               oa_id,
-            "oa_display_name":     display_name,
-            "oa_works_count":      works_count,
-            "oa_cited_by_count":   cited_by_count,
-            "oa_h_index":          None,   # not in snapshot
-            "oa_i10_index":        None,
-            "oa_first_pub_year":   first_year,
-            "oa_last_pub_year":    last_year,
-            "oa_career_age":       age,
-            "oa_country_code":     None,   # filled later by works scan
-            "oa_last_institution": None,   # filled later by works scan
-            "oa_match_score":      1.0,    # exact normalized match
+            "oa_status": STATUS_FOUND,
+            "oa_id": oa_id,
+            "oa_display_name": display_name,
+            "oa_works_count": works_count,
+            "oa_cited_by_count": cited_by_count,
+            "oa_h_index": None,  # not in snapshot
+            "oa_i10_index": None,
+            "oa_first_pub_year": first_year,
+            "oa_last_pub_year": last_year,
+            "oa_career_age": age,
+            "oa_country_code": None,  # filled later by works scan
+            "oa_last_institution": None,  # filled later by works scan
+            "oa_match_score": 1.0,  # exact normalized match
         }
     logger.info("DuckDB authors: resolved %d / %d names", len(out), len(unique))
     return out
@@ -324,11 +345,17 @@ def resolve_via_jw(db_path: str, norm_names: list[str]) -> dict[str, dict | None
     con = _open_duckdb(db_path)
     try:
         con.register("query_names", pd.DataFrame({"norm": unique}))
-        logger.info("DuckDB JW: scanning + JW for %d unresolved names "
-                    "(full>=%.2f, first>=%.2f, last=exact) …",
-                    len(unique), JW_THRESHOLD, JW_FIRST_THRESHOLD)
+        logger.info(
+            "DuckDB JW: scanning + JW for %d unresolved names "
+            "(full>=%.2f, first>=%.2f, last=exact) …",
+            len(unique),
+            JW_THRESHOLD,
+            JW_FIRST_THRESHOLD,
+        )
         t0 = time.time()
-        rows = con.execute(_AUTHORS_JW_QUERY, [JW_THRESHOLD, JW_FIRST_THRESHOLD]).fetchall()
+        rows = con.execute(
+            _AUTHORS_JW_QUERY, [JW_THRESHOLD, JW_FIRST_THRESHOLD]
+        ).fetchall()
         logger.info("DuckDB JW: %d rows returned (%.0fs)", len(rows), time.time() - t0)
     except Exception as exc:
         logger.warning("DuckDB JW query failed: %s", exc)
@@ -341,31 +368,45 @@ def resolve_via_jw(db_path: str, norm_names: list[str]) -> dict[str, dict | None
             pass
 
     out: dict[str, dict | None] = {}
-    for oa_id, display_name, works_count, cited_by_count, counts_by_year, query_norm, jw_score in rows:
+    for (
+        oa_id,
+        display_name,
+        works_count,
+        cited_by_count,
+        counts_by_year,
+        query_norm,
+        jw_score,
+    ) in rows:
         if query_norm in out:
             continue
         counts = counts_by_year or []
         first_year, last_year, age = _career_age(
-            [{"year": e["year"], "works_count": e.get("works_count", 0)} for e in counts]
+            [
+                {"year": e["year"], "works_count": e.get("works_count", 0)}
+                for e in counts
+            ]
         )
         out[query_norm] = {
-            "oa_status":           STATUS_FOUND,
-            "oa_id":               oa_id,
-            "oa_display_name":     display_name,
-            "oa_works_count":      works_count,
-            "oa_cited_by_count":   cited_by_count,
-            "oa_h_index":          None,
-            "oa_i10_index":        None,
-            "oa_first_pub_year":   first_year,
-            "oa_last_pub_year":    last_year,
-            "oa_career_age":       age,
-            "oa_country_code":     None,
+            "oa_status": STATUS_FOUND,
+            "oa_id": oa_id,
+            "oa_display_name": display_name,
+            "oa_works_count": works_count,
+            "oa_cited_by_count": cited_by_count,
+            "oa_h_index": None,
+            "oa_i10_index": None,
+            "oa_first_pub_year": first_year,
+            "oa_last_pub_year": last_year,
+            "oa_career_age": age,
+            "oa_country_code": None,
             "oa_last_institution": None,
-            "oa_match_score":      float(jw_score),   # JW score for downstream filtering
+            "oa_match_score": float(jw_score),  # JW score for downstream filtering
         }
-    logger.info("DuckDB JW: resolved %d / %d names (avg score in matches: %.3f)",
-                len(out), len(unique),
-                (sum(r[6] for r in rows if r[5] in out) / max(len(out), 1)))
+    logger.info(
+        "DuckDB JW: resolved %d / %d names (avg score in matches: %.3f)",
+        len(out),
+        len(unique),
+        (sum(r[6] for r in rows if r[5] in out) / max(len(out), 1)),
+    )
     return out
 
 
@@ -397,7 +438,7 @@ def resolve_via_jw(db_path: str, norm_names: list[str]) -> dict[str, dict | None
 # is already inline in the struct, so we use it directly instead of looking up
 # inst_id against the institutions table.
 
-WORKS_AGG_DIR = "/data/asanchez/duckdb_enrich/oa_works_agg_chunks"
+WORKS_AGG_DIR = os.path.join(WORKS_TMP_DIR, "oa_works_agg_chunks")
 
 # Chunks are tuples of (label, sql_predicate). Predicate plugs into the
 # `WHERE inst.country_code IS NOT NULL AND <predicate>` clause. Label is used
@@ -413,26 +454,26 @@ WORKS_AGG_DIR = "/data/asanchez/duckdb_enrich/oa_works_agg_chunks"
 # Order is recent → old so an early-bail still covers most authors' most-
 # recent papers (ARG_MAX wins from the latest chunk that resolved them).
 YEAR_CHUNKS: list[tuple[str, str]] = [
-    ("2024",      "publication_year = 2024"),                                       # 30M ✓
-    ("2025_a",    "publication_year = 2025 AND hash(w.id) % 3 = 0"),                # ~15M
-    ("2025_b",    "publication_year = 2025 AND hash(w.id) % 3 = 1"),                # ~15M
-    ("2025_c",    "publication_year = 2025 AND hash(w.id) % 3 = 2"),                # ~15M
-    ("2026_plus", "publication_year BETWEEN 2026 AND 2999"),                        # ~12M
-    ("2023",      "publication_year = 2023"),                                       # 22M
-    ("2022",      "publication_year = 2022"),                                       # 17M
-    ("2021",      "publication_year = 2021"),                                       # 17M
-    ("2020",      "publication_year = 2020"),                                       # 16M
-    ("2019",      "publication_year = 2019"),                                       # 17M
-    ("2018",      "publication_year = 2018"),                                       # 15M
-    ("2017",      "publication_year = 2017"),                                       # 15M
-    ("2015_2016", "publication_year BETWEEN 2015 AND 2016"),                        # 32M (edge)
-    ("2013_2014", "publication_year BETWEEN 2013 AND 2014"),                        # 27M
-    ("2011_2012", "publication_year BETWEEN 2011 AND 2012"),                        # 23M
-    ("2008_2010", "publication_year BETWEEN 2008 AND 2010"),                        # ~28M
-    ("2004_2007", "publication_year BETWEEN 2004 AND 2007"),                        # ~25M
-    ("2000_2003", "publication_year BETWEEN 2000 AND 2003"),                        # ~17M
-    ("1990_1999", "publication_year BETWEEN 1990 AND 1999"),                        # legacy
-    ("pre1990",   "publication_year BETWEEN 1500 AND 1989"),                        # legacy
+    ("2024", "publication_year = 2024"),  # 30M ✓
+    ("2025_a", "publication_year = 2025 AND hash(w.id) % 3 = 0"),  # ~15M
+    ("2025_b", "publication_year = 2025 AND hash(w.id) % 3 = 1"),  # ~15M
+    ("2025_c", "publication_year = 2025 AND hash(w.id) % 3 = 2"),  # ~15M
+    ("2026_plus", "publication_year BETWEEN 2026 AND 2999"),  # ~12M
+    ("2023", "publication_year = 2023"),  # 22M
+    ("2022", "publication_year = 2022"),  # 17M
+    ("2021", "publication_year = 2021"),  # 17M
+    ("2020", "publication_year = 2020"),  # 16M
+    ("2019", "publication_year = 2019"),  # 17M
+    ("2018", "publication_year = 2018"),  # 15M
+    ("2017", "publication_year = 2017"),  # 15M
+    ("2015_2016", "publication_year BETWEEN 2015 AND 2016"),  # 32M (edge)
+    ("2013_2014", "publication_year BETWEEN 2013 AND 2014"),  # 27M
+    ("2011_2012", "publication_year BETWEEN 2011 AND 2012"),  # 23M
+    ("2008_2010", "publication_year BETWEEN 2008 AND 2010"),  # ~28M
+    ("2004_2007", "publication_year BETWEEN 2004 AND 2007"),  # ~25M
+    ("2000_2003", "publication_year BETWEEN 2000 AND 2003"),  # ~17M
+    ("1990_1999", "publication_year BETWEEN 1990 AND 1999"),  # legacy
+    ("pre1990", "publication_year BETWEEN 1500 AND 1989"),  # legacy
 ]
 
 
@@ -444,10 +485,15 @@ def _build_works_agg_chunk(db_path: str, label: str, predicate: str) -> None:
     """Aggregate a single chunk (defined by predicate) into its parquet.
     Idempotent — skips if the parquet already exists and is non-empty."""
     import duckdb  # noqa: F401
+
     out = _chunk_path(label)
     if os.path.exists(out) and os.path.getsize(out) > 0:
-        logger.info("DuckDB chunk %s: reusing %s (%.2f GB)",
-                    label, out, os.path.getsize(out) / 1e9)
+        logger.info(
+            "DuckDB chunk %s: reusing %s (%.2f GB)",
+            label,
+            out,
+            os.path.getsize(out) / 1e9,
+        )
         return
 
     # If a zero-byte stub from a killed previous run is here, nuke it.
@@ -459,7 +505,8 @@ def _build_works_agg_chunk(db_path: str, label: str, predicate: str) -> None:
     con = _open_duckdb(db_path)
     try:
         t0 = time.time()
-        con.execute(f"""
+        con.execute(
+            f"""
             COPY (
               SELECT
                 au.author.id                                       AS oa_id,
@@ -473,10 +520,12 @@ def _build_works_agg_chunk(db_path: str, label: str, predicate: str) -> None:
                 AND ({predicate})
               GROUP BY au.author.id
             ) TO '{out}' (FORMAT PARQUET)
-        """)
+        """
+        )
         size_gb = os.path.getsize(out) / 1e9
-        logger.info("DuckDB chunk %s: built (%.2f GB, %.0fs)",
-                    label, size_gb, time.time() - t0)
+        logger.info(
+            "DuckDB chunk %s: built (%.2f GB, %.0fs)", label, size_gb, time.time() - t0
+        )
     finally:
         try:
             con.close()
@@ -498,7 +547,9 @@ def _build_all_chunks(db_path: str) -> None:
             pass
 
 
-def resolve_country_via_works(db_path: str, oa_ids: list[str]) -> dict[str, tuple[str | None, str | None]]:
+def resolve_country_via_works(
+    db_path: str, oa_ids: list[str]
+) -> dict[str, tuple[str | None, str | None]]:
     """Build (or reuse) year-range chunk Parquets, then filter+merge across
     chunks to derive (country, institution_display_name) per oa_id from each
     author's most-recent paper.
@@ -523,8 +574,11 @@ def resolve_country_via_works(db_path: str, oa_ids: list[str]) -> dict[str, tupl
         return {}
 
     chunk_glob = os.path.join(WORKS_AGG_DIR, "chunk_*.parquet")
-    logger.info("DuckDB chunks: filtering+merging across %s for %d oa_ids …",
-                chunk_glob, len(set(oa_ids)))
+    logger.info(
+        "DuckDB chunks: filtering+merging across %s for %d oa_ids …",
+        chunk_glob,
+        len(set(oa_ids)),
+    )
     t0 = time.time()
     con = _open_duckdb(db_path)
     try:
@@ -532,7 +586,8 @@ def resolve_country_via_works(db_path: str, oa_ids: list[str]) -> dict[str, tupl
         # Cross-chunk dedup: ARG_MAX picks the (country, inst_name) from the
         # chunk with the highest last_year per oa_id. Filter via JOIN keeps
         # only the 606K oa_ids of interest.
-        rows = con.execute(f"""
+        rows = con.execute(
+            f"""
             SELECT
               p.oa_id,
               ARG_MAX(p.country,   p.last_year) AS country,
@@ -540,9 +595,11 @@ def resolve_country_via_works(db_path: str, oa_ids: list[str]) -> dict[str, tupl
             FROM read_parquet('{chunk_glob}') p
             JOIN query_oa_ids q ON p.oa_id = q.id
             GROUP BY p.oa_id
-        """).fetchall()
-        logger.info("DuckDB chunks: %d oa_ids resolved (%.0fs)",
-                    len(rows), time.time() - t0)
+        """
+        ).fetchall()
+        logger.info(
+            "DuckDB chunks: %d oa_ids resolved (%.0fs)", len(rows), time.time() - t0
+        )
     except Exception as exc:
         logger.warning("DuckDB chunks filter/merge failed: %s", exc)
         return {}
@@ -557,32 +614,17 @@ def resolve_country_via_works(db_path: str, oa_ids: list[str]) -> dict[str, tupl
 
 # ── Persistent cache ───────────────────────────────────────────────────────────
 
+
 def load_cache(path: str | None) -> dict[str, dict | None]:
-    if not path or not os.path.exists(path):
-        return {}
-    try:
-        with open(path, "rb") as f:
-            cache = pickle.load(f)
-        logger.info("Cache: loaded %d entries from %s", len(cache), path)
-        return cache
-    except Exception as exc:
-        logger.warning("Cache: failed to load %s (%s) — starting empty", path, exc)
-        return {}
+    return load_pickle(path, logger=logger) or {}
 
 
 def save_cache(cache: dict[str, dict | None], path: str | None) -> None:
-    if not path:
-        return
-    try:
-        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-        with open(path, "wb") as f:
-            pickle.dump(cache, f, protocol=pickle.HIGHEST_PROTOCOL)
-        logger.info("Cache: saved %d entries to %s", len(cache), path)
-    except Exception as exc:
-        logger.warning("Cache: failed to save %s (%s)", path, exc)
+    save_pickle(cache, path, logger=logger)
 
 
 # ── Main pipeline ──────────────────────────────────────────────────────────────
+
 
 def run(
     input_path: str,
@@ -591,12 +633,14 @@ def run(
     cache_path: str | None = None,
     skip_works: bool = False,
 ) -> None:
-    logger.info("Loading input: %s", input_path)
-    df = pd.read_csv(input_path, low_memory=False)
-    logger.info("Rows: %d", len(df))
+    df = read_input_csv(input_path, logger=logger)
 
     norm_series = (
-        (df["name"].fillna("").astype(str) + " " + df["lastname"].fillna("").astype(str))
+        (
+            df["name"].fillna("").astype(str)
+            + " "
+            + df["lastname"].fillna("").astype(str)
+        )
         .str.strip()
         .map(normalize_name)
     )
@@ -606,29 +650,23 @@ def run(
     # 1. persistent cache
     cache = load_cache(cache_path)
     pending = [n for n in unique_norms if n not in cache]
-    logger.info("Cache: %d hit / %d total (pending: %d)",
-                len(unique_norms) - len(pending), len(unique_norms), len(pending))
+    logger.info(
+        "Cache: %d hit / %d total (pending: %d)",
+        len(unique_norms) - len(pending),
+        len(unique_norms),
+        len(pending),
+    )
 
     # 2. DuckDB authors — exact match (fast)
     if pending and db_path:
         cache.update(resolve_via_authors(db_path, pending))
-        save_cache(cache, cache_path)   # checkpoint: safe to Ctrl+C from here
+        save_cache(cache, cache_path)  # checkpoint: safe to Ctrl+C from here
 
-    # 2.5 DuckDB authors — JW fuzzy match for names exact-match missed
-    if db_path:
-        unresolved = [n for n in unique_norms if n not in cache or not cache[n].get("oa_id")]
-        # avoid re-running JW on names we already tried-and-failed in a previous run
-        unresolved = [n for n in unresolved
-                      if n not in cache or not cache[n].get("_jw_tried")]
-        if unresolved:
-            jw_resolved = resolve_via_jw(db_path, unresolved)
-            for n in unresolved:
-                # mark as JW-tried regardless (so re-runs skip)
-                if n in jw_resolved:
-                    cache[n] = jw_resolved[n]
-                cache.setdefault(n, _empty_record())
-                cache[n]["_jw_tried"] = True
-            save_cache(cache, cache_path)   # checkpoint: safe to Ctrl+C from here
+    # Stage B (JW fuzzy fallback) disabled — manual validation 20-request
+    # sample showed 10% precision on fuzzy matches vs 78% on exact, so the
+    # marginal recall does not offset the homonym noise. The function
+    # `resolve_via_jw` is left defined above in case we want to re-enable it
+    # with a higher threshold (>=0.95) and/or a mandatory field-check.
 
     # mark unresolved names as not_found (so re-runs don't retry)
     for n in unique_norms:
@@ -638,7 +676,8 @@ def run(
     # 3. DuckDB works → fresh country + institution per oa_id (skip already-tried)
     if not skip_works and db_path:
         oa_ids = [
-            rec["oa_id"] for rec in cache.values()
+            rec["oa_id"]
+            for rec in cache.values()
             if rec and rec.get("oa_id") and not rec.get("_works_tried")
         ]
         if oa_ids:
@@ -658,9 +697,13 @@ def run(
                         rec["oa_last_institution"] = inst_name
                     updated += 1
                 rec["_works_tried"] = True
-            logger.info("Works enrichment: filled country/institution for %d oa_ids", updated)
+            logger.info(
+                "Works enrichment: filled country/institution for %d oa_ids", updated
+            )
         else:
-            logger.info("Works enrichment: nothing to fetch (all oa_ids already attempted)")
+            logger.info(
+                "Works enrichment: nothing to fetch (all oa_ids already attempted)"
+            )
 
     # persist cache
     save_cache(cache, cache_path)
@@ -670,38 +713,56 @@ def run(
     for col in OA_COLS:
         df[col] = [r[col] for r in records]
 
-    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    df.to_csv(output_path, index=False)
-    logger.info("Saved %d rows → %s", len(df), output_path)
-
+    write_output_csv(df, output_path, logger=logger)
+    log_value_counts(
+        df, "oa_status", title="OpenAlex status distribution", width=12, logger=logger
+    )
     n = len(df)
-    logger.info("OpenAlex status distribution:")
-    for status, count in df["oa_status"].value_counts().items():
-        logger.info("  %-12s %6d  (%.1f%%)", status, count, 100 * count / n)
     has_country = df["oa_country_code"].notna().sum()
-    has_inst    = df["oa_last_institution"].notna().sum()
-    logger.info("  oa_country_code     populated: %d (%.1f%%)", has_country, 100 * has_country / n)
-    logger.info("  oa_last_institution populated: %d (%.1f%%)", has_inst,    100 * has_inst    / n)
+    has_inst = df["oa_last_institution"].notna().sum()
+    logger.info(
+        "  oa_country_code     populated: %d (%.1f%%)",
+        has_country,
+        100 * has_country / n,
+    )
+    logger.info(
+        "  oa_last_institution populated: %d (%.1f%%)", has_inst, 100 * has_inst / n
+    )
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="OpenAlex enrichment for the factuality pipeline (DuckDB only)")
-    parser.add_argument("--input", required=True,
-                        help="Input CSV (e.g. factuality_author_jw.csv)")
-    parser.add_argument("--output", required=True,
-                        help="Output CSV (input columns + oa_* columns)")
-    parser.add_argument("--db_path", default=None,
-                        help="Path to openalex_latest.duckdb (used for both authors and works lookups)")
-    parser.add_argument("--cache", default=None,
-                        help="Path to persistent pickle cache (resume across runs)")
-    parser.add_argument("--skip_works", action="store_true",
-                        help="Skip works streaming (country/institution lookup) — faster but no location data")
+    parser = argparse.ArgumentParser(
+        description="OpenAlex enrichment for the factuality pipeline (DuckDB only)"
+    )
+    parser.add_argument(
+        "--input", required=True, help="Input CSV (e.g. factuality_author_jw.csv)"
+    )
+    parser.add_argument(
+        "--output", required=True, help="Output CSV (input columns + oa_* columns)"
+    )
+    parser.add_argument(
+        "--db_path",
+        default=None,
+        help="Path to openalex_latest.duckdb (used for both authors and works lookups)",
+    )
+    parser.add_argument(
+        "--cache",
+        default=None,
+        help="Path to persistent pickle cache (resume across runs)",
+    )
+    parser.add_argument(
+        "--skip_works",
+        action="store_true",
+        help="Skip works streaming (country/institution lookup) — faster but no location data",
+    )
     args = parser.parse_args()
 
     run(
-        args.input, args.output,
+        args.input,
+        args.output,
         db_path=args.db_path,
         cache_path=args.cache,
         skip_works=args.skip_works,

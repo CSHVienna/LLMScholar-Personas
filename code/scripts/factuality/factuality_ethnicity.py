@@ -14,21 +14,22 @@ Output columns added:
   perceived_ethnicity   {Asian | White | Black or African American
                          | Hispanic or Latino | Unknown}
 
-Usage (from code/scripts/):
-  python factuality_ethnicity.py \\
-      --input             ../../../results/summary/factuality_location.csv \\
-      --ethnicity_lookup  ../../../results/summary/recommendations_with_ethnicity.csv \\
-      --output            ../../../results/summary/factuality_ethnicity.csv
+Usage (from code/, with PYTHONPATH=.):
+  python scripts/factuality/factuality_ethnicity.py \\
+      --input             ../results/summary/factuality_affiliation.csv \\
+      --ethnicity_lookup  ../results/summary/recommendations_with_ethnicity.csv \\
+      --output            ../results/summary/factuality_full.csv
 """
 
 import argparse
-import logging
-import os
 
 import pandas as pd
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+from libs.utils.cli import add_io_args
+from libs.utils.ios import read_input_csv, write_output_csv
+from libs.utils.logging import log_value_counts, setup_logging
+
+logger = setup_logging()
 
 LOOKUP_COLS = ["name", "lastname", "perceived_ethnicity"]
 
@@ -40,7 +41,7 @@ def _build_lookup(lookup_path: str) -> dict[tuple[str, str], str]:
     logger.info("Lookup rows: %d", len(df))
 
     df = df.dropna(subset=["name", "lastname", "perceived_ethnicity"])
-    df["name"]     = df["name"].astype(str).str.strip()
+    df["name"] = df["name"].astype(str).str.strip()
     df["lastname"] = df["lastname"].astype(str).str.strip()
 
     df = df.drop_duplicates(subset=["name", "lastname"], keep="first")
@@ -51,12 +52,9 @@ def _build_lookup(lookup_path: str) -> dict[tuple[str, str], str]:
 
 def run(input_path: str, lookup_path: str, output_path: str) -> None:
     lookup = _build_lookup(lookup_path)
+    df = read_input_csv(input_path, logger=logger)
 
-    logger.info("Loading: %s", input_path)
-    df = pd.read_csv(input_path, low_memory=False)
-    logger.info("Rows: %d", len(df))
-
-    names     = df["name"].fillna("").astype(str).str.strip()
+    names = df["name"].fillna("").astype(str).str.strip()
     lastnames = df["lastname"].fillna("").astype(str).str.strip()
 
     df["perceived_ethnicity"] = [
@@ -64,25 +62,31 @@ def run(input_path: str, lookup_path: str, output_path: str) -> None:
     ]
 
     n_unknown = (df["perceived_ethnicity"] == "Unknown").sum()
-    logger.info("Lookup hits: %d / %d  (Unknown: %d)", len(df) - n_unknown, len(df), n_unknown)
+    logger.info(
+        "Lookup hits: %d / %d  (Unknown: %d)", len(df) - n_unknown, len(df), n_unknown
+    )
 
-    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
-    df.to_csv(output_path, index=False)
-    logger.info("Saved %d rows → %s", len(df), output_path)
-
-    n = len(df)
-    logger.info("Perceived ethnicity distribution:")
-    for cat, count in df["perceived_ethnicity"].value_counts().items():
-        logger.info("  %-28s %6d  (%.1f%%)", cat, count, 100 * count / n)
+    write_output_csv(df, output_path, logger=logger)
+    log_value_counts(
+        df, "perceived_ethnicity",
+        title="Perceived ethnicity distribution", width=28, logger=logger,
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Step 5: join pre-computed perceived_ethnicity from recommendations_with_ethnicity.csv"
     )
-    parser.add_argument("--input",            required=True, help="Path to factuality_location.csv (output of step 4)")
-    parser.add_argument("--ethnicity_lookup", required=True, help="Path to recommendations_with_ethnicity.csv")
-    parser.add_argument("--output",           required=True, help="Output CSV path (final factuality dataset)")
+    add_io_args(
+        parser,
+        input_help="Path to factuality_location.csv (output of step 4)",
+        output_help="Output CSV path (final factuality dataset)",
+    )
+    parser.add_argument(
+        "--ethnicity_lookup",
+        required=True,
+        help="Path to recommendations_with_ethnicity.csv",
+    )
     args = parser.parse_args()
 
     run(args.input, args.ethnicity_lookup, args.output)

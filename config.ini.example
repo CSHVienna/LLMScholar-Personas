@@ -1,0 +1,23 @@
+# Copy this file to config.ini and edit the paths for your environment.
+# config.ini is gitignored.
+
+[secrets]
+keys_dir = <path_to_keys_dir>
+
+[openai]
+data_dir = ${secrets:keys_dir}/openai_api_key.txt
+
+[namsor]
+data_dir = ${secrets:keys_dir}/namsor_api_key.txt
+
+[data]
+# Semantic Scholar deduplicated researchers (parquet).
+ss_parquet       = <path_to_ss_parquet>
+# Root of the Semantic Scholar dataset (contains per-field ranking CSVs).
+ss_data_dir      = <path_to_ss_data_dir>
+# OpenAlex snapshot (DuckDB file).
+oa_duckdb        = <path_to_oa_duckdb>
+# Temporary directory for OpenAlex works enrichment chunks.
+oa_works_tmp_dir = <path_to_oa_works_tmp_dir>
+# Root of the results directory (CSV tables, plots, cache, ...).
+results_dir      = ../results

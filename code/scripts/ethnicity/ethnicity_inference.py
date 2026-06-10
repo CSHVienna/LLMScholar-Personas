@@ -19,7 +19,6 @@ Valid output categories:
   - Unknown
 """
 
-import logging
 import os
 
 # Must be set before any TensorFlow/Keras import
@@ -29,16 +28,15 @@ import numpy as np
 import pandas as pd
 import torch
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+from libs.utils.ios import read_input_csv, write_output_csv
+from libs.utils.logging import setup_logging
+
+logger = setup_logging()
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
-DEMOGRAPHICX_THRESHOLD = 0.5   # min max-probability to trust demographicx
-ETHNICOLR_THRESHOLD    = 0.5   # min max-probability to trust ethnicolr
+DEMOGRAPHICX_THRESHOLD = 0.5  # min max-probability to trust demographicx
+ETHNICOLR_THRESHOLD = 0.5  # min max-probability to trust ethnicolr
 
 # Canonical 5 categories
 VALID_CATEGORIES = [
@@ -51,22 +49,27 @@ VALID_CATEGORIES = [
 
 # demographicx output indices → canonical categories
 # Model output order: [white, hispanic, black, asian]  (from classifier.py)
-_DEMOGRAPHICX_LABELS = ["White", "Hispanic or Latino", "Black or African American", "Asian"]
+_DEMOGRAPHICX_LABELS = [
+    "White",
+    "Hispanic or Latino",
+    "Black or African American",
+    "Asian",
+]
 
 # ethnicolr 'race' column values → canonical categories
 _ETHNICOLR_MAP = {
-    "nh_white":  "White",
-    "asian":     "Asian",
-    "hispanic":  "Hispanic or Latino",
-    "nh_black":  "Black or African American",
+    "nh_white": "White",
+    "asian": "Asian",
+    "hispanic": "Hispanic or Latino",
+    "nh_black": "Black or African American",
 }
 _ETHNICOLR_PROB_COLS = ["nh_white", "asian", "hispanic", "nh_black"]
 
 # ─── Lazy model singletons ───────────────────────────────────────────────────
 
-_demographicx_model     = None
+_demographicx_model = None
 _demographicx_tokenizer = None
-_ethnicolr_ready        = False
+_ethnicolr_ready = False
 
 
 def _load_demographicx():
@@ -74,7 +77,8 @@ def _load_demographicx():
     global _demographicx_model, _demographicx_tokenizer
     if _demographicx_model is None:
         logger.info("Loading demographicx BERT model (liamliang/demographics_race_v2)…")
-        from transformers import BertForSequenceClassification, AutoTokenizer
+        from transformers import AutoTokenizer, BertForSequenceClassification
+
         _demographicx_model = BertForSequenceClassification.from_pretrained(
             "liamliang/demographics_race_v2"
         )
@@ -88,10 +92,12 @@ def _load_ethnicolr():
     global _ethnicolr_ready
     if not _ethnicolr_ready:
         import ethnicolr  # noqa: F401 — side-effect: downloads models on first use
+
         _ethnicolr_ready = True
 
 
 # ─── Core inference ──────────────────────────────────────────────────────────
+
 
 def _demographicx_batch(names: list[str]) -> list[dict]:
     """
@@ -103,6 +109,7 @@ def _demographicx_batch(names: list[str]) -> list[dict]:
     if confidence < threshold.
     """
     _load_demographicx()
+
     # Replicate demographicx.classifier.get_name_pair logic exactly:
     # input is (word-level name, char-level name), both lowercased;
     # double spaces from embedded spaces in name are collapsed.
@@ -125,20 +132,26 @@ def _demographicx_batch(names: list[str]) -> list[dict]:
         probs = torch.softmax(logits, dim=1).numpy()
     except Exception as exc:
         logger.warning("demographicx batch failed: %s", exc)
-        return [{"category": None, "confidence": 0.0, "source": "demographicx"}] * len(names)
+        return [{"category": None, "confidence": 0.0, "source": "demographicx"}] * len(
+            names
+        )
 
     results = []
     for prob_row in probs:
         max_idx = int(np.argmax(prob_row))
         confidence = float(prob_row[max_idx])
         if confidence >= DEMOGRAPHICX_THRESHOLD:
-            results.append({
-                "category":   _DEMOGRAPHICX_LABELS[max_idx],
-                "confidence": confidence,
-                "source":     "demographicx",
-            })
+            results.append(
+                {
+                    "category": _DEMOGRAPHICX_LABELS[max_idx],
+                    "confidence": confidence,
+                    "source": "demographicx",
+                }
+            )
         else:
-            results.append({"category": None, "confidence": confidence, "source": "demographicx"})
+            results.append(
+                {"category": None, "confidence": confidence, "source": "demographicx"}
+            )
     return results
 
 
@@ -160,10 +173,14 @@ def _ethnicolr_batch(full_names: list[str]) -> list[dict]:
         if len(parts) >= 2:
             rows.append({"__idx": len(rows), "first": parts[0], "last": parts[-1]})
         else:
-            rows.append({"__idx": len(rows), "first": parts[0] if parts else "", "last": ""})
+            rows.append(
+                {"__idx": len(rows), "first": parts[0] if parts else "", "last": ""}
+            )
 
     df = pd.DataFrame(rows)
-    defaults = [{"category": None, "confidence": 0.0, "source": "ethnicolr"}] * len(full_names)
+    defaults = [{"category": None, "confidence": 0.0, "source": "ethnicolr"}] * len(
+        full_names
+    )
 
     # Names with no last name cannot be processed by ethnicolr
     has_last = df["last"].str.strip() != ""
@@ -176,22 +193,24 @@ def _ethnicolr_batch(full_names: list[str]) -> list[dict]:
 
         for _, row in result.iterrows():
             idx = int(row["__idx"])
-            max_prob_col = max(_ETHNICOLR_PROB_COLS, key=lambda c: float(row.get(c, 0.0)))
+            max_prob_col = max(
+                _ETHNICOLR_PROB_COLS, key=lambda c: float(row.get(c, 0.0))
+            )
             confidence = float(row.get(max_prob_col, 0.0))
             race_label = str(row.get("race", "")).strip()
             canonical = _ETHNICOLR_MAP.get(race_label)
 
             if canonical and confidence >= ETHNICOLR_THRESHOLD:
                 defaults[idx] = {
-                    "category":   canonical,
+                    "category": canonical,
                     "confidence": confidence,
-                    "source":     "ethnicolr",
+                    "source": "ethnicolr",
                 }
             else:
                 defaults[idx] = {
-                    "category":   None,
+                    "category": None,
                     "confidence": confidence,
-                    "source":     "ethnicolr",
+                    "source": "ethnicolr",
                 }
     except Exception as exc:
         logger.warning("ethnicolr batch failed: %s", exc)
@@ -269,15 +288,16 @@ def infer_ethnicity_batch(
                 final_results[global_i] = res
             else:
                 final_results[global_i] = {
-                    "category":   "Unknown",
+                    "category": "Unknown",
                     "confidence": 0.0,
-                    "source":     "unknown",
+                    "source": "unknown",
                 }
 
     return final_results  # type: ignore[return-value]
 
 
 # ─── Application entry point ─────────────────────────────────────────────────
+
 
 def _apply_to_recommendations(
     input_path: str,
@@ -293,10 +313,8 @@ def _apply_to_recommendations(
     """
     from tqdm import tqdm
 
-    logger.info("Loading %s …", input_path)
-    df = pd.read_csv(input_path, low_memory=False)
+    df = read_input_csv(input_path, logger=logger)
     total_rows = len(df)
-    logger.info("Loaded %d rows.", total_rows)
 
     # Build full_name column
     df["__full_name"] = (
@@ -306,19 +324,23 @@ def _apply_to_recommendations(
     ).str.strip()
 
     # Rows without any name → Unknown immediately
-    no_name_mask = (
-        df["name"].isna() & df["lastname"].isna()
-    ) | (df["__full_name"] == "")
+    no_name_mask = (df["name"].isna() & df["lastname"].isna()) | (
+        df["__full_name"] == ""
+    )
 
     # Unique names that need inference
     names_to_infer = df.loc[~no_name_mask, "__full_name"].unique().tolist()
-    logger.info("Unique names to infer: %d (out of %d rows)", len(names_to_infer), total_rows)
+    logger.info(
+        "Unique names to infer: %d (out of %d rows)", len(names_to_infer), total_rows
+    )
 
     # ── Run cascade inference ────────────────────────────────────────────────
     categories: list[str] = []
-    sources:    list[str] = []
+    sources: list[str] = []
 
-    for i in tqdm(range(0, len(names_to_infer), batch_size), desc="Inferring ethnicity"):
+    for i in tqdm(
+        range(0, len(names_to_infer), batch_size), desc="Inferring ethnicity"
+    ):
         batch = names_to_infer[i : i + batch_size]
         results = infer_ethnicity_batch(batch, batch_size=batch_size)
         for r in results:
@@ -327,24 +349,28 @@ def _apply_to_recommendations(
 
     # ── Build lookup map ─────────────────────────────────────────────────────
     name_to_category = dict(zip(names_to_infer, categories))
-    name_to_source   = dict(zip(names_to_infer, sources))
+    name_to_source = dict(zip(names_to_infer, sources))
 
-    df["perceived_ethnicity"] = df["__full_name"].map(name_to_category).fillna("Unknown")
-    df["__ethnicity_source"]  = df["__full_name"].map(name_to_source).fillna("unknown")
+    df["perceived_ethnicity"] = (
+        df["__full_name"].map(name_to_category).fillna("Unknown")
+    )
+    df["__ethnicity_source"] = df["__full_name"].map(name_to_source).fillna("unknown")
 
     # Rows with no name get Unknown
     df.loc[no_name_mask, "perceived_ethnicity"] = "Unknown"
-    df.loc[no_name_mask, "__ethnicity_source"]  = "unknown"
+    df.loc[no_name_mask, "__ethnicity_source"] = "unknown"
 
     # ── Logging summary ──────────────────────────────────────────────────────
-    n_demo    = (df["__ethnicity_source"] == "demographicx").sum()
-    n_ethn    = (df["__ethnicity_source"] == "ethnicolr").sum()
+    n_demo = (df["__ethnicity_source"] == "demographicx").sum()
+    n_ethn = (df["__ethnicity_source"] == "ethnicolr").sum()
     n_unknown = (df["__ethnicity_source"] == "unknown").sum()
 
     logger.info("Classification breakdown (by row):")
-    logger.info("  demographicx : %d  (%.1f%%)", n_demo,    100 * n_demo    / total_rows)
-    logger.info("  ethnicolr    : %d  (%.1f%%)", n_ethn,    100 * n_ethn    / total_rows)
-    logger.info("  unknown      : %d  (%.1f%%)", n_unknown, 100 * n_unknown / total_rows)
+    logger.info("  demographicx : %d  (%.1f%%)", n_demo, 100 * n_demo / total_rows)
+    logger.info("  ethnicolr    : %d  (%.1f%%)", n_ethn, 100 * n_ethn / total_rows)
+    logger.info(
+        "  unknown      : %d  (%.1f%%)", n_unknown, 100 * n_unknown / total_rows
+    )
 
     logger.info("Perceived ethnicity distribution:")
     dist = df["perceived_ethnicity"].value_counts()
@@ -354,17 +380,21 @@ def _apply_to_recommendations(
     # ── Drop internal helper columns and save ────────────────────────────────
     df.drop(columns=["__full_name", "__ethnicity_source"], inplace=True)
 
-    logger.info("Saving to %s …", output_path)
-    df.to_csv(output_path, index=False)
-    logger.info("Done. Saved %d rows.", len(df))
+    write_output_csv(df, output_path, logger=logger)
 
     # ── Print summary to stdout ──────────────────────────────────────────────
     print("\n=== Ethnicity Inference Summary ===")
     print(f"Total rows processed  : {total_rows:,}")
     print(f"Unique names inferred : {len(names_to_infer):,}")
-    print(f"  classified by demographicx : {n_demo:,} rows ({100*n_demo/total_rows:.1f}%)")
-    print(f"  classified by ethnicolr    : {n_ethn:,} rows ({100*n_ethn/total_rows:.1f}%)")
-    print(f"  Unknown (no inference)     : {n_unknown:,} rows ({100*n_unknown/total_rows:.1f}%)")
+    print(
+        f"  classified by demographicx : {n_demo:,} rows ({100*n_demo/total_rows:.1f}%)"
+    )
+    print(
+        f"  classified by ethnicolr    : {n_ethn:,} rows ({100*n_ethn/total_rows:.1f}%)"
+    )
+    print(
+        f"  Unknown (no inference)     : {n_unknown:,} rows ({100*n_unknown/total_rows:.1f}%)"
+    )
     print("\nPerceived ethnicity distribution:")
     for cat, count in dist.items():
         print(f"  {cat:<30} {count:>8,}  ({100*count/total_rows:5.1f}%)")
@@ -376,15 +406,27 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Infer perceived ethnicity for LLMScholar-Personas recommendations."
     )
+    from libs.utils.config import get_results_path
+
+    try:
+        _results = get_results_path()
+        _default_input = str(_results / "summary" / "recommendations.csv")
+        _default_output = str(_results / "summary" / "recommendations_with_ethnicity.csv")
+    except (FileNotFoundError, KeyError, ValueError):
+        _default_input = None
+        _default_output = None
+
     parser.add_argument(
         "--input",
-        default="/data/datasets/LLMScholar-Personas/results/summary/recommendations.csv",
-        help="Path to input recommendations CSV",
+        default=_default_input,
+        required=_default_input is None,
+        help="Path to input recommendations CSV (default from [data].results_dir).",
     )
     parser.add_argument(
         "--output",
-        default="/data/datasets/LLMScholar-Personas/results/summary/recommendations_with_ethnicity.csv",
-        help="Path to output CSV (with perceived_ethnicity column added)",
+        default=_default_output,
+        required=_default_output is None,
+        help="Path to output CSV with perceived_ethnicity column added (default from [data].results_dir).",
     )
     parser.add_argument(
         "--batch-size",
