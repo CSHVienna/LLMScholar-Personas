@@ -251,7 +251,12 @@ def main() -> None:
         .map(GENDER_MAP)
     )
     df_valid_recommendations["author_id"] = df_valid_recommendations.oa_id.apply(
-        lambda v: v.split("/")[-1].strip() if pd.notna(v) and v != "" else None
+        # oa_id may arrive as a URL ("https://openalex.org/A123"), a bare numeric
+        # id (5003003822.0, read as float when the column has NaNs), or a plain
+        # string. Normalise all three to the trailing id token.
+        lambda v: (str(int(v)) if isinstance(v, float) else str(v)).split("/")[-1].strip()
+        if pd.notna(v) and v != ""
+        else None
     )
 
     # ── 5. Duplicates and author factuality ──────────────────────────────────
