@@ -586,13 +586,26 @@ def resolve_country_via_works(
         # Cross-chunk dedup: ARG_MAX picks the (country, inst_name) from the
         # chunk with the highest last_year per oa_id. Filter via JOIN keeps
         # only the 606K oa_ids of interest.
+        #
+        # The works table stores au.author.id as a URL ("https://openalex.org/A123")
+        # while the authors table (and therefore the resolved oa_ids passed in)
+        # uses the bare numeric id (123). Normalise the chunk side to the numeric
+        # id so the JOIN matches and the returned keys line up with rec["oa_id"];
+        # otherwise DuckDB tries to cast the URL to INT64 and the whole merge
+        # fails, leaving oa_country_code / oa_last_institution empty.
         rows = con.execute(
             f"""
+            WITH norm AS (
+              SELECT
+                TRY_CAST(replace(oa_id, 'https://openalex.org/A', '') AS BIGINT) AS oa_id,
+                country, inst_name, last_year
+              FROM read_parquet('{chunk_glob}')
+            )
             SELECT
               p.oa_id,
               ARG_MAX(p.country,   p.last_year) AS country,
               ARG_MAX(p.inst_name, p.last_year) AS inst_name
-            FROM read_parquet('{chunk_glob}') p
+            FROM norm p
             JOIN query_oa_ids q ON p.oa_id = q.id
             GROUP BY p.oa_id
         """
