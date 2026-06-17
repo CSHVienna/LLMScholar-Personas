@@ -29,7 +29,9 @@ def assign_quadrants(df, x_col="x_technical", y_col="y_social"):
 
 
 def colors_from_quadrants(quadrants, palette=QUADRANT_COLORS):
-    return [palette[q] for q in quadrants]
+    # A row with NaN in either axis falls through np.select to "" (no quadrant);
+    # fall back to neutral grey instead of KeyError-ing on the missing key.
+    return [palette.get(q, "#6B7280") for q in quadrants]
 
 
 # ─── visualization ─────────────────────────────────────────────────────────

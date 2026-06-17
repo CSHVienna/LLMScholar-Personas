@@ -1557,11 +1557,7 @@ def plot_temperature_consistency(df, fn=None, **kwargs):
 
     # save
     if fn is not None:
-<<<<<<< HEAD
         plt.savefig(fn, dpi=FIG_DPI, bbox_inches='tight')
-=======
-        plt.savefig(fn, dpi=constants.FIG_DPI, bbox_inches="tight")
->>>>>>> origin/Submission2026
 
     # close
     plt.show()
