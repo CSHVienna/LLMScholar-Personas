@@ -111,17 +111,22 @@ def block_key(last: str) -> str:
 # ── Reference index ──────────────────────────────────────────────────────────
 
 
-def _cache_path(parquet_path: str) -> Path:
+REFERENCE_YEAR = 2025
+
+
+def _cache_path(parquet_path: str, reference_year: int) -> Path:
     p = Path(parquet_path)
     stat = p.stat()
-    key = f"{stat.st_size}_{int(stat.st_mtime)}"
+    key = f"{stat.st_size}_{int(stat.st_mtime)}_ry{reference_year}"
     h = hashlib.md5(key.encode()).hexdigest()[:10]
     cache_dir = Path(__file__).resolve().parent.parent.parent.parent / "results" / ".cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir / f".jw_index_{p.stem}_{h}.pkl"
 
 
-def build_index(parquet_path: str, use_cache: bool = True) -> dict[str, dict]:
+def build_index(
+    parquet_path: str, use_cache: bool = True, reference_year: int = REFERENCE_YEAR
+) -> dict[str, dict]:
     """
     Load parquet and build a per-block structure:
       block_key → {
@@ -133,7 +138,7 @@ def build_index(parquet_path: str, use_cache: bool = True) -> dict[str, dict]:
       }
     """
     if use_cache:
-        cp = _cache_path(parquet_path)
+        cp = _cache_path(parquet_path, reference_year)
         cached = load_pickle(cp, logger=logger)
         if cached is not None:
             return cached
@@ -150,7 +155,7 @@ def build_index(parquet_path: str, use_cache: bool = True) -> dict[str, dict]:
             "Citations",
         ],
     )
-    df["gt_career_age"] = (datetime.now().year - df["First_year"]).clip(lower=0)
+    df["gt_career_age"] = (reference_year - df["First_year"]).clip(lower=0)
     logger.info("Parquet rows: %d", len(df))
 
     raw_blocks: dict[str, list] = defaultdict(list)
@@ -347,6 +352,7 @@ def run(
     dn_threshold: float = DN_THRESHOLD,
     workers: int = -1,
     use_cache: bool = True,
+    reference_year: int = REFERENCE_YEAR,
 ) -> None:
     logger.info("Loading recommendations: %s", recommendations_path)
     df = pd.read_csv(recommendations_path, low_memory=False)
@@ -356,7 +362,9 @@ def run(
         df["name"].fillna("").astype(str) + " " + df["lastname"].fillna("").astype(str)
     ).str.strip()
 
-    index = build_index(parquet_path, use_cache=use_cache)
+    index = build_index(
+        parquet_path, use_cache=use_cache, reference_year=reference_year
+    )
 
     # Parse and group unique queries by block key
     unique_raws = [q for q in df["_query"].dropna().unique() if q.strip()]
@@ -455,6 +463,15 @@ def main() -> None:
         action="store_true",
         help="Rebuild the reference index even if a cache exists",
     )
+    parser.add_argument(
+        "--reference-year",
+        type=int,
+        default=REFERENCE_YEAR,
+        help=(
+            "Year used for career age (year - First_year). Fixed default "
+            f"{REFERENCE_YEAR} for reproducibility (NOT datetime.now())."
+        ),
+    )
     args = parser.parse_args()
 
     run(
@@ -464,6 +481,7 @@ def main() -> None:
         dn_threshold=args.dn_threshold,
         workers=args.workers,
         use_cache=not args.no_cache,
+        reference_year=args.reference_year,
     )
 
 
