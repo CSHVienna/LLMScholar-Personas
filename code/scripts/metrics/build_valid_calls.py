@@ -5,14 +5,22 @@ analysis notebooks.
 Ports the preprocessing stage of notebooks/analysis/metrics_pipeline.ipynb so
 the notebook can stay plotting-only. Reads factuality_full.csv plus ethnicity
 ground-truth CSVs and the Semantic Scholar parquet, derives every per-call
-metric (factuality, diversity, parity, consistency, duplicates, popularity),
-and writes a single CSV that every plotting notebook then loads.
+metric (factuality, diversity, parity, consistency, duplicates, popularity,
+connectedness, similarity), and writes a single CSV that every plotting
+notebook then loads.
 
 Output: <results_dir>/factualities/tables/valid_requests_metadata.csv
+
+The two structural metrics (paper Eqs. 6-8) need the OpenAlex DuckDB snapshot to
+build the coauthorship graph. Graph and PCA pipeline are cached under
+<results_dir>/.cache, so the pass over oa.works happens once; pass
+--rebuild_structural to force it again. Without --oa_duckdb the two metrics are
+skipped and every other metric is unaffected.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/metrics/build_valid_calls.py
   python scripts/metrics/build_valid_calls.py --results <results_dir> --parquet <path_to_ss_parquet>
+  python scripts/metrics/build_valid_calls.py --rebuild_structural
 
 Defaults come from [data] in config.ini.
 """
@@ -24,16 +32,28 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from tqdm.auto import tqdm
 
 HERE = Path(__file__).resolve().parent
 
 from libs.metrics.aggregators import (
     assign_productivity_tier,
+    compute_connectedness,
+    compute_similarity,
     productivity_thresholds,
+)
+from libs.metrics.io import (
+    build_author_features,
+    build_coauthorship_graph,
+    build_similarity_embeddings,
 )
 from libs.metrics.constants import (
     CALL_KEYS,
+    CONNECTEDNESS_METRIC,
     ETHNICITY_ORDER,
+    SIMILARITY_METRIC,
+    STRUCTURAL_EXCLUSION_COLS,
+    STRUCTURAL_USED_COLS,
     FIELD_NORM_MAP,
     GENDER_ORDER,
     LANGUAGE_NORM_MAP,
@@ -157,6 +177,97 @@ def _compute_consistency(responses_df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _compute_structural_metrics(
+    df_valid_recommendations: pd.DataFrame,
+    *,
+    cache_dir: Path,
+    oa_duckdb_path: str,
+    rebuild: bool = False,
+) -> pd.DataFrame:
+    """Per-response connectedness and scholarly similarity (paper Eqs. 6-8).
+
+    Returns a DataFrame indexed by ``_cid`` with the two metric columns plus one
+    exclusion count each, ready to be assigned onto ``df_valid_calls``.
+
+    U-hat_i is the set of unique *factual* authors of the response, matching the
+    definition the rest of the pipeline uses (``author_found`` = Semantic Scholar
+    OR OpenAlex). Both metrics need OpenAlex-side data, so authors matched only
+    in Semantic Scholar are excluded and counted. They are de-duplicated on a
+    composite id (``oa_id`` when present, else ``SS:<researcher_id>``) so that
+    several such authors within one response are not collapsed into one.
+    """
+    factual = df_valid_recommendations[df_valid_recommendations["author_found"]].copy()
+
+    # Composite uid: without it, drop_duplicates(['_cid','author_id']) treats
+    # every author_id-less author as the same row and the exclusion count would
+    # under-report.
+    factual["_uid"] = np.where(
+        factual["author_id"].notna(),
+        factual["author_id"],
+        "SS:" + factual["researcher_id"].astype(str),
+    )
+    factual = factual.drop_duplicates(["_cid", "_uid"])
+
+    author_ids = factual["author_id"].dropna().unique().tolist()
+    logger.info(
+        "Structural metrics: %d unique factual authors with an OpenAlex id",
+        len(author_ids),
+    )
+
+    adjacency, graph_index = build_coauthorship_graph(
+        author_ids,
+        cache_path=cache_dir / "coauthorship_graph.joblib",
+        oa_duckdb_path=oa_duckdb_path,
+        temp_dir=cache_dir / "duckdb_tmp",
+        rebuild=rebuild,
+        logger=logger,
+    )
+    features = build_author_features(factual.dropna(subset=["author_id"]))
+    embeddings, emb_index, _ = build_similarity_embeddings(
+        features,
+        cache_path=cache_dir / "similarity_embeddings.joblib",
+        index=graph_index,
+        rebuild=rebuild,
+        logger=logger,
+    )
+
+    rows = []
+    grouped = factual.groupby("_cid", sort=False)["author_id"]
+    for cid, ids in tqdm(grouped, total=grouped.ngroups, desc="structural metrics"):
+        with_oa = [a for a in ids if pd.notna(a)]
+        # Factual authors with no oa_id have neither a node nor features.
+        n_without_oa = len(ids) - len(with_oa)
+
+        conn = compute_connectedness(with_oa, adjacency, graph_index, logger=logger)
+        sim = compute_similarity(with_oa, embeddings, emb_index, logger=logger)
+        rows.append(
+            {
+                "_cid": cid,
+                CONNECTEDNESS_METRIC: conn.value,
+                SIMILARITY_METRIC: sim.value,
+                STRUCTURAL_EXCLUSION_COLS[CONNECTEDNESS_METRIC]: conn.n_excluded
+                + n_without_oa,
+                STRUCTURAL_EXCLUSION_COLS[SIMILARITY_METRIC]: sim.n_excluded
+                + n_without_oa,
+                # The actual denominator of Eqs. 6-8. n_authors_found cannot play
+                # that role: it collapses all oa_id-less authors into one entry.
+                STRUCTURAL_USED_COLS[CONNECTEDNESS_METRIC]: conn.n_used,
+                STRUCTURAL_USED_COLS[SIMILARITY_METRIC]: sim.n_used,
+            }
+        )
+
+    out = pd.DataFrame(rows).set_index("_cid")
+    logger.info(
+        "Structural metrics: connectedness defined for %d/%d responses, "
+        "similarity for %d/%d",
+        int(out[CONNECTEDNESS_METRIC].notna().sum()),
+        len(out),
+        int(out[SIMILARITY_METRIC].notna().sum()),
+        len(out),
+    )
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -174,6 +285,18 @@ def main() -> None:
         "--data",
         default=str(HERE.parent.parent.parent / "data"),
         help="Repo data/ directory (defaults to ../data).",
+    )
+    parser.add_argument(
+        "--oa_duckdb",
+        default=config_default("oa_duckdb"),
+        help="OpenAlex DuckDB snapshot, used to build the coauthorship graph for "
+        "the structural metrics (default: [data].oa_duckdb). Without it, "
+        "connectedness and similarity are skipped.",
+    )
+    parser.add_argument(
+        "--rebuild_structural",
+        action="store_true",
+        help="Ignore the cached coauthorship graph / PCA pipeline and rebuild them.",
     )
     args = parser.parse_args()
 
@@ -382,6 +505,25 @@ def main() -> None:
     df_valid_calls["parity_gender"] = _parity(
         df_authors_found, "gender_clean", GENDER_ORDER, gt_gen_frac
     )
+
+    # ── 7.5 Structural metrics: connectedness + similarity (Eqs. 6-8) ────────
+    # Assigned here, while df_valid_calls is still indexed by _cid — the
+    # reset_index() below drops it and later sections have to go through _pk.
+    if args.oa_duckdb:
+        df_structural = _compute_structural_metrics(
+            df_valid_recommendations,
+            cache_dir=cache_dir,
+            oa_duckdb_path=args.oa_duckdb,
+            rebuild=args.rebuild_structural,
+        )
+        for col in df_structural.columns:
+            df_valid_calls[col] = df_structural[col]
+    else:
+        logger.warning(
+            "Skipping structural metrics: no --oa_duckdb and no [data].oa_duckdb "
+            "in config.ini"
+        )
+
     df_valid_calls = df_valid_calls.reset_index(drop=True)
 
     # ── 8. Productivity tiers ────────────────────────────────────────────────

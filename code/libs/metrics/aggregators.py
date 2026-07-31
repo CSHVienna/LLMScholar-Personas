@@ -1,6 +1,10 @@
+import logging
+from typing import Mapping, NamedTuple, Sequence
+
 import numpy as np
 import pandas as pd
-from scipy import stats
+from scipy import sparse, stats
+from scipy.sparse.csgraph import connected_components
 from scipy.stats import t
 from statsmodels.stats.proportion import proportion_confint
 from tqdm.auto import tqdm
@@ -693,3 +697,163 @@ def aggregate_similarity(df_factuality_author, **kwargs):
     df = df_similarity[group_cols].copy()
     df.rename(columns={metric_similarity: "metric"}, inplace=True)
     return df
+
+
+# ── Structural metrics: connectedness and scholarly similarity ────────────────
+# Paper Eqs. 6-8. Pure functions over a single response's factual author set
+# U-hat_i; the graph and the embeddings are built once by
+# libs.metrics.io.build_coauthorship_graph / build_similarity_embeddings.
+#
+# Both return np.nan — never a silent 0.0 — whenever the metric is undefined,
+# and report how many members of U-hat_i had to be dropped.
+
+
+class StructuralMetric(NamedTuple):
+    """Result of a structural metric over one response.
+
+    ``value``       the metric, or ``np.nan`` where it is undefined.
+    ``n_used``      members of U-hat_i that actually entered the computation.
+    ``n_excluded``  members dropped for lack of a graph node / feature vector.
+    """
+
+    value: float
+    n_used: int
+    n_excluded: int
+
+
+def _resolve_indices(
+    author_ids: Sequence[str], index: Mapping[str, int]
+) -> tuple[np.ndarray, int, int]:
+    """Map U-hat_i to matrix rows, dropping unknown authors.
+
+    Returns ``(rows, n_unique, n_excluded)``. Duplicates are collapsed first:
+    U-hat_i is a *set* of authors, so a name repeated within a response must not
+    inflate n.
+    """
+    unique = {str(a) for a in author_ids if a is not None and str(a) != ""}
+    rows = np.array(sorted(index[a] for a in unique if a in index), dtype=np.int64)
+    return rows, len(unique), len(unique) - len(rows)
+
+
+def compute_connectedness(
+    author_ids: Sequence[str],
+    adjacency: sparse.spmatrix,
+    index: Mapping[str, int],
+    *,
+    logger: logging.Logger | None = None,
+) -> StructuralMetric:
+    """Connectedness of a response's factual authors (paper Eqs. 6-7).
+
+    Takes the induced subgraph G-hat_i = G[U-hat_i], splits it into connected
+    components {C_1..C_m} of sizes s_c, and with n = |U-hat_i| computes
+
+        NormEntropy_i  = -(1 / log n) * sum_c (s_c/n) * log(s_c/n)   (Eq. 6)
+        Connectedness_i = 1 - NormEntropy_i                          (Eq. 7)
+
+    which lands in [0, 1]: a single component spanning all n authors gives 1.0
+    (zero component entropy), n isolated singletons give 0.0 (maximal entropy).
+
+    ``np.nan`` is returned when the metric is undefined: n == 0 (no factual
+    recommendation) or n == 1 (log n = 0, so Eq. 6 has no value — no default is
+    invented). Authors absent from ``index`` are excluded and counted.
+
+    Parameters
+    ----------
+    author_ids : the members of U-hat_i, as ``author_id`` strings.
+    adjacency  : symmetric CSR adjacency of the cached coauthorship graph.
+    index      : ``author_id -> row`` mapping that goes with ``adjacency``.
+    """
+    log = logger or logging.getLogger()
+    rows, n_unique, n_excluded = _resolve_indices(author_ids, index)
+    n = len(rows)
+
+    if n_excluded:
+        log.debug(
+            "connectedness: %d/%d authors not in the coauthorship graph",
+            n_excluded,
+            n_unique,
+        )
+    if n == 0:
+        log.debug("connectedness: undefined, n == 0 (no factual author in the graph)")
+        return StructuralMetric(np.nan, 0, n_excluded)
+    if n == 1:
+        log.debug("connectedness: undefined, n == 1 (log n = 0)")
+        return StructuralMetric(np.nan, 1, n_excluded)
+
+    subgraph = adjacency[rows, :][:, rows]
+    _, labels = connected_components(subgraph, directed=False, return_labels=True)
+    sizes = np.bincount(labels)
+
+    p = sizes / n
+    norm_entropy = -np.sum(p * np.log(p)) / np.log(n)
+    # Clip absorbs float error only; the maths already bounds this to [0, 1].
+    value = float(np.clip(1.0 - norm_entropy, 0.0, 1.0))
+    log.debug("connectedness: n=%d, %d component(s), value=%.4f", n, len(sizes), value)
+    return StructuralMetric(value, n, n_excluded)
+
+
+def compute_similarity(
+    author_ids: Sequence[str],
+    embeddings: np.ndarray,
+    index: Mapping[str, int],
+    *,
+    logger: logging.Logger | None = None,
+) -> StructuralMetric:
+    """Mean pairwise scholarly similarity of a response's authors (paper Eq. 8).
+
+    With unit embeddings z_u (see io.build_similarity_embeddings for the exact
+    preprocessing order) and n = |U-hat_i|,
+
+        Sim_i = (2 / (n(n-1))) * sum_{u != v, unordered pairs} z_u^T z_v   (Eq. 8)
+
+    computed via the equivalent closed form. Since every ||z_u|| = 1,
+
+        ||S||^2 = ||sum_u z_u||^2 = n + 2 * sum_{unordered pairs} z_u^T z_v
+        =>  Sim_i = (||S||^2 - n) / (n(n-1))
+
+    so the n x n cosine matrix is never materialised: cost is O(n·d) instead of
+    O(n²·d), in time and in memory.
+
+    ``np.nan`` is returned when the metric is undefined: n == 0, or n == 1 (no
+    pair exists, so Eq. 8 has no value). Authors with no embedding — absent from
+    ``index``, or with an all-missing feature vector — are excluded and counted.
+
+    Parameters
+    ----------
+    author_ids : the members of U-hat_i, as ``author_id`` strings.
+    embeddings : ``(n_population, d)`` matrix of unit vectors; NaN rows mark
+                 authors whose features were entirely missing.
+    index      : ``author_id -> row`` mapping that goes with ``embeddings``.
+    """
+    log = logger or logging.getLogger()
+    rows, n_unique, n_excluded = _resolve_indices(author_ids, index)
+
+    if len(rows):
+        vectors = embeddings[rows]
+        # The closed form is only valid for unit vectors: drop NaN rows (no
+        # features) and any degenerate zero-norm row.
+        norms = np.linalg.norm(vectors, axis=1)
+        keep = np.isfinite(norms) & np.isclose(norms, 1.0, atol=1e-6)
+        n_excluded += int((~keep).sum())
+        vectors = vectors[keep]
+    else:
+        vectors = np.empty((0, embeddings.shape[1]))
+
+    n = vectors.shape[0]
+    if n_excluded:
+        log.debug(
+            "similarity: %d/%d authors without a usable embedding", n_excluded, n_unique
+        )
+    if n == 0:
+        log.debug("similarity: undefined, n == 0 (no factual author with features)")
+        return StructuralMetric(np.nan, 0, n_excluded)
+    if n == 1:
+        log.debug("similarity: undefined, n == 1 (no pair to compare)")
+        return StructuralMetric(np.nan, 1, n_excluded)
+
+    total = vectors.sum(axis=0)
+    # Clip absorbs float error only: the closed form is mathematically bounded
+    # to [-1, 1], but ||S||^2 on collinear embeddings can land at 1 + 4e-16.
+    value = float(np.clip((total @ total - n) / (n * (n - 1)), -1.0, 1.0))
+    log.debug("similarity: n=%d, value=%.4f", n, value)
+    return StructuralMetric(value, n, n_excluded)

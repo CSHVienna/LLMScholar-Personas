@@ -120,6 +120,8 @@ PLOT_LABELS = {
     'parity_citations':           'Parity $_{cit.}$',
     'popularity_works':           'Popularity $_{pub.}$',
     'popularity_citations':       'Popularity $_{cit.}$',
+    'connectedness':              'Connectedness',
+    'similarity':                 'Similarity',
     'pct_citations_high':         '% H cit.',
     'pct_citations_med':          '% M cit.',
     'pct_citations_low':          '% L cit.',
@@ -164,6 +166,9 @@ PLOT_METRICS = [
     # Popularity (fraction in top productivity tier within field)
     "popularity_works",
     "popularity_citations",
+    # Structural block (paper Eqs. 6-8)
+    "connectedness",
+    "similarity",
 ]
 PLOT_METRICS = [m for m in PLOT_METRICS if m in ALL_METRICS]
 
@@ -174,7 +179,10 @@ PLOT_TECHNICAL_METRICS = [
     or m.startswith("factuality")
 ]
 PLOT_SOCIAL_METRICS = [
-    m for m in PLOT_METRICS if m.startswith(("div_", "parity_", "popularity_"))
+    m
+    for m in PLOT_METRICS
+    if m.startswith(("div_", "parity_", "popularity_"))
+    or m in ("connectedness", "similarity")
 ]
 METRIC_TYPES = {"technical": PLOT_TECHNICAL_METRICS, "social": PLOT_SOCIAL_METRICS}
 
@@ -198,6 +206,11 @@ METRIC_DIRECTIONS = {
     "parity_citations": "↑",
     "popularity_works": None,
     "popularity_citations": None,
+    # No preferred direction: a high connectedness means the recommendations
+    # form one coauthorship clique and a high similarity means the authors are
+    # alike — desirable or not depending on the reading, exactly like div_*.
+    "connectedness": None,
+    "similarity": None,
 }
 
 LANGUAGE_ORDER = ["English", "Spanish", "German"]
@@ -362,7 +375,10 @@ METRICS_NAME_MAP = {'parity_ethnicity':'Ethinicity parity',
 
                     'validity':'Validity',
                     'refusals':'Refusals',
-                    'consistency':'Consistency',    
+                    'consistency':'Consistency',
                     'duplicates':'Duplicates',
+
+                    'connectedness':'Connectedness',
+                    'similarity':'Scholarly similarity',
 
                     }

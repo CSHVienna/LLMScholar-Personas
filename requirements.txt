@@ -20,6 +20,9 @@ transformers
 # tf-keras
 # ethnicolr
 
+# Optional: running the test suite under code/tests/
+# pytest
+
 annotated-types==0.7.0
 anyio==4.13.0
 certifi==2026.5.20

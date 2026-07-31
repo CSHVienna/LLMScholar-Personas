@@ -16,9 +16,16 @@ code/
 │   ├── factuality/     7-step factuality cascade + run_factuality_pipeline orchestrator
 │   ├── ethnicity/      BERT + ethnicolr ethnicity cascade
 │   └── metrics/        build_valid_calls, build_ethnicity_distributions
-└── notebooks/          Plot-only Jupyter notebooks.
-    ├── analysis/       Paper figures (metrics, ethnicity, OA coverage, manual validation)
-    └── agreement/      Inter-annotator agreement (Cohen κ, Krippendorff α)
+├── notebooks/          Plot-only Jupyter notebooks.
+│   ├── analysis/       Paper figures (metrics, ethnicity, OA coverage, manual validation)
+│   └── agreement/      Inter-annotator agreement (Cohen κ, Krippendorff α)
+└── tests/              pytest suite (structural metrics, coauthorship builder)
+```
+
+Run the tests from `code/` with `PYTHONPATH=.`:
+
+```bash
+PYTHONPATH=. python -m pytest tests/ -v
 ```
 
 ---
@@ -197,6 +204,51 @@ python scripts/metrics/build_ethnicity_distributions.py
 ```
 
 Both scripts read their defaults (`ss_parquet`, `results_dir`) from `[data]` in `config.ini`.
+
+##### Structural metrics: connectedness & similarity (paper Eqs. 6-8)
+
+`build_valid_calls.py` also derives the two structural metrics. They are the only metrics
+that need the **OpenAlex snapshot** (`[data].oa_duckdb`) rather than just `factuality_full.csv`,
+because one of them needs a coauthorship graph. Both are computed over `Û_i`, the set of
+unique *factual* authors of a response.
+
+| Metric | What it measures | Definition |
+|---|---|---|
+| `connectedness` | Whether the recommended authors form one collaborating group or scattered individuals | `1 − NormEntropy` over the connected components of the induced subgraph `G[Û_i]` |
+| `similarity` | Whether the recommended authors have similar academic profiles | Mean pairwise cosine of PCA embeddings of 5 author features |
+
+Two cached artefacts are built **once** and reused (`--rebuild_structural` forces a rebuild):
+
+| Artefact | Cost | Cached at |
+|---|---|---|
+| Coauthorship graph (CSR + `author_id → index`) | **~2.5 h** — explodes the `authorships` of all 492M works, chunked by `works.id` quantiles to bound memory | `<results_dir>/.cache/coauthorship_graph.joblib` |
+| Scaler + PCA + author embeddings | seconds | `<results_dir>/.cache/similarity_embeddings.joblib` |
+
+The graph is restricted to the benchmark's ~306k factual authors. That is exact, not an
+approximation: every `Û_i` is a subset of that population and induced subgraphs compose, so
+`G[Û_i] = (G[population])[Û_i]`. It keeps the matrix at 306k² sparse instead of 113M².
+
+The scaler and PCA are fitted **once** over the whole author population and only *applied*
+per response. This departs from a literal reading of the paper (which fits inside each
+response) and is deliberate: with n≈10 authors a per-response PCA is unstable and the values
+stop being comparable across models — see the docstring of `build_similarity_embeddings`.
+
+Four columns reach the output CSV per metric pair:
+
+```
+connectedness, similarity                            the metrics (NaN where undefined)
+n_used_connectedness, n_used_similarity              the n that entered each formula
+n_excluded_connectedness, n_excluded_similarity      Û_i members dropped (no oa_id / no features)
+```
+
+**Both are NaN when fewer than 2 authors are evaluable** — connectedness because `log n = 0`
+at n=1, similarity because there is no pair. No default value is invented. In practice this
+makes them undefined for ~63% of responses, for two structural reasons: `k=1` cannot produce
+a pair at all, and authors matched only in Semantic Scholar have no `oa_id`, hence no graph
+node and no features (~13% of factual authors, reported in `n_excluded_*`).
+
+Use `n_used_*` as the denominator, **not** `n_authors_found`: the latter collapses every
+author without an `oa_id` into a single entry, so subtracting the two goes negative.
 
 #### 6. Notebooks — plot the figures
 

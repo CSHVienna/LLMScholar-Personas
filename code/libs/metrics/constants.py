@@ -47,6 +47,11 @@ NEEDED_COLS = [
     "location_status",
     "oa_works_count",
     "oa_cited_by_count",
+    # Structural metrics (Eqs. 6-8): oa_career_age feeds the similarity features;
+    # researcher_id identifies authors matched only in Semantic Scholar (no
+    # oa_id) so they can be counted as exclusions instead of vanishing.
+    "oa_career_age",
+    "researcher_id",
 ]
 
 #######################################################################################################################
@@ -57,6 +62,9 @@ ALL_METRICS = [
     # All-responses denominator
     "validity",
     "refusals",
+    # Structural (factual-records denominator) — paper Eqs. 6-8
+    "connectedness",
+    "similarity",
     # Valid-responses denominator
     "consistency",
     "duplicates",
@@ -148,6 +156,52 @@ PROMINENCE_METRICS = ['pct_works_low',
                       'pct_citations_med', 
                       'pct_citations_high']
 
+#######################################################################################################################
+# STRUCTURAL METRICS (paper Eqs. 6-8): connectedness + scholarly similarity
+#######################################################################################################################
+# Both are computed over U-hat_i, the set of unique *factual* authors of a
+# response, and both need OpenAlex-side data (the coauthorship graph and the
+# author feature vectors). Authors matched only in Semantic Scholar have no
+# oa_id, hence no node and no features: they are excluded and counted in the
+# exclusion columns below (~12% of factual recommendations).
+
+CONNECTEDNESS_METRIC = "connectedness"
+SIMILARITY_METRIC = "similarity"
+STRUCTURAL_METRICS = [CONNECTEDNESS_METRIC, SIMILARITY_METRIC]
+
+# Per-response count of U-hat_i members dropped for lack of graph node / features.
+STRUCTURAL_EXCLUSION_COLS = {
+    CONNECTEDNESS_METRIC: "n_excluded_connectedness",
+    SIMILARITY_METRIC: "n_excluded_similarity",
+}
+
+# Per-response n that actually entered each formula — the denominator of Eqs. 6-8.
+# Published alongside the exclusions because `n_authors_found` is NOT a valid
+# denominator for these two metrics: it collapses every author without an oa_id
+# into a single entry (drop_duplicates on ['_cid','author_id']), whereas U-hat_i
+# here distinguishes them via a composite uid. Subtracting one from the other
+# goes negative on ~8% of responses; use these columns instead.
+STRUCTURAL_USED_COLS = {
+    CONNECTEDNESS_METRIC: "n_used_connectedness",
+    SIMILARITY_METRIC: "n_used_similarity",
+}
+
+# Feature vector for scholarly similarity. h-index / i10-index are NOT usable:
+# factuality_openalex.py leaves them None (absent from the DuckDB snapshot), so
+# they are 0% covered. citations_per_work stands in for the missing h-index.
+SIMILARITY_FEATURE_COLS = [
+    "works_count",         # productivity: raw publication volume
+    "cited_by_count",      # impact: raw accumulated citations
+    "citations_per_work",  # impact per unit of output (h-index surrogate)
+    "career_age",          # career stage: span of active years
+    "works_per_year",      # productivity intensity over the career
+]
+
+# Minimum share of variance the retained PCA components must explain (Eq. 8).
+SIMILARITY_PCA_VARIANCE = 0.90
+# Fixed for reproducibility (PCA with svd_solver='full' is deterministic anyway).
+SIMILARITY_RANDOM_STATE = 0
+
 TECHNICAL_METRICS = ['validity','refusals','consistency','duplicates'] + FACTUALITY_METRICS
 SOCIAL_METRICS = PARITY_METRICS + DIVERSITY_METRICS + PROMINENCE_METRICS + POPULARITY_METRICS
 
@@ -201,7 +255,10 @@ NESTED_METRIC_PAIRS = {
     
     'popularity_works': 'factuality_author',
     'popularity_citations': 'factuality_author',
-    
+
+    'connectedness': 'factuality_author',
+    'similarity': 'factuality_author',
+
     'pct_works_low': 'factuality_author',
     'pct_works_med': 'factuality_author',
     'pct_works_high': 'factuality_author',
