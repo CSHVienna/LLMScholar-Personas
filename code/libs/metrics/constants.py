@@ -72,7 +72,8 @@ ALL_METRICS = [
     # Factual-records denominator
     "factuality_field",
     "factuality_seniority",
-    "factuality_location",
+    # Bias (social representation, factual-records denominator)
+    "bias_location",
     # Diversity
     "div_ethnicity",
     "div_gender",
@@ -99,6 +100,7 @@ ALL_METRICS = [
 
 PREFIX_GROUPS_METRICS = {
         'factuality_': 'Factuality',
+        'bias_':       'Bias',
         'parity_':     'Parity',
         'div_':        'Diversity',
         'pct_works_':        'Publications tertile',
@@ -130,10 +132,15 @@ PRODUCTIVITY_METRIC_COLS = [
     'div_productivity_citations',
 ]
 
-FACTUALITY_METRICS   = ['factuality_author', 
-                        'factuality_field', 
-                        'factuality_seniority', 
-                        'factuality_location']
+FACTUALITY_METRICS   = ['factuality_author',
+                        'factuality_field',
+                        'factuality_seniority']
+
+# Location is a *choice*, not a factual error (reviewer's comment, issue #36):
+# whether the LLM places an author in the country embedded in the prompt is read
+# as social representation, so it groups with the social metrics below. The value
+# is unchanged — still the share of location_match among evaluable records.
+BIAS_METRICS = ['bias_location']
 
 PARITY_METRICS = ['parity_gender', 
                   'parity_ethnicity', 
@@ -203,9 +210,17 @@ SIMILARITY_PCA_VARIANCE = 0.90
 SIMILARITY_RANDOM_STATE = 0
 
 TECHNICAL_METRICS = ['validity','refusals','consistency','duplicates'] + FACTUALITY_METRICS
-SOCIAL_METRICS = PARITY_METRICS + DIVERSITY_METRICS + PROMINENCE_METRICS + POPULARITY_METRICS
+SOCIAL_METRICS = BIAS_METRICS + PARITY_METRICS + DIVERSITY_METRICS + PROMINENCE_METRICS + POPULARITY_METRICS
 
 TECHNICAL_METRICS_NORM = ['validity','refusals_c','duplicates_c'] + FACTUALITY_METRICS
+
+# ── Backward compatibility ────────────────────────────────────────────────────
+# Artefacts produced before issue #36 (the 425 MB valid_requests_metadata.csv and
+# every effect_sizes.parquet under results/sensitivity_analysis/) still carry the
+# old metric name. Apply this on load — as a column rename for wide frames, or on
+# the `metric` column for long-format ANOVA output — instead of regenerating them.
+# Idempotent: names already canonical are left untouched.
+METRIC_RENAME_MAP = {'factuality_location': 'bias_location'}
 
 PERSONA_VARIABLES = ['language_en', 'location_en', 'role_en']
 CONTEXT_VARIABLES = ['k', 'field_en', 'subfield_en', 'target_en']
@@ -240,8 +255,8 @@ NESTED_METRIC_PAIRS = {
 
     'factuality_field': 'factuality_author',
     'factuality_seniority': 'factuality_author',
-    'factuality_location': 'factuality_author',
-    
+    'bias_location': 'factuality_author',
+
     'div_gender': 'factuality_author',
     'div_ethnicity': 'factuality_author',
     'div_location': 'factuality_author',
@@ -354,6 +369,20 @@ BENCHMARK_MODEL_GROUPS_LABEL_MAP = {
     "model_access": "Access",
     "model_size": "Size",
     "model_class": "Reasoning",
+}
+
+# metric -> status column emitted by the factuality pipeline, consumed by
+# aggregators.aggregate_factuality_task. Replaces the pre-refactor
+# BENCHMARK_FACTUALITY_FIELD_METRICS_MAP, which was deleted with
+# constants_old.py in 789bbb0 and pointed at a retired column schema
+# (`fact_author_field`, `fact_epoch_requested`, ...).
+# Status values are {<prefix>_match | <prefix>_mismatch | <prefix>_unknown |
+# not_applicable}; only the first two are evaluable — same rule as step 6 of
+# scripts/metrics/build_valid_calls.py.
+FACTUALITY_TASK_STATUS_COLS = {
+    "factuality_field": "field_status",
+    "factuality_seniority": "seniority_status",
+    "bias_location": "location_status",
 }
 
 BENCHMARK_PER_ATTEMPT_COLS = BENCHMARK_MODEL_GROUPS + [

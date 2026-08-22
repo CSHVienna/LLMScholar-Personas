@@ -415,11 +415,13 @@ def main() -> None:
         np.nan,
     )
 
-    # ── 6. Field / seniority / location factuality ───────────────────────────
+    # ── 6. Field / seniority factuality + location bias ──────────────────────
+    # Same match-rate computation for the three; location is named a bias and
+    # grouped as social representation (issue #36), not as a factuality.
     for status_col, metric_col in [
         ("field_status", "factuality_field"),
         ("seniority_status", "factuality_seniority"),
-        ("location_status", "factuality_location"),
+        ("location_status", "bias_location"),
     ]:
         prefix = status_col.split("_")[0]
         eligible = df_authors_found[

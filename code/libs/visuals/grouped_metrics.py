@@ -89,7 +89,7 @@ DEFAULT_DIRECTIONS = {
     "factuality_author": "↑",
     "factuality_field": "↑",
     "factuality_seniority": "↑",
-    "factuality_location": "↑",
+    "bias_location": None,  # see METRIC_DIRECTIONS in visuals/constants.py
     "consistency": None,
     "duplicates": "↓",
     "div_gender": None,

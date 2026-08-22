@@ -67,6 +67,13 @@ The seven factuality steps run in order — each reads the output of the previou
 | 3.5 | `factuality_affiliation.py`  | `factuality_location.csv` → `factuality_affiliation.csv` | `affiliation_llm`, `affiliation_oa_all`, `affiliation_status` |
 | 4   | `factuality_ethnicity.py`    | `factuality_affiliation.csv` → `factuality_full.csv` | `perceived_ethnicity` |
 
+> **Naming note (issue #36).** Step 3 keeps its `factuality_location` script/CSV
+> names — it is a pipeline stage producing `location_status`. The *evaluation
+> metric* derived from that column is named `bias_location` and is grouped with
+> the social-representation metrics, not with factuality. Artefacts generated
+> before the rename carry the old column name; `METRIC_RENAME_MAP` in
+> `libs/metrics/constants.py` maps it on load.
+
 ---
 
 ## How to run

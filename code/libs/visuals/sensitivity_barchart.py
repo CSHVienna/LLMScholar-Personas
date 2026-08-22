@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from grouped_heatmap import PROMPT_VAR_COLORS, NAME_MAP
+from libs.visuals.sensitivity_heatmap import PROMPT_VAR_COLORS, NAME_MAP
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +190,7 @@ def _make_demo_df() -> pd.DataFrame:
         'duplicates':          (0.012,   0.023),
         'factuality_author':   (0.0012,  0.017),
         'factuality_field':    (0.23,    0.0022),
-        'factuality_location': (0.065,   0.13),
+        'bias_location':       (0.065,   0.13),
         'factuality_seniority':(0.15,    0.003),
         'parity_ethnicity':    (0.026,   0.039),
         'parity_gender':       (0.087,   0.0064),

@@ -37,8 +37,13 @@ QUADRANT_COLORS = {
     "Q4": "#ff7f0e",  # bottom-right — high tech, low  social  (orange)
 }
 
-PROMPT_VAR_COLORS = {'context': '#7ab0d3', 'persona': '#efaf76', 'llm': '#9a9a9a', 'model': '#9a9a9a'}
- 
+PROMPT_VAR_COLORS = {
+    "context": "#7ab0d3",
+    "persona": "#efaf76",
+    "llm": "#9a9a9a",
+    "model": "#9a9a9a",
+}
+
 ETHNICITY_MAP = {
     "White": "White",
     "Asian": "Asian",
@@ -101,44 +106,45 @@ MODEL_FAMILY_ORDER = [
 TICK_COLOR = "#828282"
 
 PLOT_LABELS = {
-    'validity':                   'Validity',
-    'refusals':                   'Refusals',
-    'factuality_author':          'Fact. $_{author}$',
-    'factuality_field':           'Fact. $_{field}$',
-    'factuality_seniority':       'Fact. $_{seniority}$',
-    'factuality_location':        'Fact. $_{location}$',
-    'consistency':                'Consistency',
-    'duplicates':                 'Duplicates',
-    'div_gender':                 'Div. $_{gen.}$',
-    'div_ethnicity':              'Div. $_{eth.}$',
-    'div_location':               'Div. $_{loc.}$',
-    'div_productivity_works':     'Div. $_{pub.}$',
-    'div_productivity_citations': 'Div. $_{cit.}$',
-    'parity_gender':              'Parity $_{gender}$',
-    'parity_ethnicity':           'Parity $_{eth.}$',
-    'parity_works':               'Parity $_{pub.}$',
-    'parity_citations':           'Parity $_{cit.}$',
-    'popularity_works':           'Popularity $_{pub.}$',
-    'popularity_citations':       'Popularity $_{cit.}$',
-    'connectedness':              'Connectedness',
-    'similarity':                 'Similarity',
-    'pct_citations_high':         '% H cit.',
-    'pct_citations_med':          '% M cit.',
-    'pct_citations_low':          '% L cit.',
-    'pct_works_high':             '% H pub.',
-    'pct_works_med':              '% M pub.',
-    'pct_works_low':              '% L pub.',
+    "validity": "Validity",
+    "refusals": "Refusals",
+    "factuality_author": "Fact. $_{author}$",
+    "factuality_field": "Fact. $_{field}$",
+    "factuality_seniority": "Fact. $_{seniority}$",
+    "bias_location": "Bias $_{location}$",
+    "consistency": "Consistency",
+    "duplicates": "Duplicates",
+    "div_gender": "Div. $_{gen.}$",
+    "div_ethnicity": "Div. $_{eth.}$",
+    "div_location": "Div. $_{loc.}$",
+    "div_productivity_works": "Div. $_{pub.}$",
+    "div_productivity_citations": "Div. $_{cit.}$",
+    "parity_gender": "Parity $_{gender}$",
+    "parity_ethnicity": "Parity $_{eth.}$",
+    "parity_works": "Parity $_{pub.}$",
+    "parity_citations": "Parity $_{cit.}$",
+    "popularity_works": "Popularity $_{pub.}$",
+    "popularity_citations": "Popularity $_{cit.}$",
+    "connectedness": "Connectedness",
+    "similarity": "Similarity",
+    "pct_citations_high": "% H cit.",
+    "pct_citations_med": "% M cit.",
+    "pct_citations_low": "% L cit.",
+    "pct_works_high": "% H pub.",
+    "pct_works_med": "% M pub.",
+    "pct_works_low": "% L pub.",
 }
 
-PLOT_LABELS |= {'role_en': 'Role', 
-                'location_en': 'Location', 
-                'language_en': 'Language',
-                'k': 'k', 
-                'field_en': 'Field', 
-                'subfield_en': 'Subfield',
-                'target_en': 'Seniority',
-                'model': 'Model'
-                }
+PLOT_LABELS |= {
+    "role_en": "Role",
+    "location_en": "Location",
+    "language_en": "Language",
+    "k": "k",
+    "field_en": "Field",
+    "subfield_en": "Subfield",
+    "target_en": "Seniority",
+    "model": "Model",
+}
 
 PLOT_METRICS = [
     # Output quality (response-level)
@@ -151,7 +157,8 @@ PLOT_METRICS = [
     "factuality_author",  # author
     "factuality_field",
     "factuality_seniority",
-    "factuality_location",
+    # Bias block (social representation, see BIAS_METRICS)
+    "bias_location",
     # Diversity block (order: gender, ethnicity, publications, citations)
     "div_gender",
     "div_ethnicity",
@@ -181,7 +188,7 @@ PLOT_TECHNICAL_METRICS = [
 PLOT_SOCIAL_METRICS = [
     m
     for m in PLOT_METRICS
-    if m.startswith(("div_", "parity_", "popularity_"))
+    if m.startswith(("bias_", "div_", "parity_", "popularity_"))
     or m in ("connectedness", "similarity")
 ]
 METRIC_TYPES = {"technical": PLOT_TECHNICAL_METRICS, "social": PLOT_SOCIAL_METRICS}
@@ -192,7 +199,10 @@ METRIC_DIRECTIONS = {
     "factuality_author": "↑",
     "factuality_field": "↑",
     "factuality_seniority": "↑",
-    "factuality_location": "↑",
+    # No preferred direction since it became a bias rather than a factuality
+    # (issue #36): the value is still the location match rate, but whether
+    # matching the prompt's country is desirable is the reading under review.
+    "bias_location": None,
     "consistency": None,
     "duplicates": "↓",
     "div_gender": None,
@@ -337,48 +347,68 @@ MODEL_ARCHITECTURE_GROUPS = {
 K_ORDER = [1, 5, 10]
 K_COLORS = {1: "#2980B9", 5: "#E67E22", 10: "#8E44AD"}
 
-ORDER_MAP = {'language_en': LANGUAGE_ORDER, 
-             'role_en': ROLE_ORDER, 
-             'location_en': LOCATION_ORDER, 
-             'field_en': FIELD_ORDER, 
-             'target_en': SENIORITY_ORDER, 
-             'k': K_ORDER}
+ORDER_MAP = {
+    "language_en": LANGUAGE_ORDER,
+    "role_en": ROLE_ORDER,
+    "location_en": LOCATION_ORDER,
+    "field_en": FIELD_ORDER,
+    "target_en": SENIORITY_ORDER,
+    "k": K_ORDER,
+}
 
 
-METRICS_NAME_MAP = {'parity_ethnicity':'Ethinicity parity',
-                    'div_ethnicity':'Ethinicity diversity',
+# ISO-2 → display name for the countries that show up as recommendation targets
+# in the location Sankey (issue #37). Only the ones that reach the figure need an
+# entry; anything else falls back to its ISO code.
+COUNTRY_ISO_NAMES = {
+    "US": "United States",
+    "JP": "Japan",
+    "DE": "Germany",
+    "ES": "Spain",
+    "GB": "United Kingdom",
+    "CA": "Canada",
+    "ZA": "South Africa",
+    "CH": "Switzerland",
+    "MX": "Mexico",
+    "AU": "Australia",
+    "BR": "Brazil",
+    "CO": "Colombia",
+    "FR": "France",
+    "CL": "Chile",
+    "EC": "Ecuador",
+    "IT": "Italy",
+    "NL": "Netherlands",
+    "CN": "China",
+    "AT": "Austria",
+    "SE": "Sweden",
+}
 
-                    'parity_gender':'Gender parity',
-                    'div_gender':'Gender diversity',
-                    
-                    'parity_works':'Works parity',
-                    'pct_works_high':'Works upper tertile',
-                    'popularity_works':'Popularity-based works',
-
-                    'parity_citations':'Citations parity',
-                    'pct_citations_high':'Citations upper tertile',
-                    'popularity_citations':'Popularity-based citations',
-
-                    'pct_works_med':'Works middle tertile',
-                    'pct_works_low':'Works lower tertile',
-                    'pct_citations_med':'Citations middle tertile',
-                    'pct_citations_low':'Citations lower tertile',
-
-                    'div_location':'Location diversity',
-                    'div_productivity_citations':'Citations diversity',
-                    'div_productivity_works':'Works diversity',
-
-                    'factuality_author':'Author factuality',
-                    'factuality_field':'Field factuality',
-                    'factuality_seniority':'Seniority factuality',
-                    'factuality_location':'Location factuality',
-
-                    'validity':'Validity',
-                    'refusals':'Refusals',
-                    'consistency':'Consistency',
-                    'duplicates':'Duplicates',
-
-                    'connectedness':'Connectedness',
-                    'similarity':'Scholarly similarity',
-
-                    }
+METRICS_NAME_MAP = {
+    "parity_ethnicity": "Ethinicity parity",
+    "div_ethnicity": "Ethinicity diversity",
+    "parity_gender": "Gender parity",
+    "div_gender": "Gender diversity",
+    "parity_works": "Works parity",
+    "pct_works_high": "Works upper tertile",
+    "popularity_works": "Popularity-based works",
+    "parity_citations": "Citations parity",
+    "pct_citations_high": "Citations upper tertile",
+    "popularity_citations": "Popularity-based citations",
+    "pct_works_med": "Works middle tertile",
+    "pct_works_low": "Works lower tertile",
+    "pct_citations_med": "Citations middle tertile",
+    "pct_citations_low": "Citations lower tertile",
+    "div_location": "Location diversity",
+    "div_productivity_citations": "Citations diversity",
+    "div_productivity_works": "Works diversity",
+    "factuality_author": "Author factuality",
+    "factuality_field": "Field factuality",
+    "factuality_seniority": "Seniority factuality",
+    "bias_location": "Location bias",
+    "validity": "Validity",
+    "refusals": "Refusals",
+    "consistency": "Consistency",
+    "duplicates": "Duplicates",
+    "connectedness": "Connectedness",
+    "similarity": "Scholarly similarity",
+}

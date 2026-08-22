@@ -875,9 +875,10 @@ COL_GROUPS: Dict[str, List[str]] = {
     'technical': [
         'validity', 'refusals', 'consistency', 'duplicates',
         'factuality_author', 'factuality_field',
-        'factuality_seniority', 'factuality_location',
+        'factuality_seniority',
     ],
     'social': [
+        'bias_location',
         'parity_eth', 'parity_gender', 'parity_pub', 'parity_cit',
         'div_gen', 'div_eth', 'div_loc',
         'pct_pub_l', 'pct_pub_m', 'pct_pub_h',
@@ -912,7 +913,7 @@ NAME_MAP = {
     # full-name overrides for grouped columns whose suffix collides with
     # a row name ('field', 'location'): force lowercase tick labels
     'factuality_field':    'field',
-    'factuality_location': 'location',
+    'bias_location':       'location',
     # suffix defaults (no collision → bare key is enough)
     'author': 'author', 'seniority': 'seniority',
     'eth': 'eth.', 'gender': 'gender', 'pub': 'pub.', 'cit': 'cit.',
@@ -923,6 +924,7 @@ NAME_MAP = {
 
 TICK_PREFIX_GROUPS = {
     'factuality_': 'Factuality',
+    'bias_':       'Bias',
     'parity_':     'Parity',
     'div_':        'Diversity',
     'pct_works_':        '% Publications',

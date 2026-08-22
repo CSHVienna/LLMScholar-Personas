@@ -376,7 +376,17 @@ def aggregate_factuality_author(df_factuality_author):
 
 
 def aggregate_factuality_task(df_factuality_task, metric):
-    fact_column = constants.BENCHMARK_FACTUALITY_FIELD_METRICS_MAP[metric]
+    """Per-attempt match rate for a task-level metric (field / seniority / location).
+
+    ``metric`` is a key of ``constants.FACTUALITY_TASK_STATUS_COLS``; the status
+    column it maps to holds ``<prefix>_match`` / ``<prefix>_mismatch`` /
+    ``<prefix>_unknown`` / ``not_applicable``. Only match and mismatch are
+    evaluable — the other two mean there was nothing to check against (e.g. an
+    author with no topics on the field side), so they are dropped rather than
+    counted as failures, exactly as step 6 of build_valid_calls.py does.
+    """
+    status_col = constants.FACTUALITY_TASK_STATUS_COLS[metric]
+    prefix = status_col.split("_")[0]
     df_factuality_task_clean = df_factuality_task.drop_duplicates(
         subset=[
             "model",
@@ -390,19 +400,18 @@ def aggregate_factuality_task(df_factuality_task, metric):
             "clean_name",
         ]
     ).copy()
-    df_factuality_task_clean.dropna(
-        subset=[fact_column], inplace=True
-    )  # eg. in field, some authors do not have a list of topics associated with them so we cannot check fact.
-    # print(df_factuality_task_clean[fact_column].value_counts())
-    df_factuality_task_clean[fact_column] = df_factuality_task_clean[
-        fact_column
-    ].astype(int)
+    eligible = df_factuality_task_clean[
+        df_factuality_task_clean[status_col].isin(
+            [f"{prefix}_match", f"{prefix}_mismatch"]
+        )
+    ].copy()
+    eligible[status_col] = (eligible[status_col] == f"{prefix}_match").astype(int)
     metric_agg = (
-        fact_column,
+        status_col,
         "mean",
-    )  # how many factual field-author / epoch-author / seniority-author checks are true
+    )  # how many factual field-author / location-author / seniority-author checks are true
     per_attempt = aggregate_per_attempt(
-        df_factuality_task_clean, constants.BENCHMARK_PER_ATTEMPT_COLS, metric_agg
+        eligible, constants.BENCHMARK_PER_ATTEMPT_COLS, metric_agg
     )
     return per_attempt
 
