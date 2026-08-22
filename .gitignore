@@ -234,3 +234,7 @@ data/*.parquet
 
 
 
+
+# NamSor test-run outputs (contain personal names + inferred ethnicity)
+data/ethnicity_inference/*_test*.csv
+data/ethnicity_inference/*_test*.jsonl
