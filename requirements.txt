@@ -6,6 +6,7 @@ patsy==1.0.2
 scikit-learn==1.7.2
 matplotlib==3.10.9
 seaborn==0.13.2
+adjustText==1.4.0
 jinja2==3.1.6
 rapidfuzz==3.14.1
 duckdb==1.4.3

@@ -205,6 +205,10 @@ python scripts/annotation/lookup_output.py 42 \
 python scripts/metrics/build_valid_calls.py
 # → ../results/factualities/tables/valid_requests_metadata.csv
 
+# 5c. Build the prompt-country -> author-country flow table (location Sankey, issue #37).
+python scripts/metrics/build_location_flows.py
+# → ../results/factualities/tables/location_flows.csv
+
 # 5b. Build the GT/rec ethnicity distributions used by ethnicity_metrics.ipynb.
 python scripts/metrics/build_ethnicity_distributions.py
 # → ../results/ethnicity/distributions/{gt_overall,gt_per_field,rec_overall,rec_per_field,rec_per_model}.csv

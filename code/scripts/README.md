@@ -165,6 +165,8 @@ Two scripts pre-compute the aggregated tables consumed by `notebooks/analysis/`:
 - **`build_valid_calls.py`** — reads `summary/factuality_full.csv`, joins ground truth, derives every per-call metric (factuality, diversity, parity, consistency, duplicates, popularity, connectedness, similarity), and writes `factualities/tables/valid_requests_metadata.csv`.
   - The two structural metrics (paper Eqs. 6-8) build a coauthorship graph from the OpenAlex snapshot (`[data].oa_duckdb`) and a PCA embedding of author features. Both are cached under `<results_dir>/.cache`, so the pass over `oa.works` runs once; use `--rebuild_structural` to force it. Without `--oa_duckdb` they are skipped and no other metric changes.
   - That pass is the expensive step: it explodes the `authorships` list of all 492M works. It is chunked by `works.id` to bound peak memory — a single-pass version exhausted 56 GiB of DuckDB temp space. Budget hours, not minutes, and run it once.
+- **`build_location_flows.py`** — reads `summary/factuality_full.csv` in chunks and writes `factualities/tables/location_flows.csv`: one row per (prompt country → author country, field, language, model) with a recommendation count. Feeds the location Sankey figure (issue #37). Recommendations whose author has no OpenAlex country (15.2%) cannot form a flow and are excluded, reported as a coverage line in the log.
+
 - **`build_ethnicity_distributions.py`** — reads the per-field ground-truth CSVs and `recommendations_with_ethnicity.csv`, computes the distributions needed by `notebooks/analysis/ethnicity_metrics.ipynb`, and writes them under `ethnicity/distributions/`.
 
 Both scripts read their default paths from the `[data]` section of `config.ini`.
