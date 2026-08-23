@@ -193,16 +193,32 @@ STRUCTURAL_USED_COLS = {
     SIMILARITY_METRIC: "n_used_similarity",
 }
 
-# Feature vector for scholarly similarity. h-index / i10-index are NOT usable:
-# factuality_openalex.py leaves them None (absent from the DuckDB snapshot), so
-# they are 0% covered. citations_per_work stands in for the missing h-index.
+# Feature vector for scholarly similarity, base half: everything derivable from
+# the columns factuality_openalex.py already writes into factuality_full.csv.
+# Note that oa_h_index / oa_i10_index are NOT among them — the columns exist but
+# are 0% covered (0 of 3,907,448 rows), because the OpenAlex DuckDB snapshot has
+# no summary_stats. The real h-index arrives via SIMILARITY_STATS_COLS below;
+# citations_per_work remains as its cheap surrogate for runs without the snapshot.
 SIMILARITY_FEATURE_COLS = [
-    "works_count",         # productivity: raw publication volume
-    "cited_by_count",      # impact: raw accumulated citations
-    "citations_per_work",  # impact per unit of output (h-index surrogate)
-    "career_age",          # career stage: span of active years
-    "works_per_year",      # productivity intensity over the career
+    "works_count",              # productivity: raw publication volume
+    "cited_by_count",           # impact: raw accumulated citations
+    "citations_per_work",       # impact per unit of output (h-index surrogate)
+    "career_age",               # career stage: span of active years
+    "works_per_year",           # productivity intensity over the career
+    "citations_per_paper_age",  # citations_per_work damped by career length
 ]
+
+# Second half: recomputed from the snapshot by io.build_author_scholarly_stats,
+# which is the only way to get them — see the note above. Appended to the base
+# vector when that pass has run, dropped when it has not, so the pipeline still
+# works without --oa_duckdb.
+SIMILARITY_STATS_COLS = [
+    "h_index",    # impact concentration: h papers with >= h citations each
+    "i10_index",  # papers with at least 10 citations
+    "e_index",    # entropy of the per-paper citation distribution
+]
+
+SIMILARITY_FEATURE_COLS_FULL = SIMILARITY_FEATURE_COLS + SIMILARITY_STATS_COLS
 
 # Minimum share of variance the retained PCA components must explain (Eq. 8).
 SIMILARITY_PCA_VARIANCE = 0.90

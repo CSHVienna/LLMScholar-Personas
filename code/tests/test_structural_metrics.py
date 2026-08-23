@@ -275,7 +275,7 @@ def test_zero_norm_embedding_row_is_excluded():
 # ── Feature derivation ────────────────────────────────────────────────────────
 
 
-def test_build_author_features_derives_the_five_columns():
+def test_build_author_features_derives_the_base_columns():
     df = pd.DataFrame(
         {
             "author_id": ["A1", "A2"],
@@ -286,12 +286,15 @@ def test_build_author_features_derives_the_five_columns():
     )
     features = build_author_features(df)
 
+    # Without `stats` the vector stays on what factuality_full.csv can supply;
+    # h_index / i10_index / e_index only appear once the snapshot pass has run.
     assert list(features.columns) == [
         "works_count",
         "cited_by_count",
         "citations_per_work",
         "career_age",
         "works_per_year",
+        "citations_per_paper_age",
     ]
     assert features.loc["A1", "citations_per_work"] == pytest.approx(10.0)
     # career_age 0 must not divide by zero — clipped to 1.

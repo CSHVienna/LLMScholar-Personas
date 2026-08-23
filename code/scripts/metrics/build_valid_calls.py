@@ -44,6 +44,7 @@ from libs.metrics.aggregators import (
 )
 from libs.metrics.io import (
     build_author_features,
+    build_author_scholarly_stats,
     build_coauthorship_graph,
     build_similarity_embeddings,
 )
@@ -222,7 +223,19 @@ def _compute_structural_metrics(
         rebuild=rebuild,
         logger=logger,
     )
-    features = build_author_features(factual.dropna(subset=["author_id"]))
+    # h-index / i10-index / e-index need their own pass over oa.works; the
+    # coauthorship cache above is keyed independently and is not invalidated.
+    stats = build_author_scholarly_stats(
+        author_ids,
+        cache_path=cache_dir / "author_scholarly_stats.joblib",
+        oa_duckdb_path=oa_duckdb_path,
+        temp_dir=cache_dir / "duckdb_tmp",
+        rebuild=rebuild,
+        logger=logger,
+    )
+    features = build_author_features(
+        factual.dropna(subset=["author_id"]), stats=stats
+    )
     embeddings, emb_index, _ = build_similarity_embeddings(
         features,
         cache_path=cache_dir / "similarity_embeddings.joblib",

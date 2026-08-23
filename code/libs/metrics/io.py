@@ -354,6 +354,212 @@ def build_coauthorship_graph(
     return adjacency, index
 
 
+def _scholarly_stats_from_citations(
+    idx: np.ndarray, citations: np.ndarray, n_authors: int
+) -> pd.DataFrame:
+    """h-index, i10-index and e-index from one (author row, paper citations) pair
+    array. Split out from the DuckDB pass so it can be unit-tested directly.
+
+    Everything is computed group-wise without a Python-level loop: sorting by
+    (author, -citations) once puts each author's papers in descending citation
+    order, and the per-group rank of a row is its offset from that group's start.
+
+    * h-index — largest rank r whose paper still has >= r citations, i.e. the
+      largest r for which the descending-sorted c[r-1] >= r.
+    * i10-index — count of papers with >= 10 citations.
+    * e-index — NOT Zhang's sqrt(h-core excess) but LLMScholarBench's definition
+      (GTBuilder/APS/code/libs/scholar.py), the entropy of how an author's
+      citations spread over their papers:
+          e = -1/N * sum_i c_i * log(c_i / c_total)
+      Uncited papers contribute nothing (the limit of c*log(c) as c -> 0 is 0),
+      and an author with no citations at all scores 0.
+    """
+    order = np.lexsort((-citations, idx))
+    idx_s = idx[order]
+    c_s = citations[order].astype(np.float64, copy=False)
+
+    is_start = np.empty(len(idx_s), dtype=bool)
+    is_start[0] = True
+    np.not_equal(idx_s[1:], idx_s[:-1], out=is_start[1:])
+    group = np.cumsum(is_start) - 1
+    starts = np.flatnonzero(is_start)
+    rank = np.arange(len(idx_s), dtype=np.int64) - starts[group] + 1
+    n_groups = len(starts)
+
+    h = np.zeros(n_groups, dtype=np.int64)
+    holds = c_s >= rank
+    np.maximum.at(h, group[holds], rank[holds])
+
+    i10 = np.bincount(group[c_s >= 10], minlength=n_groups).astype(np.int64)
+
+    n_papers = np.bincount(group, minlength=n_groups)
+    c_total = np.bincount(group, weights=c_s, minlength=n_groups)
+    cited = c_s > 0
+    contrib = np.zeros(len(c_s), dtype=np.float64)
+    contrib[cited] = c_s[cited] * np.log(c_s[cited] / c_total[group[cited]])
+    e = -np.bincount(group, weights=contrib, minlength=n_groups) / n_papers
+
+    # Authors whose every paper fell outside the snapshot never appear in `idx`;
+    # reindexing onto the full row range leaves them NaN rather than a fake 0.
+    present = idx_s[starts]
+    out = pd.DataFrame(
+        {"h_index": h, "i10_index": i10, "e_index": e}, index=present
+    )
+    return out.reindex(np.arange(n_authors))
+
+
+def build_author_scholarly_stats(
+    author_ids: Iterable[str],
+    *,
+    cache_path: Path | str,
+    oa_duckdb_path: Path | str,
+    memory_limit: str = "12GB",
+    temp_dir: Path | str | None = None,
+    n_chunks: int = 32,
+    rebuild: bool = False,
+    logger: logging.Logger | None = None,
+) -> pd.DataFrame:
+    """Compute (once) and cache h-index / i10-index / e-index per author.
+
+    Returns a DataFrame indexed by author id with those three columns, ready to
+    pass as ``build_author_features(stats=...)``.
+
+    These cannot be read off the snapshot: OpenAlex publishes them under an
+    author's ``summary_stats``, which this dump does not carry — ``oa_h_index``
+    and ``oa_i10_index`` reach factuality_full.csv as all-NULL columns (0 of
+    3,907,448 rows). They are recomputed here from first principles instead,
+    which needs nothing but ``works.cited_by_count`` and ``works.authorships``.
+
+    Note what this does *not* need: the citation graph. LLMScholarBench derives
+    the e-index from a publication-to-publication citation table because the APS
+    dataset has one, but the formula only ever reads c_i, the citation count of
+    each paper — a column OpenAlex already stores. ``referenced_works`` is never
+    touched.
+
+    Cost is the same shape as :func:`build_coauthorship_graph`: one chunked pass
+    over ``oa.works`` exploding ``authorships``, so budget hours and run it once.
+    Both passes are independent and the cache keys differ, so adding this does
+    not invalidate an existing coauthorship graph.
+    """
+    log = logger or logging.getLogger()
+    cache_path = Path(cache_path)
+    index = build_author_index(author_ids)
+    n = len(index)
+    population_key = _population_key(index)
+
+    if cache_path.exists() and not rebuild:
+        import joblib
+
+        payload = joblib.load(cache_path)
+        if payload.get("population_key") == population_key:
+            log.info(
+                "Scholarly stats: loaded %s (%d authors)",
+                cache_path,
+                len(payload["stats"]),
+            )
+            return payload["stats"]
+        log.info(
+            "Scholarly stats: cache was built for a different author population "
+            "(%s != %s) — rebuilding",
+            payload.get("population_key"),
+            population_key,
+        )
+
+    import duckdb
+    import joblib
+
+    log.info("Scholarly stats: building over %d authors", n)
+
+    u_df = pd.DataFrame(
+        {
+            "author_url": [f"https://openalex.org/{a}" for a in index],
+            "idx": list(index.values()),
+        }
+    )
+
+    # DISTINCT on (work, author): an author listed twice in one work's
+    # authorships would otherwise count that paper — and its citations — twice.
+    chunk_query = """
+        SELECT DISTINCT w.id AS work_id, u.idx AS idx, w.cited_by_count AS c
+        FROM oa.works w,
+             UNNEST(w.authorships) AS t(a)
+             JOIN u ON u.author_url = a.author.id
+        WHERE w.id >= ? AND w.id < ?
+    """
+
+    con = duckdb.connect()
+    try:
+        con.execute(f"PRAGMA memory_limit='{memory_limit}'")
+        if temp_dir is not None:
+            Path(temp_dir).mkdir(parents=True, exist_ok=True)
+            con.execute(f"PRAGMA temp_directory='{temp_dir}'")
+        con.execute("SET preserve_insertion_order=false")
+        con.execute(f"ATTACH '{oa_duckdb_path}' AS oa (READ_ONLY)")
+
+        con.register("u_df", u_df)
+        con.execute(
+            "CREATE TEMP TABLE u AS "
+            "SELECT author_url::VARCHAR AS author_url, idx::INTEGER AS idx FROM u_df"
+        )
+
+        lo, hi = con.execute("SELECT min(id), max(id) FROM oa.works").fetchone()
+        cut_points = ", ".join(f"{i / n_chunks:.6f}" for i in range(1, n_chunks))
+        inner = (
+            con.execute(
+                f"SELECT approx_quantile(id, [{cut_points}]) FROM oa.works"
+            ).fetchone()[0]
+            if n_chunks > 1
+            else []
+        )
+        bounds = sorted({int(lo), *(int(b) for b in inner), int(hi) + 1})
+        log.info(
+            "Scholarly stats: scanning oa.works in %d quantile chunks",
+            len(bounds) - 1,
+        )
+
+        idx_parts, cit_parts = [], []
+        for c, (start, end) in enumerate(zip(bounds, bounds[1:])):
+            result = con.execute(chunk_query, [start, end]).fetchnumpy()
+            if len(result["idx"]):
+                idx_parts.append(result["idx"].astype(np.int32, copy=False))
+                cit_parts.append(result["c"].astype(np.int64, copy=False))
+            log.info(
+                "Scholarly stats: chunk %d/%d — %d (author, paper) rows",
+                c + 1,
+                len(bounds) - 1,
+                len(result["idx"]),
+            )
+    finally:
+        con.close()
+
+    if idx_parts:
+        idx_all = np.concatenate(idx_parts)
+        cit_all = np.concatenate(cit_parts)
+    else:
+        idx_all = np.empty(0, dtype=np.int32)
+        cit_all = np.empty(0, dtype=np.int64)
+    log.info("Scholarly stats: %d (author, paper) rows collected", len(idx_all))
+
+    stats = _scholarly_stats_from_citations(idx_all, cit_all, n)
+    # Back from row positions to author ids.
+    stats.index = pd.Index(list(index), name="author_id")
+    log.info(
+        "Scholarly stats: h-index defined for %d/%d authors (median %.0f)",
+        int(stats["h_index"].notna().sum()),
+        n,
+        stats["h_index"].median(skipna=True),
+    )
+
+    validate_path(cache_path)
+    joblib.dump(
+        {"stats": stats, "index": index, "population_key": population_key},
+        cache_path,
+        compress=3,
+    )
+    log.info("Scholarly stats: saved → %s", cache_path)
+    return stats
+
+
 def _log1p_clipped(x):
     """``log(1 + x)`` with a non-negativity guard.
 
@@ -370,13 +576,27 @@ def build_author_features(
     works_col: str = "oa_works_count",
     citations_col: str = "oa_cited_by_count",
     career_age_col: str = "oa_career_age",
+    stats: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Derive the 5 scholarly-similarity features, one row per unique author.
+    """Derive the scholarly-similarity features, one row per unique author.
 
     Columns are ``constants.SIMILARITY_FEATURE_COLS``, indexed by ``id_col``:
     productivity (``works_count``, ``works_per_year``), citation impact
-    (``cited_by_count``, ``citations_per_work``) and career stage
-    (``career_age``) — the three axes named in the paper.
+    (``cited_by_count``, ``citations_per_work``, ``citations_per_paper_age``)
+    and career stage (``career_age``) — the three axes named in the paper.
+
+    ``stats`` is the optional output of :func:`build_author_scholarly_stats`
+    (``h_index`` / ``i10_index`` / ``e_index``). When given, those three columns
+    are joined on and the result carries ``SIMILARITY_FEATURE_COLS_FULL``;
+    authors absent from ``stats`` get NaN and are median-imputed downstream like
+    any other gap. When omitted the base vector is returned unchanged, which is
+    what a run without ``--oa_duckdb`` gets.
+
+    ``citations_per_paper_age`` follows LLMScholarBench's definition —
+    ``(cited_by_count / works_count) / career_age`` — and is deliberately kept
+    alongside ``citations_per_work`` and ``works_per_year`` even though the three
+    are algebraically related. They are not collinear (the ratios differ per
+    author) and the PCA is what decides how much each is worth.
 
     Absolute years (``oa_first_pub_year`` / ``oa_last_pub_year``) are
     deliberately not features: after ``log(1+x)`` a 30-year gap between 1985 and
@@ -405,7 +625,18 @@ def build_author_features(
     features["citations_per_work"] = citations / works.clip(lower=1)
     features["career_age"] = career_age
     features["works_per_year"] = works / career_age.clip(lower=1)
-    return features[constants.SIMILARITY_FEATURE_COLS]
+    features["citations_per_paper_age"] = features["citations_per_work"] / career_age.clip(
+        lower=1
+    )
+
+    if stats is None:
+        return features[constants.SIMILARITY_FEATURE_COLS]
+
+    for col in constants.SIMILARITY_STATS_COLS:
+        features[col] = pd.to_numeric(
+            stats[col].reindex(features.index), errors="coerce"
+        )
+    return features[constants.SIMILARITY_FEATURE_COLS_FULL]
 
 
 def build_similarity_embeddings(
