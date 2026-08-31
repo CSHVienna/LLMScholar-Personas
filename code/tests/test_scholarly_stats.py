@@ -220,3 +220,57 @@ def test_full_vector_extends_base_without_reordering():
         constants.SIMILARITY_FEATURE_COLS_FULL[: len(constants.SIMILARITY_FEATURE_COLS)]
         == constants.SIMILARITY_FEATURE_COLS
     )
+
+
+# ── The extended vector must actually reach the PCA ──────────────────────────
+
+
+def test_pca_consumes_every_column_the_features_frame_carries():
+    """Regression: build_similarity_embeddings used to slice the matrix with a
+    hardcoded SIMILARITY_FEATURE_COLS, so the three snapshot-derived features
+    were dropped on the way in — the pass that computes them ran, and the
+    embedding ignored its output."""
+    import numpy as np
+
+    from libs.metrics.io import build_similarity_embeddings
+
+    rng = np.random.default_rng(0)
+    n = 60
+    ids = [f"A{i}" for i in range(n)]
+    base = {c: rng.integers(1, 500, n) for c in constants.SIMILARITY_FEATURE_COLS}
+    stats = {c: rng.integers(1, 90, n) for c in constants.SIMILARITY_STATS_COLS}
+    full = pd.DataFrame({**base, **stats}, index=ids)
+
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as tmp:
+        _, _, pipe_full = build_similarity_embeddings(
+            full, cache_path=Path(tmp) / "full.joblib"
+        )
+        _, _, pipe_base = build_similarity_embeddings(
+            full[constants.SIMILARITY_FEATURE_COLS], cache_path=Path(tmp) / "base.joblib"
+        )
+
+    assert pipe_full.named_steps["impute"].n_features_in_ == len(
+        constants.SIMILARITY_FEATURE_COLS_FULL
+    )
+    assert pipe_base.named_steps["impute"].n_features_in_ == len(
+        constants.SIMILARITY_FEATURE_COLS
+    )
+
+
+def test_missing_base_column_is_an_error_not_a_silent_drop():
+    import tempfile
+    from pathlib import Path
+
+    from libs.metrics.io import build_similarity_embeddings
+
+    incomplete = pd.DataFrame(
+        {"works_count": [1.0, 2.0], "cited_by_count": [3.0, 4.0]}, index=["A1", "A2"]
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        with pytest.raises(ValueError, match="missing base columns"):
+            build_similarity_embeddings(
+                incomplete, cache_path=Path(tmp) / "x.joblib"
+            )

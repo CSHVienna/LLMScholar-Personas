@@ -706,10 +706,20 @@ def build_similarity_embeddings(
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import FunctionTransformer, Normalizer, StandardScaler
 
+    # Take the columns the caller actually supplied rather than a fixed list:
+    # build_author_features returns the base vector without the snapshot pass
+    # and SIMILARITY_FEATURE_COLS_FULL with it, so hardcoding either one
+    # silently drops features in the other case. Ordered by the canonical list
+    # so the fitted pipeline is reproducible.
+    feature_cols = [
+        c for c in constants.SIMILARITY_FEATURE_COLS_FULL if c in features.columns
+    ]
+    missing = set(constants.SIMILARITY_FEATURE_COLS) - set(feature_cols)
+    if missing:
+        raise ValueError(f"features is missing base columns: {sorted(missing)}")
+
     # Align the feature matrix to the shared index; unknown authors stay NaN.
-    matrix = features.reindex(list(index.keys()))[
-        constants.SIMILARITY_FEATURE_COLS
-    ].to_numpy(dtype=float)
+    matrix = features.reindex(list(index.keys()))[feature_cols].to_numpy(dtype=float)
     all_missing = np.isnan(matrix).all(axis=1)
     log.info(
         "Similarity embeddings: fitting over %d authors (%d without any feature)",
@@ -751,7 +761,7 @@ def build_similarity_embeddings(
     log.info(
         "Similarity embeddings: PCA kept %d/%d components (%.1f%% of variance)",
         n_components,
-        len(constants.SIMILARITY_FEATURE_COLS),
+        len(feature_cols),
         100 * explained,
     )
 
