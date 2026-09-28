@@ -11,15 +11,26 @@ notebook then loads.
 
 Output: <results_dir>/factualities/tables/valid_requests_metadata.csv
 
-The two structural metrics (paper Eqs. 6-8) need the OpenAlex DuckDB snapshot to
-build the coauthorship graph. Graph and PCA pipeline are cached under
-<results_dir>/.cache, so the pass over oa.works happens once; pass
---rebuild_structural to force it again. Without --oa_duckdb the two metrics are
-skipped and every other metric is unaffected.
+The two structural metrics (paper Eqs. 6-8) need two things prepared first:
+
+  1. the OpenAlex DuckDB snapshot, for the coauthorship graph;
+  2. the per-author scholarly stats, from
+     scripts/metrics/extract_oa_author_stats.py — run that BEFORE this script
+     or the similarity features cannot be built.
+
+Graph and PCA pipeline are cached under <results_dir>/.cache, so the pass over
+oa.works happens once; pass --rebuild_structural to force it again. Without
+--oa_duckdb the two metrics are skipped and every other metric is unaffected.
+
+To recompute only the structural metrics, without rewriting the 425 MB
+per-call table, use scripts/metrics/run_similarity.py instead — it calls the
+same code path and writes its own parquet per feature-vector variant.
 
 Usage (from code/, with PYTHONPATH=.):
+  python scripts/metrics/extract_oa_author_stats.py      # once, ~95 min
   python scripts/metrics/build_valid_calls.py
   python scripts/metrics/build_valid_calls.py --results <results_dir> --parquet <path_to_ss_parquet>
+  python scripts/metrics/build_valid_calls.py --with_ss_block
   python scripts/metrics/build_valid_calls.py --rebuild_structural
 
 Defaults come from [data] in config.ini.
@@ -44,11 +55,13 @@ from libs.metrics.aggregators import (
 )
 from libs.metrics.io import (
     build_author_features,
-    build_author_scholarly_stats,
+    load_author_scholarly_stats,
+    load_ss_author_features,
     build_coauthorship_graph,
     build_similarity_embeddings,
 )
 from libs.metrics.constants import (
+    SIMILARITY_SS_COLS,
     CALL_KEYS,
     CONNECTEDNESS_METRIC,
     ETHNICITY_ORDER,
@@ -79,6 +92,64 @@ from libs.visuals.constants import ETHNICITY_MAP, GENDER_MAP
 
 warnings.filterwarnings("ignore")
 logger = setup_logging()
+
+
+def author_uid(df: pd.DataFrame) -> pd.Series:
+    """A per-author key that never merges two different people.
+
+    ``author_id`` is the OpenAlex id, and it is None for the 37% of
+    recommendations OpenAlex does not resolve. Dropping duplicates on it alone
+    folds every unresolved author of one response into a single row, which the
+    counts then read as the model having repeated itself: measured that way
+    `duplicates` is 0.159, against 0.002 when distinct people stay distinct.
+
+    Falls back the way libs/metrics/io.py already does for the structural
+    metrics — ``SS:<researcher_id>`` when Semantic Scholar matched the author —
+    and finally to the recommended name itself, so two hallucinated authors in
+    one response are two authors, while the same name twice is one.
+    """
+    name = (
+        df["name"].fillna("").astype(str).str.strip()
+        + " "
+        + df["lastname"].fillna("").astype(str).str.strip()
+    ).str.lower()
+    return np.where(
+        df["author_id"].notna(),
+        df["author_id"].astype(str),
+        np.where(
+            df["researcher_id"].notna(),
+            "SS:" + df["researcher_id"].astype(str),
+            "NM:" + name.str.strip(),
+        ),
+    )
+
+
+def match_rate_per_call(
+    eligible: pd.DataFrame,
+    status_col: str,
+    match_value: str,
+    index: pd.Index,
+) -> pd.Series:
+    """Per-call share of evaluable recommendations that matched.
+
+    `eligible` holds only the rows a metric can be scored on (status in
+    {match, mismatch}); `index` is every call, so calls absent from it get NaN.
+
+    A call whose evaluable recommendations all missed scores **0.0, not NaN** —
+    counting the matches alone and dividing leaves those calls out of the
+    groupby entirely, which silently restricts the metric to calls that got at
+    least one hit and inflates it (it put bias_location for Ecuador at 0.454
+    against a true 0.040). Only a call with nothing evaluable is NaN.
+    """
+    evaluated = eligible.groupby("_cid").size().reindex(index)
+    matched = (
+        eligible[eligible[status_col] == match_value]
+        .groupby("_cid")
+        .size()
+        .reindex(index)
+        .fillna(0)
+    )
+    return matched / evaluated.replace(0, np.nan)
 
 
 def _load_recommendations(fact_path: Path, cache_dir: Path) -> pd.DataFrame:
@@ -183,6 +254,10 @@ def _compute_structural_metrics(
     *,
     cache_dir: Path,
     oa_duckdb_path: str,
+    oa_author_stats_dir: Path | str,
+    ss_parquet: Path | str | None = None,
+    with_ss_block: bool = False,
+    population: str = "union",
     rebuild: bool = False,
 ) -> pd.DataFrame:
     """Per-response connectedness and scholarly similarity (paper Eqs. 6-8).
@@ -190,14 +265,40 @@ def _compute_structural_metrics(
     Returns a DataFrame indexed by ``_cid`` with the two metric columns plus one
     exclusion count each, ready to be assigned onto ``df_valid_calls``.
 
-    U-hat_i is the set of unique *factual* authors of the response, matching the
-    definition the rest of the pipeline uses (``author_found`` = Semantic Scholar
-    OR OpenAlex). Both metrics need OpenAlex-side data, so authors matched only
-    in Semantic Scholar are excluded and counted. They are de-duplicated on a
-    composite id (``oa_id`` when present, else ``SS:<researcher_id>``) so that
-    several such authors within one response are not collapsed into one.
+    U-hat_i is the set of unique *factual* authors of the response. Which
+    authors count is set by ``population``:
+
+    ``"union"`` (default) follows the definition the rest of the pipeline uses,
+    ``author_found`` = matched in Semantic Scholar OR in OpenAlex. Both metrics
+    need OpenAlex-side data, so authors matched only in Semantic Scholar are
+    excluded and counted; 305,893 authors carry an ``oa_id`` and enter.
+
+    ``"intersection"`` keeps only the 137,013 authors matched in BOTH sources,
+    which is what you want if every author must carry evidence from each. The
+    cost is that it drops 55% of the authors OpenAlex knows and Semantic
+    Scholar does not, so Sim_i is measured over fewer than half the population
+    and per-response exclusions rise accordingly. It needs no extra passes: the
+    scholarly stats already cover the wider population, and the cached
+    coauthorship graph is sliced to the subset instead of rebuilt.
+
+    Authors are de-duplicated on a composite id (``oa_id`` when present, else
+    ``SS:<researcher_id>``) so that several authors without an ``oa_id`` within
+    one response are not collapsed into one.
     """
+    if population not in ("union", "intersection"):
+        raise ValueError(
+            f"population must be 'union' or 'intersection', got {population!r}"
+        )
     factual = df_valid_recommendations[df_valid_recommendations["author_found"]].copy()
+    if population == "intersection":
+        before = factual["author_id"].nunique()
+        factual = factual[factual["author_status"] == "found"]
+        logger.info(
+            "Structural metrics: population 'intersection' — %d of %d authors "
+            "kept (matched in both sources)",
+            factual["author_id"].nunique(),
+            before,
+        )
 
     # Composite uid: without it, drop_duplicates(['_cid','author_id']) treats
     # every author_id-less author as the same row and the exclusion count would
@@ -223,19 +324,30 @@ def _compute_structural_metrics(
         rebuild=rebuild,
         logger=logger,
     )
-    # h-index / i10-index / e-index need their own pass over oa.works; the
-    # coauthorship cache above is keyed independently and is not invalidated.
-    stats = build_author_scholarly_stats(
-        author_ids,
-        cache_path=cache_dir / "author_scholarly_stats.joblib",
-        oa_duckdb_path=oa_duckdb_path,
-        temp_dir=cache_dir / "duckdb_tmp",
-        rebuild=rebuild,
-        logger=logger,
+    # h_index / i10_index / two_year_mean_citedness come straight from
+    # OpenAlex's own summary_stats (extracted from the raw author records, since
+    # the DuckDB dump omits the field); only e_index has to be computed, which
+    # extract_oa_author_stats.py does in its own checkpointed pass over
+    # oa.works. Both land in [data].oa_author_stats.
+    stats = load_author_scholarly_stats(oa_author_stats_dir, logger=logger)
+    # Second block, over the other corpus, mirroring the reference PCA's
+    # OpenAlex + APS concatenation. Off by default so the effect of turning it
+    # on is measurable against the OpenAlex-only vector.
+    ss = (
+        load_ss_author_features(ss_parquet, logger=logger)
+        if with_ss_block and ss_parquet
+        else None
     )
     features = build_author_features(
-        factual.dropna(subset=["author_id"]), stats=stats
+        factual.dropna(subset=["author_id"]), stats=stats, ss=ss
     )
+    if ss is not None:
+        covered = features[SIMILARITY_SS_COLS].notna().any(axis=1).mean()
+        logger.info(
+            "Similarity features: SS block covers %.1f%% of authors; the rest is "
+            "median-imputed there",
+            100 * covered,
+        )
     embeddings, emb_index, _ = build_similarity_embeddings(
         features,
         cache_path=cache_dir / "similarity_embeddings.joblib",
@@ -307,16 +419,57 @@ def main() -> None:
         "connectedness and similarity are skipped.",
     )
     parser.add_argument(
+        "--oa_author_stats",
+        default=config_default("oa_author_stats"),
+        help="Directory holding summary_stats.parquet and eindex.parquet, as "
+        "written by scripts/metrics/extract_oa_author_stats.py "
+        "(default: [data].oa_author_stats). Needed for the similarity features.",
+    )
+    parser.add_argument(
+        "--population",
+        choices=("union", "intersection"),
+        default="union",
+        help="Which authors enter the structural metrics: 'union' (matched in "
+        "either source, 305,893) or 'intersection' (matched in both, 137,013).",
+    )
+    parser.add_argument(
+        "--with_ss_block",
+        action="store_true",
+        help="Append the Semantic Scholar feature block to the similarity PCA "
+        "(4 extra columns over the SS corpus, mirroring the reference's aps_* "
+        "block). Off by default: it refits the PCA and so moves every Sim_i.",
+    )
+    parser.add_argument(
         "--rebuild_structural",
         action="store_true",
         help="Ignore the cached coauthorship graph / PCA pipeline and rebuild them.",
+    )
+    parser.add_argument(
+        "--input",
+        default=None,
+        help="File under <results>/summary/ to read. Defaults to "
+             "factuality_full_resolved.csv (the output of resolve_homonyms.py, "
+             "whose gt_* columns no longer depend on the order of the reference "
+             "parquet) when it exists, else factuality_full.csv.",
     )
     args = parser.parse_args()
 
     results = Path(args.results) if args.results else get_results_path()
     data = Path(args.data)
 
-    fact_path = results / "summary" / "factuality_full.csv"
+    if args.input:
+        fact_path = results / "summary" / args.input
+    else:
+        fact_path = results / "summary" / "factuality_full_resolved.csv"
+        if not fact_path.exists():
+            fact_path = results / "summary" / "factuality_full.csv"
+            logger.warning(
+                "factuality_full_resolved.csv not found — falling back to %s, "
+                "whose gt_field/gt_career_age still carry the file-order "
+                "tie-break (run scripts/factuality/resolve_homonyms.py)",
+                fact_path.name,
+            )
+    logger.info("Reading %s", fact_path)
     eth_gt_glob = str(
         results / "ethnicity" / "DataFrameRankings_Genderize_Namsor_*_with_ethnicity.csv"
     )
@@ -399,7 +552,8 @@ def main() -> None:
     n_total_recommendations = (
         df_valid_recommendations.groupby("_cid").size().rename("n_total_recommendations")
     )
-    uniq = df_valid_recommendations.drop_duplicates(["_cid", "author_id"])
+    df_valid_recommendations["author_uid"] = author_uid(df_valid_recommendations)
+    uniq = df_valid_recommendations.drop_duplicates(["_cid", "author_uid"])
     n_unique_authors = uniq.groupby("_cid").size().rename("n_unique_authors")
     df_authors_found = uniq[uniq["author_found"]]
     n_authors_found = df_authors_found.groupby("_cid").size().rename("n_authors_found")
@@ -440,18 +594,9 @@ def main() -> None:
         eligible = df_authors_found[
             df_authors_found[status_col].isin([f"{prefix}_match", f"{prefix}_mismatch"])
         ]
-        eval_n = eligible.groupby("_cid").size().rename("_e")
-        match_n = (
-            eligible[eligible[status_col] == f"{prefix}_match"]
-            .groupby("_cid")
-            .size()
-            .rename("_m")
+        df_valid_calls[metric_col] = match_rate_per_call(
+            eligible, status_col, f"{prefix}_match", df_valid_calls.index
         )
-        df_valid_calls = df_valid_calls.join(eval_n).join(match_n)
-        df_valid_calls[metric_col] = df_valid_calls["_m"] / df_valid_calls["_e"].replace(
-            0, np.nan
-        )
-        df_valid_calls.drop(columns=["_e", "_m"], inplace=True)
 
     # ── 7. Diversity and parity ──────────────────────────────────────────────
     gt_eth_frac = (
@@ -529,6 +674,10 @@ def main() -> None:
             df_valid_recommendations,
             cache_dir=cache_dir,
             oa_duckdb_path=args.oa_duckdb,
+            oa_author_stats_dir=args.oa_author_stats,
+            ss_parquet=args.parquet,
+            with_ss_block=args.with_ss_block,
+            population=args.population,
             rebuild=args.rebuild_structural,
         )
         for col in df_structural.columns:
