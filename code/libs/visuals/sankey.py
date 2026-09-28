@@ -73,16 +73,27 @@ def collapse_tail(
     value_col: str = "value",
     top_n: int = 12,
     other_label: str = "Other",
+    keep: Sequence[str] = (),
 ) -> pd.DataFrame:
     """Keep the `top_n` targets by total flow and fold the rest into one node.
 
     With 200+ author countries the figure is unreadable otherwise. Returns a copy
     — the caller's frame is untouched — and never silently drops a flow: whatever
     falls outside the top N is still there under `other_label`.
+
+    `keep` pins targets that must survive whatever their size — Ecuador is the
+    case this project cares about: it is the smallest of the prompted countries,
+    so a plain top-N drops it into `Other` and the figure can no longer answer
+    "how often does the model send Ecuador back to Ecuador?". Pinned targets
+    count against `top_n` rather than adding to it, so the node count is stable.
     """
-    keep = flows.groupby(target_col)[value_col].sum().nlargest(top_n).index
+    totals = flows.groupby(target_col)[value_col].sum()
+    pinned = [k for k in keep if k in totals.index]
+    room = max(top_n - len(pinned), 0)
+    rest = totals.drop(index=pinned).nlargest(room).index
+    keepers = set(pinned) | set(rest)
     out = flows.copy()
-    out[target_col] = out[target_col].where(out[target_col].isin(keep), other_label)
+    out[target_col] = out[target_col].where(out[target_col].isin(keepers), other_label)
     return out
 
 
@@ -115,6 +126,7 @@ def plot_sankey(
     source_order: Sequence[str] | None = None,
     target_order: Sequence[str] | None = None,
     source_colors: Mapping[str, str] | None = None,
+    target_colors: Mapping[str, str] | None = None,
     source_labels: Mapping[str, str] | None = None,
     target_labels: Mapping[str, str] | None = None,
     figsize: tuple = (9, 8),
@@ -123,6 +135,13 @@ def plot_sankey(
     ribbon_alpha: float = 0.62,
     label_fontsize: int = 10,
     value_fmt: str | None = "{pct:.0f}%",
+    source_value_fmt: str | None = None,
+    source_label_side: str = "right",
+    flow_fmt: str | None = None,
+    flow_label_min_pct: float = 0.0,
+    flow_label_min_gap: float | None = None,
+    flow_label_fontsize: int | None = None,
+    flow_label_color: str = "#1F2933",
     ax=None,
 ):
     """Two-column Sankey: `source_col` on the left, `target_col` on the right.
@@ -131,8 +150,28 @@ def plot_sankey(
     source, and both columns are packed top-down in the given order (or by
     descending total when no order is passed).
 
+    `target_colors` tints individual right-hand nodes; anything it omits keeps
+    the neutral grey. The location and language figures use it so the five
+    prompted countries carry the same colour on the right as they do on the
+    left, instead of dissolving into the grey of every other destination.
+
     `value_fmt` is appended to each target label; it receives `value` (the raw
     total) and `pct` (share of the grand total). Pass None to omit it.
+    `source_value_fmt` does the same on the left column — same fields, `pct`
+    being the source's share of the grand total, which after
+    `normalize_by_source` is just 1/n_sources and therefore only worth showing
+    on un-normalised data.
+
+    `flow_fmt` labels each ribbon where it leaves its source. It receives
+    `value`, `pct` (the flow as a share **of its source** — "of everything the
+    model returns for Ecuador, this much goes to the US") and `pct_total` (share
+    of the grand total). `flow_label_min_pct` suppresses labels below a given
+    within-source share so a 12-target figure stays readable; it is compared
+    against `pct`.
+
+    `source_label_side` puts the left column's labels outside the figure
+    ("left") instead of on top of the ribbons ("right", the default). Use
+    "left" whenever `flow_fmt` is on, since both want the same strip of canvas.
 
     Returns `(fig, ax)`.
     """
@@ -180,6 +219,12 @@ def plot_sankey(
     else:
         fig = ax.get_figure()
 
+    flow_fontsize = flow_label_fontsize or max(label_fontsize - 2, 5)
+    if flow_label_min_gap is None:
+        # One line of text, converted from points to the axes' data units (the
+        # y axis spans ~1.04 over the full figure height).
+        flow_label_min_gap = 1.15 * flow_fontsize / (72 * fig.get_size_inches()[1])
+
     x_left, x_right = 0.0, 1.0
     colors = source_colors or {}
     palette = plt.rcParams["axes.prop_cycle"].by_key().get("color", ["#4A90D9"])
@@ -187,6 +232,7 @@ def plot_sankey(
     # Ribbons first so the node bars sit on top of them.
     src_cursor = {s: src_pos[s][0] for s in sources}
     dst_cursor = {t: dst_pos[t][0] for t in targets}
+    last_label_y: dict = {}  # per source, to keep flow labels from overlapping
     for si, s in enumerate(sources):
         color = colors.get(s, palette[si % len(palette)])
         # Within a source, follow the target column order so ribbons cross no
@@ -213,6 +259,28 @@ def plot_sankey(
                 color,
                 ribbon_alpha,
             )
+            if flow_fmt:
+                pct_src = 100 * value / float(src_tot[s])
+                y_label = y0_top - h_src / 2
+                crowded = (
+                    s in last_label_y
+                    and abs(last_label_y[s] - y_label) < flow_label_min_gap
+                )
+                if pct_src >= flow_label_min_pct and not crowded:
+                    last_label_y[s] = y_label
+                    ax.text(
+                        x_left + node_width + 0.012,
+                        y_label,
+                        flow_fmt.format(
+                            value=value,
+                            pct=pct_src,
+                            pct_total=100 * value / total,
+                        ),
+                        va="center",
+                        ha="left",
+                        fontsize=flow_fontsize,
+                        color=flow_label_color,
+                    )
             src_cursor[s] -= h_src
             dst_cursor[t] -= h_dst
 
@@ -224,15 +292,25 @@ def plot_sankey(
                 (x_left, bot), node_width, top - bot, facecolor=color, edgecolor="none"
             )
         )
+        label = (source_labels or {}).get(s, s)
+        if source_value_fmt:
+            label += "  " + source_value_fmt.format(
+                value=float(src_tot[s]), pct=100 * float(src_tot[s]) / total
+            )
+        if source_label_side == "left":
+            lx, lha = x_left - 0.015, "right"
+        else:
+            lx, lha = x_left + node_width + 0.015, "left"
         ax.text(
-            x_left + node_width + 0.015,
+            lx,
             (top + bot) / 2,
-            (source_labels or {}).get(s, s),
+            label,
             va="center",
-            ha="left",
+            ha=lha,
             fontsize=label_fontsize,
         )
 
+    tgt_colors = target_colors or {}
     for t in targets:
         top, bot = dst_pos[t]
         ax.add_patch(
@@ -240,7 +318,7 @@ def plot_sankey(
                 (x_right, bot),
                 node_width,
                 top - bot,
-                facecolor=constants.TICK_COLOR,
+                facecolor=tgt_colors.get(t, constants.TICK_COLOR),
                 edgecolor="none",
             )
         )
@@ -258,7 +336,8 @@ def plot_sankey(
             fontsize=label_fontsize,
         )
 
-    ax.set_xlim(-0.02, x_right + node_width + 0.30)
+    left_margin = 0.30 if source_label_side == "left" else 0.02
+    ax.set_xlim(-left_margin, x_right + node_width + 0.30)
     ax.set_ylim(-0.02, 1.02)
     ax.axis("off")
     return fig, ax

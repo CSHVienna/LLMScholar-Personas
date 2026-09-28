@@ -163,3 +163,85 @@ def test_duplicate_pairs_are_aggregated(flows):
     doubled = pd.concat([flows, flows], ignore_index=True)
     fig, ax = plot_sankey(doubled)
     assert len([p for p in ax.patches if isinstance(p, PathPatch)]) == len(flows)
+
+
+def test_collapse_tail_pins_requested_targets(flows):
+    """EC is the smallest target, so only `keep` saves it from the tail."""
+    assert "EC" not in set(collapse_tail(flows, top_n=2).target)
+    out = collapse_tail(flows, top_n=2, keep=["EC"])
+    assert "EC" in set(out.target)
+    assert out.value.sum() == flows.value.sum()
+
+
+def test_pinned_targets_count_against_top_n(flows):
+    """Pinning must not quietly widen the figure."""
+    out = collapse_tail(flows, top_n=2, keep=["EC"])
+    assert len(set(out.target)) == 3  # EC + the biggest one + Other
+
+
+def test_collapse_tail_ignores_unknown_pins(flows):
+    out = collapse_tail(flows, top_n=2, keep=["ZZ"])
+    assert set(out.target) == {"JP", "US", "Other"}
+
+
+def test_flow_labels_are_shares_of_their_source(flows):
+    """EC sends 280 of its 555 to ES — 50.5%, not 18.8% of the grand total."""
+    fig, ax = plot_sankey(flows, flow_fmt="{pct:.1f}%", value_fmt=None)
+    texts = [t.get_text() for t in ax.texts]
+    assert "50.5%" in texts  # 280 / 555
+    assert "40.5%" in texts  # 225 / 555
+    assert "91.8%" in texts  # 857 / 934
+
+
+def test_flow_label_min_pct_suppresses_the_thin_ribbons(flows):
+    fig, ax = plot_sankey(
+        flows, flow_fmt="{pct:.1f}%", flow_label_min_pct=10.0, value_fmt=None
+    )
+    texts = [t.get_text() for t in ax.texts]
+    assert "50.5%" in texts
+    assert "9.0%" not in texts  # EC -> EC, 50 / 555
+
+
+def test_source_value_fmt_labels_the_left_column(flows):
+    fig, ax = plot_sankey(flows, source_value_fmt="{pct:.1f}%", value_fmt=None)
+    # EC carries 555 of 1489 → 37.3%
+    assert any(t.get_text().startswith("EC") and "37.3%" in t.get_text() for t in ax.texts)
+
+
+def test_source_labels_can_sit_outside_the_diagram(flows):
+    fig, ax = plot_sankey(flows, source_label_side="left")
+    ec = next(t for t in ax.texts if t.get_text() == "EC")
+    assert ec.get_position()[0] < 0
+    assert ec.get_horizontalalignment() == "right"
+    assert ax.get_xlim()[0] < -0.2  # room was made for them
+
+
+def test_crowded_flow_labels_are_thinned_out():
+    """Five equal ribbons out of one source cannot all carry a legible label."""
+    crowded = pd.DataFrame(
+        {
+            "source": ["EC"] * 5,
+            "target": list("ABCDE"),
+            "value": [100] * 5,
+        }
+    )
+    fig, ax = plot_sankey(
+        crowded, flow_fmt="{pct:.0f}%", flow_label_min_gap=0.5, value_fmt=None
+    )
+    assert len([t for t in ax.texts if t.get_text() == "20%"]) == 2  # spans 1.0
+
+
+def test_min_gap_zero_keeps_every_flow_label(flows):
+    fig, ax = plot_sankey(flows, flow_fmt="{pct:.1f}%", flow_label_min_gap=0.0,
+                          value_fmt=None)
+    assert len([t for t in ax.texts if t.get_text().endswith("%")]) == len(flows)
+
+
+def test_target_colors_tint_only_the_nodes_they_name(flows):
+    """The five prompted countries keep their colour on the right too."""
+    fig, ax = plot_sankey(flows, target_colors={"JP": "#c0392b"})
+    bars = [b for b in ax.patches if isinstance(b, Rectangle)
+            and b.get_x() == pytest.approx(1.0)]
+    faces = {tuple(round(c, 3) for c in b.get_facecolor()[:3]) for b in bars}
+    assert (0.753, 0.224, 0.169) in faces      # JP, tinted
+    assert len(faces) > 1                       # the rest stay grey
