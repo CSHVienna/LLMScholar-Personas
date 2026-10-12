@@ -152,20 +152,28 @@ def match_rate_per_call(
     return matched / evaluated.replace(0, np.nan)
 
 
+# Per-recommendation verdicts written by scripts/factuality_cascade/. Read only
+# when the input has them; renamed so they don't clash with the per-call metrics.
+CASCADE_COLS = {"factuality_name": "cascade_name", "factuality_author": "cascade_author"}
+
+
 def _load_recommendations(fact_path: Path, cache_dir: Path) -> pd.DataFrame:
     cache = cache_dir / f"df_{ios.file_hash(fact_path)}.pkl"
+    header = pd.read_csv(fact_path, nrows=0).columns
+    wanted = NEEDED_COLS + [c for c in CASCADE_COLS if c in header]
 
     def _compute():
         logger.info("Loading %s (selected columns only)", fact_path.name)
-        return pd.read_csv(fact_path, usecols=NEEDED_COLS, low_memory=False)
+        return pd.read_csv(fact_path, usecols=wanted, low_memory=False)
 
     df = ios.cached_pickle(cache, _compute, logger=logger)
     # Cache may pre-date column additions — invalidate if columns are missing.
-    missing = [c for c in NEEDED_COLS if c not in df.columns]
+    missing = [c for c in wanted if c not in df.columns]
     if missing:
         logger.info("Cached df missing %s — reloading from CSV", missing)
         df = _compute()
         ios.save_pickle(df, cache, logger=logger)
+    df = df.rename(columns=CASCADE_COLS)
     logger.info("Total recommendations: %d", len(df))
     logger.info("Unique calls: %d", df[CALL_KEYS].drop_duplicates().shape[0])
     return df
@@ -445,6 +453,19 @@ def main() -> None:
         help="Ignore the cached coauthorship graph / PCA pipeline and rebuild them.",
     )
     parser.add_argument(
+        "--output",
+        default=None,
+        help="Where to write the per-call table. Defaults to "
+             "<results>/factualities/tables/valid_requests_metadata.csv.",
+    )
+    parser.add_argument(
+        "--cache_dir",
+        default=None,
+        help="Cache directory. Defaults to <results>/.cache. Use a separate one "
+             "when running on another factuality table, so the cached "
+             "coauthorship graph and PCA of the default run are not replaced.",
+    )
+    parser.add_argument(
         "--input",
         default=None,
         help="File under <results>/summary/ to read. Defaults to "
@@ -473,13 +494,15 @@ def main() -> None:
     eth_gt_glob = str(
         results / "ethnicity" / "DataFrameRankings_Genderize_Namsor_*_with_ethnicity.csv"
     )
-    valid_calls_path = results / "factualities" / "tables" / "valid_requests_metadata.csv"
+    valid_calls_path = Path(args.output) if args.output else (
+        results / "factualities" / "tables" / "valid_requests_metadata.csv"
+    )
     valid_calls_path.parent.mkdir(parents=True, exist_ok=True)
 
     models_metadata_fn = data / "models" / "metadata.json"
     models_fn = data / "models" / "models.txt"
 
-    cache_dir = results / ".cache"
+    cache_dir = Path(args.cache_dir) if args.cache_dir else results / ".cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
 
     if args.parquet is None:
@@ -581,6 +604,16 @@ def main() -> None:
         df_valid_calls["n_authors_found"] / df_valid_calls["n_unique_authors"],
         np.nan,
     )
+
+    # Cascade input: factuality_name = the name exists in Semantic Scholar;
+    # factuality_author = name + field + seniority. Same denominator as above
+    # (unique authors of the call), and it replaces the definition above.
+    if "cascade_name" in uniq.columns:
+        for col, metric in [("cascade_name", "factuality_name"),
+                            ("cascade_author", "factuality_author")]:
+            df_valid_calls[metric] = (
+                uniq.groupby("_cid")[col].mean().reindex(df_valid_calls.index)
+            )
 
     # ── 6. Field / seniority factuality + location bias ──────────────────────
     # Same match-rate computation for the three; location is named a bias and
