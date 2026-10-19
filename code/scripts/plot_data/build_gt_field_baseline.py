@@ -9,7 +9,7 @@ Biology is therefore *below* what picking a name at random would give, not above
 
 Writes one tiny CSV, <results_dir>/factualities/tables/gt_field_baseline.csv,
 with the share of each field among the deduplicated Semantic Scholar researchers
-(the exact table factuality_author_jw.py matches against).
+(the table the factuality cascade matches names against).
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/plot_data/build_gt_field_baseline.py

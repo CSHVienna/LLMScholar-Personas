@@ -2,7 +2,7 @@
 similarity.py — Scholarly similarity between authors (paper Eq. 8).
 
   load_author_scholarly_stats   h-index, i10-index, e-index and 2yr citedness per
-                                author (files written by extract_oa_author_stats.py)
+                                author (files written by pipeline/4_author_stats.py)
   load_ss_author_features       optional Semantic Scholar block of features
   build_author_features         one feature vector per author
   build_similarity_embeddings   impute → log1p → standardise → PCA → unit vectors
@@ -25,7 +25,7 @@ import pandas as pd
 from libs.metrics import constants
 from libs.metrics.coauthorship import (
     StructuralMetric, _population_key, _resolve_indices, author_num, build_author_index,
-    works_author_key,
+    chunk_bounds, works_author_key,
 )
 from libs.metrics.io import validate_path
 
@@ -115,11 +115,10 @@ def build_author_scholarly_stats(
     Returns a DataFrame indexed by author id with those three columns, ready to
     pass as ``build_author_features(stats=...)``.
 
-    These cannot be read off the snapshot: OpenAlex publishes them under an
-    author's ``summary_stats``, which this dump does not carry — ``oa_h_index``
-    and ``oa_i10_index`` reach factuality_full.csv as all-NULL columns (0 of
-    3,907,448 rows). They are recomputed here from first principles instead,
-    which needs nothing but ``works.cited_by_count`` and ``works.authorships``.
+    They are computed from first principles, which needs nothing but
+    ``works.cited_by_count`` and ``works.authorships``. (The pipeline reads
+    h/i10 from OpenAlex's summary_stats instead; this version is kept for the
+    tests that check both agree.)
 
     Note what this does *not* need: the citation graph. LLMScholarBench derives
     the e-index from a publication-to-publication citation table because the APS
@@ -195,16 +194,7 @@ def build_author_scholarly_stats(
         )
         chunk_query = chunk_query.replace("{key}", works_author_key(con))
 
-        lo, hi = con.execute("SELECT min(id), max(id) FROM oa.works").fetchone()
-        cut_points = ", ".join(f"{i / n_chunks:.6f}" for i in range(1, n_chunks))
-        inner = (
-            con.execute(
-                f"SELECT approx_quantile(id, [{cut_points}]) FROM oa.works"
-            ).fetchone()[0]
-            if n_chunks > 1
-            else []
-        )
-        bounds = sorted({int(lo), *(int(b) for b in inner), int(hi) + 1})
+        bounds = chunk_bounds(con, n_chunks)
         log.info(
             "Scholarly stats: scanning oa.works in %d quantile chunks",
             len(bounds) - 1,
@@ -261,8 +251,7 @@ def load_author_scholarly_stats(
     """The four SIMILARITY_STATS_COLS, assembled from the two files that carry them.
 
     ``summary_stats.parquet`` holds what OpenAlex already publishes — h_index,
-    i10_index, 2yr_mean_citedness — extracted from the raw author records
-    because the DuckDB dump's `authors` table has no `summary_stats` column.
+    i10_index, 2yr_mean_citedness (authors.summary_stats).
     ``eindex.parquet`` holds the e-index, which OpenAlex does not publish and
     which therefore has to be computed from per-paper citation counts. Both are
     produced by scripts/pipeline/4_author_stats.py.
@@ -768,7 +757,7 @@ def compute_similarity(
 ) -> StructuralMetric:
     """Mean pairwise scholarly similarity of a response's authors (paper Eq. 8).
 
-    With unit embeddings z_u (see io.build_similarity_embeddings for the exact
+    With unit embeddings z_u (see build_similarity_embeddings for the exact
     preprocessing order) and n = |U-hat_i|,
 
         Sim_i = (2 / (n(n-1))) * sum_{u != v, unordered pairs} z_u^T z_v   (Eq. 8)

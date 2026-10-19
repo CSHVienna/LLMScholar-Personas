@@ -34,13 +34,16 @@ Usage (from code/, with PYTHONPATH=.):
 """
 
 import argparse
+import hashlib
+import json
+import shutil
 import time
 import warnings
 from pathlib import Path
 
 import duckdb
 
-from libs.metrics.coauthorship import works_author_key
+from libs.metrics.coauthorship import chunk_bounds, works_author_key
 from libs.utils.config import config_default, get_results_path
 from libs.utils.logging import setup_logging
 
@@ -139,13 +142,20 @@ def stage_author_work_citations(con, duckdb_path: Path, authors: Path, out: Path
                     SELECT id AS author_url, CAST(substr(author_id, 2) AS BIGINT) AS author_num
                     FROM read_parquet('{authors}')""")
     key = works_author_key(con)          # the snapshot refers to authors by URL or by number
-    cuts = ", ".join(f"{i / N_CHUNKS:.6f}" for i in range(1, N_CHUNKS))
-    lo, hi = con.execute("SELECT min(id), max(id) FROM oa.works").fetchone()
-    inner = con.execute(f"SELECT approx_quantile(id, [{cuts}]) FROM oa.works").fetchone()[0]
-    bounds = sorted({int(lo), *(int(b) for b in inner), int(hi) + 1})
 
-    parts = out.with_name(out.stem + "_parts")
+    # Every finished chunk is saved, so a run that stops restarts from the first
+    # missing one. The folder is named after the author list (another list
+    # never reuses it) and also keeps the chunk boundaries, so resumed chunks
+    # line up. It is deleted at the end.
+    ids = sorted(r[0] for r in con.execute("SELECT author_url FROM u").fetchall())
+    parts = out.with_name(f"{out.stem}_parts_{hashlib.md5(''.join(ids).encode()).hexdigest()[:12]}")
     parts.mkdir(exist_ok=True)
+    bounds_file = parts / "bounds.json"
+    if bounds_file.exists():
+        bounds = json.loads(bounds_file.read_text())
+    else:
+        bounds = chunk_bounds(con, N_CHUNKS)
+        bounds_file.write_text(json.dumps(bounds))
     for i, (start, end) in enumerate(zip(bounds, bounds[1:])):
         part = parts / f"part_{i:02d}.parquet"
         if part.exists():                      # resume after a crash
@@ -163,6 +173,7 @@ def stage_author_work_citations(con, duckdb_path: Path, authors: Path, out: Path
         )
         logger.info("Works chunk %d/%d done", i + 1, len(bounds) - 1)
     con.execute(f"COPY (SELECT * FROM read_parquet('{parts}/*.parquet')) TO '{out}' (FORMAT parquet)")
+    shutil.rmtree(parts)
     n = con.execute(f"SELECT count(*) FROM read_parquet('{out}')").fetchone()[0]
     logger.info("Author-paper rows: %d", n)
 

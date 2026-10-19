@@ -1,7 +1,7 @@
 """
 build_sankey_flows.py — Pre-compute the flow tables behind the Sankey figures.
 
-Same shape and rationale as build_location_flows.py (issue #37): read
+Same shape and rationale as build_location_flows.py: read
 factuality_full.csv once in chunks, reduce to long (source, target, count) rows
 keeping the slicing dimensions, and let the notebook stay plotting-only. The
 source CSV is 6.8 GB, so no figure should ever touch it directly.
@@ -70,9 +70,9 @@ NEEDED = [
     "seniority_bucket",
     "gt_field",
     "gt_gender",
-    # Written by resolve_homonyms.py: how the name tie was settled
-    # (unique | asked_field | file_order). Kept as a slicing dimension so a
-    # figure can restrict itself to names that were never ambiguous.
+    # Written by the factuality cascade: "unique" when the name had a single
+    # candidate, "cascade" when there were several. Lets a figure keep only
+    # names that were never ambiguous.
     "tiebreak",
     "oa_country_code",
     "perceived_ethnicity",
@@ -179,8 +179,7 @@ def main() -> None:
         "--input",
         default=None,
         help="File under <results>/summary/ to read. Defaults to the output of "
-             "resolve_homonyms.py, which carries the `tiebreak` column; pass "
-             "factuality_full.csv to rebuild from the unresolved table.",
+             "the factuality cascade (cascade/factuality_full.csv).",
     )
     parser.add_argument(
         "--out_dir",

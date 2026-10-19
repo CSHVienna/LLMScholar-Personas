@@ -75,7 +75,7 @@ def run(input_path: str, lookup_path: str, output_path: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Step 5: join pre-computed perceived_ethnicity from recommendations_with_ethnicity.csv"
+        description="Step 4 of run_enrichment.py: join pre-computed perceived_ethnicity from recommendations_with_ethnicity.csv"
     )
     add_io_args(
         parser,

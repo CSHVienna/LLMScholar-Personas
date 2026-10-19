@@ -105,7 +105,7 @@ def run(input_path: str, output_path: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Step 4: verify the LLM-assigned country matches the author's last-known institution country in OpenAlex"
+        description="Step 2 of run_enrichment.py: verify the LLM-assigned country matches the author's last-known institution country in OpenAlex"
     )
     add_io_args(
         parser,

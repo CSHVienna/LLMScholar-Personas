@@ -16,7 +16,6 @@ MODEL_ARCHITECTURE_COLS = ["model_access", "model_size", "model_class"]
 MODEL_EXTRA_COLS = ["model_family", "model_short_name"]
 
 VALID_FLAGS = {"cleaned", "unchanged"}  # 'valid records' = cleaned + unchanged only
-FACTUAL_AUTHOR_COL = "author_found"  # SS-match OR OA-match (any source)
 
 REFUSED_FLAG = "refused"
 ETHNICITY_ORDER = ["Asian", "Black", "White", "Hispanic", "American Indian"]
@@ -137,20 +136,6 @@ PRODUCTIVITY_OA_FIELDS_MAP = {
     "oa_cited_by_count": "citations",
 }
 PRODUCTIVITY_TIER_LABELS = ["low", "med", "high"]
-PRODUCTIVITY_METRIC_COLS = [
-    'parity_works', 
-    'parity_citations',
-    'popularity_works', 
-    'popularity_citations',
-    'pct_works_low',  
-    'pct_works_med',  
-    'pct_works_high',  
-    'div_productivity_works',
-    'pct_citations_low', 
-    'pct_citations_med', 
-    'pct_citations_high', 
-    'div_productivity_citations',
-]
 
 FACTUALITY_METRICS   = ['factuality_author',
                         'factuality_field',
@@ -214,13 +199,7 @@ STRUCTURAL_USED_COLS = {
 }
 
 # Feature vector for scholarly similarity, base half: everything derivable from
-# the columns openalex.py already writes into factuality_full.csv.
-# Note that oa_h_index / oa_i10_index are NOT among them — the columns exist but
-# are 0% covered (0 of 3,907,448 rows). That is NOT an OpenAlex limitation: the
-# raw author records under /code/openalex/oa_data/data/authors/ do carry
-# summary_stats (h_index, i10_index, 2yr_mean_citedness); the dbt build that
-# materialised the DuckDB dump dropped the field. Those three arrive via
-# SIMILARITY_STATS_COLS below, extracted from the raw files.
+# the columns openalex.py writes into factuality_full.csv.
 #
 # These four mirror the reference PCA's OpenAlex block
 # (GTBuilder/APS/code/batch_authors_pca.py), minus min_year / max_year which are
@@ -235,11 +214,9 @@ SIMILARITY_FEATURE_COLS = [
     "citations_per_paper_age",  # citations per work, damped by career length
 ]
 
-# Second half: the three OpenAlex summary_stats plus the e-index. The first
-# three are extracted from the raw author files; only e_index has to be computed
-# from oa.works, because OpenAlex does not publish it. Appended to the base
-# vector when that pass has run, dropped when it has not, so the pipeline still
-# works without --oa_duckdb.
+# Second half: the three OpenAlex summary_stats plus the e-index (computed from
+# oa.works, OpenAlex does not publish it). All four come from
+# pipeline/4_author_stats.py.
 SIMILARITY_STATS_COLS = [
     "h_index",                   # impact concentration: h papers with >= h citations
     "i10_index",                 # papers with at least 10 citations
@@ -498,13 +475,6 @@ LOCATION_ORDER = ["EC", "JP", "DE", "CA", "ZA"]
 # Canonical order of the persona-prompting languages — always English, Spanish,
 # German in plots/tables. Lower-case because that's how they live in the CSV.
 LANGUAGE_ORDER = ["english", "spanish", "german"]
-LANGUAGE_LABELS = {"english": "English", "spanish": "Spanish", "german": "German"}
-
-# Individual dimensions available for sub-populating.
-BENCHMARK_SUBPOPULATION_DIMS = ["field", "location"]
-# Combinations iterated by the notebook: field only, location only, and crossed
-# field × location.
-BENCHMARK_SUBPOPULATION_COMBOS = [["field"], ["location"], ["field", "location"]]
 
 
 BENCHMARK_MODEL_GROUP_LABEL_MAP = {
@@ -547,7 +517,6 @@ ROLE_NORM_MAP = {
 #######################################################################################################################
 
 FIG_DPI = 600
-FONT_SCALE = 1.55
 
 
 #######################################################################################################################
@@ -584,16 +553,9 @@ FACTUALITY_STATUS_UNKNOWN = FACTUALITY_LOCATION_STATUS["UNKNOWN"]
 #######################################################################################################################
 # SENIORITY
 #######################################################################################################################
-# Short-form (used in tables/plots) of the canonical Senior/Junior Professor
-# values produced by TARGET_NORM_MAP.
 
-SENIORITY_SHORT_MAP = {
-    "Senior Professor": "Senior",
-    "Junior Professor": "Junior",
-}
-
-# Same idea as SENIORITY_SHORT_MAP but also accepts the ES/DE variants of the
-# LLM `target` column (used by scripts/factuality/).
+# The seniority asked in the prompt (`target`, in EN/ES/DE) → Junior / Senior
+# (used by scripts/factuality/).
 LLM_TARGET_TO_BUCKET = {
     "Senior Professor": "Senior",
     "Profesor(a) Sénior": "Senior",

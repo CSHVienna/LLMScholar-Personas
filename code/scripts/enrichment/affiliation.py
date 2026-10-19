@@ -1,11 +1,6 @@
 """
 affiliation.py — Step 3 of run_enrichment.py: LLM affiliations vs OpenAlex institutions.
 
-PLAN.md Task 2 — Affiliation factuality.
-Structure cloned from location.py (Finding 3). Reuses
-normalize_name from openalex.py (Finding 2) and rapidfuzz
-(already in deps via factuality_author_jw.py).
-
 Reads the output of location.py and decides whether the
 LLM-claimed `current_affiliations` for each recommended author match any of
 the institutions the author has actually been affiliated with according to
@@ -19,9 +14,9 @@ OA institution history is reconstructed from the existing year-chunk
 parquets under [data].oa_works_tmp_dir/oa_works_agg_chunks (built by
 openalex.py). Each chunk holds one (country, inst_name) per
 (oa_id, year_chunk) via ARG_MAX over publication_year, so DISTINCT across
-all 20 chunks yields the author's institution history at chunk-granularity.
+all chunks yields the author's institution history (one per year range).
 
-Match logic: rapidfuzz.fuzz.token_set_ratio with a threshold of 80 between
+Match logic: rapidfuzz.fuzz.token_set_ratio with a threshold of 85 between
 each LLM affiliation string and each OA historical institution string.
 A row is `affiliation_match` if ANY (llm, oa) pair clears the threshold.
 
@@ -41,14 +36,15 @@ Usage (from code/, with PYTHONPATH=.):
 
 import argparse
 import ast
+import glob
 import json
 import os
 
+import duckdb
 import pandas as pd
 
-# Reuse the existing accent/case normalizer from the OA step so matching is
-# stable across mojibake ("Université" vs "Universite") and case differences.
-from openalex import normalize_name as _normalize_for_match
+# The same normaliser as openalex.py (lowercase, no accents).
+from openalex import WORKS_AGG_DIR, normalize_name as _normalize_for_match
 from rapidfuzz import fuzz
 
 from libs.metrics.constants import (
@@ -75,9 +71,6 @@ STATUS_NOT_APPLICABLE = _STATUS["NOT_APPLICABLE"]
 # legitimate fuzzy matches (LLM-verbose strings vs short OA names score 100
 # via subset-token mechanics) while rejecting the single-shared-token case.
 TOKEN_SET_RATIO_THRESHOLD = 85
-
-# Where openalex.py wrote per-year aggregations.
-from openalex import WORKS_AGG_DIR
 
 
 # ── Parsers ────────────────────────────────────────────────────────────────────
@@ -143,25 +136,11 @@ def fetch_oa_institutions(oa_ids: list[str]) -> dict[str, list[str]]:
     # Glob over the chunks already materialized by openalex.py
     # (one per year bin; UNNEST over authorships already done there).
     chunk_glob = os.path.join(WORKS_AGG_DIR, "chunk_*.parquet")
-    # If the folder does not exist or is empty, abort cleanly: the caller will
-    # use oa_last_institution as a proxy for "historical" (not ideal but allows
-    # the pipeline to keep running on machines without the pre-generated chunks).
-    if not any(
-        os.path.exists(os.path.join(WORKS_AGG_DIR, f))
-        for f in (os.listdir(WORKS_AGG_DIR) if os.path.isdir(WORKS_AGG_DIR) else [])
-    ):
+    # Without the chunks, the caller uses oa_last_institution alone.
+    if not glob.glob(chunk_glob):
         logger.warning(
             "OA chunk parquets not found at %s — falling back to oa_last_institution only",
             WORKS_AGG_DIR,
-        )
-        return {}
-
-    # duckdb is a soft dep — if not installed, also fallback.
-    try:
-        import duckdb  # noqa: F401
-    except ImportError:
-        logger.warning(
-            "duckdb not installed — falling back to oa_last_institution only"
         )
         return {}
 
@@ -362,7 +341,7 @@ def run(input_path: str, output_path: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Step 3.5: verify LLM `current_affiliations` against the author's "
+        description="Step 3 of run_enrichment.py: verify LLM `current_affiliations` against the author's "
         "OpenAlex institution history"
     )
     add_io_args(

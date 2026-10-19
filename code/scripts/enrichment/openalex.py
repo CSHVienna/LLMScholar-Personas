@@ -23,7 +23,7 @@ Output columns added:
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/enrichment/openalex.py \\
-      --input    ../results/summary/factuality_author_jw.csv \\
+      --input    ../results/summary/recommendations.csv \\
       --output   ../results/summary/factuality_oa.csv \\
       --db_path  <path_to_oa_duckdb> \\
       --cache    ../results/summary/.oa_cache_random.pkl \\
@@ -38,6 +38,7 @@ import re
 import time
 import unicodedata
 
+import duckdb
 import pandas as pd
 
 from libs.utils.config import config_default
@@ -55,11 +56,6 @@ logger = setup_logging()
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 WORKS_TMP_DIR = config_default("oa_works_tmp_dir") or "."
-JW_THRESHOLD = 0.85  # JW threshold on full normalized name
-JW_FIRST_THRESHOLD = 0.80  # JW threshold on first-name token (same person check)
-# These thresholds are combined with EXACT last-name token match in _AUTHORS_JW_QUERY.
-# The actual JW score is preserved in the `oa_match_score` output column so downstream
-# notebooks can filter further (e.g. >=0.95 for stricter match).
 
 STATUS_FOUND = "found"
 STATUS_NOT_FOUND = "not_found"
@@ -116,8 +112,6 @@ def _empty_record() -> dict:
 
 
 def _open_duckdb(db_path: str):
-    import duckdb  # noqa: F401  (import error handled by callers)
-
     con = duckdb.connect(db_path, read_only=True)
     cores = os.cpu_count() or 8
     try:
@@ -187,11 +181,6 @@ WHERE rn = 1
 def resolve_via_authors(db_path: str, norm_names: list[str]) -> dict[str, dict | None]:
     """Resolve normalized names → oa_id + metadata via the local DuckDB authors
     table (single scan, matches display_name and alternatives)."""
-    try:
-        import duckdb  # noqa: F401
-    except ImportError:
-        logger.warning("duckdb not installed — skipping local DB lookup.")
-        return {}
     if not os.path.exists(db_path):
         logger.warning("DuckDB path not found: %s — skipping authors lookup.", db_path)
         return {}
@@ -224,13 +213,7 @@ def resolve_via_authors(db_path: str, norm_names: list[str]) -> dict[str, dict |
     for oa_id, display_name, works_count, cited_by_count, counts_by_year, norm in rows:
         if norm in out:
             continue
-        counts = counts_by_year or []
-        first_year, last_year, age = _career_age(
-            [
-                {"year": e["year"], "works_count": e.get("works_count", 0)}
-                for e in counts
-            ]
-        )
+        first_year, last_year, age = _career_age(counts_by_year or [])
         out[norm] = {
             "oa_status": STATUS_FOUND,
             "oa_id": f"https://openalex.org/A{oa_id}",   # authors.id is the number
@@ -250,211 +233,17 @@ def resolve_via_authors(db_path: str, norm_names: list[str]) -> dict[str, dict |
     return out
 
 
-# ── Step 2.5: DuckDB authors JW (fuzzy fallback for unresolved names) ──────────
-
-# For names that didn't match exactly, apply three combined filters:
-#   1. EXACT last-name token match  — eliminates "Moller"/"Moll", "Kaunda"/"Kaundu" etc.
-#   2. JW on first-name token >= 0.80 — eliminates "Aris"/"Isaac", "Cornelia"/"Cornelius",
-#                                        "George"/"Gerrie", "Sharon"/"Stan" etc. that share
-#                                        last name but are clearly different people.
-#   3. JW on full normalized name >= 0.85 — overall similarity check.
-#
-# Common-sense passes: "Gareth F S Whitehead" / "Gareth Whitehead" (last=whitehead exact,
-# first=gareth/gareth = 1.0, full JW high — accepted). "Cornelia Moller" / "Cornelius Moller"
-# (last=moller exact, full JW high BUT first=cornelia/cornelius JW = 0.79 — rejected).
-_AUTHORS_JW_QUERY = r"""
-WITH q AS (
-  SELECT norm,
-         regexp_extract(norm, '[^ ]+$') AS last_token,
-         split_part(norm, ' ', 1)       AS first_token
-  FROM query_names
-  WHERE length(norm) > 0
-),
-expanded AS (
-  SELECT a.id,
-         a.display_name,
-         a.works_count,
-         a.cited_by_count,
-         a.counts_by_year,
-         trim(regexp_replace(
-           regexp_replace(lower(strip_accents(cand_name)), '[^a-z ]+', ' ', 'g'),
-           ' +', ' ', 'g'
-         )) AS cand_norm
-  FROM authors AS a,
-       UNNEST(list_concat([a.display_name],
-                          COALESCE(a.display_name_alternatives, []))) AS t(cand_name)
-),
-indexed AS (
-  SELECT *,
-         regexp_extract(cand_norm, '[^ ]+$') AS last_token,
-         split_part(cand_norm, ' ', 1)       AS first_token
-  FROM expanded
-  WHERE length(cand_norm) > 0
-),
-joined AS (
-  SELECT idx.id,
-         idx.display_name,
-         idx.works_count,
-         idx.cited_by_count,
-         idx.counts_by_year,
-         q.norm AS query_norm,
-         jaro_winkler_similarity(idx.cand_norm,   q.norm)        AS jw_score,
-         jaro_winkler_similarity(idx.first_token, q.first_token) AS jw_first
-  FROM indexed idx
-  JOIN q ON idx.last_token = q.last_token        -- EXACT last-name match
-        AND length(q.last_token) >= 2
-),
-filtered AS (
-  SELECT * FROM joined
-  WHERE jw_score >= ?           -- full-name JW threshold
-    AND jw_first >= ?           -- first-name JW threshold
-),
-ranked AS (
-  SELECT *,
-         ROW_NUMBER() OVER (
-           PARTITION BY query_norm
-           ORDER BY jw_score        DESC,
-                    jw_first        DESC,
-                    cited_by_count  DESC NULLS LAST,
-                    works_count     DESC NULLS LAST
-         ) AS rn
-  FROM filtered
-)
-SELECT id, display_name, works_count, cited_by_count, counts_by_year, query_norm, jw_score
-FROM ranked
-WHERE rn = 1
-"""
-
-
-def resolve_via_jw(db_path: str, norm_names: list[str]) -> dict[str, dict | None]:
-    """Stage B: Jaro-Winkler fuzzy match against OpenAlex authors for names that
-    exact match missed. Pre-blocks candidates by 2-char last-name prefix to
-    keep the JW computation tractable over 113M authors."""
-    try:
-        import duckdb  # noqa: F401
-    except ImportError:
-        logger.warning("duckdb not installed — skipping JW lookup.")
-        return {}
-    if not os.path.exists(db_path):
-        logger.warning("DuckDB path not found: %s — skipping JW lookup.", db_path)
-        return {}
-
-    unique = sorted({n for n in norm_names if n})
-    if not unique:
-        return {}
-
-    logger.info("DuckDB JW: opening %s", db_path)
-    con = _open_duckdb(db_path)
-    try:
-        con.register("query_names", pd.DataFrame({"norm": unique}))
-        logger.info(
-            "DuckDB JW: scanning + JW for %d unresolved names "
-            "(full>=%.2f, first>=%.2f, last=exact) …",
-            len(unique),
-            JW_THRESHOLD,
-            JW_FIRST_THRESHOLD,
-        )
-        t0 = time.time()
-        rows = con.execute(
-            _AUTHORS_JW_QUERY, [JW_THRESHOLD, JW_FIRST_THRESHOLD]
-        ).fetchall()
-        logger.info("DuckDB JW: %d rows returned (%.0fs)", len(rows), time.time() - t0)
-    except Exception as exc:
-        logger.warning("DuckDB JW query failed: %s", exc)
-        con.close()
-        return {}
-    finally:
-        try:
-            con.close()
-        except Exception:
-            pass
-
-    out: dict[str, dict | None] = {}
-    for (
-        oa_id,
-        display_name,
-        works_count,
-        cited_by_count,
-        counts_by_year,
-        query_norm,
-        jw_score,
-    ) in rows:
-        if query_norm in out:
-            continue
-        counts = counts_by_year or []
-        first_year, last_year, age = _career_age(
-            [
-                {"year": e["year"], "works_count": e.get("works_count", 0)}
-                for e in counts
-            ]
-        )
-        out[query_norm] = {
-            "oa_status": STATUS_FOUND,
-            "oa_id": oa_id,
-            "oa_display_name": display_name,
-            "oa_works_count": works_count,
-            "oa_cited_by_count": cited_by_count,
-            "oa_h_index": None,
-            "oa_i10_index": None,
-            "oa_first_pub_year": first_year,
-            "oa_last_pub_year": last_year,
-            "oa_career_age": age,
-            "oa_country_code": None,
-            "oa_last_institution": None,
-            "oa_match_score": float(jw_score),  # JW score for downstream filtering
-        }
-    logger.info(
-        "DuckDB JW: resolved %d / %d names (avg score in matches: %.3f)",
-        len(out),
-        len(unique),
-        (sum(r[6] for r in rows if r[5] in out) / max(len(out), 1)),
-    )
-    return out
-
-
 # ── Step 3: DuckDB works (oa_id → most-recent country + institution) ──────────
 
-# Year-chunked aggregation approach.
-#
-# History — what doesn't work:
-#   1. Streaming via fetch_record_batch + Python-side oa_id filter:
-#      DuckDB never yields the first Arrow batch — it buffers the whole
-#      UNNEST(authorships) × UNNEST(institutions) intermediate to disk first
-#      (~3.7B exploded rows from 492M papers). Verified with minimal test.
-#   2. Single-shot server-side GROUP BY oa_id:
-#      OOM-killed after 45 min, 414 GB spilled, with memory_limit=64GB.
-#      The intermediate UNNEST × UNNEST is too large for this box even with
-#      hash-agg's native spilling.
-#
-# Current approach — break the scan into year-range chunks. publication_year
-# is a top-level BIGINT column (predicate-pushable), so each chunk only scans
-# its own slice of works. Each chunk produces an aggregated Parquet with one
-# row per (oa_id, year_range): country and inst_name from that range's most-
-# recent paper. Chunks are sized to keep per-chunk exploded output ~10× smaller
-# than the full table, well within DuckDB's hash-agg comfort zone.
-#
-# Final step: a small JOIN+GROUP BY across chunk Parquets keeps the most-recent
-# year per oa_id, filtered to the 606K oa_ids of interest.
-#
-# Note on institution names: works.authorships[].institutions[].display_name
-# is already inline in the struct, so we use it directly instead of looking up
-# inst_id against the institutions table.
+# Country and institution of each author: those of their most recent paper.
+# One query over all papers does not fit in memory, so papers are aggregated by
+# publication year ranges (YEAR_CHUNKS), one Parquet per range, kept on disk
+# and reused; a last small query keeps, per author, the most recent range.
 
 WORKS_AGG_DIR = os.path.join(WORKS_TMP_DIR, "oa_works_agg_chunks")
 
-# Chunks are tuples of (label, sql_predicate). Predicate plugs into the
-# `WHERE inst.country_code IS NOT NULL AND <predicate>` clause. Label is used
-# for the chunk Parquet filename and progress logs.
-#
-# Sizing rationale: chunk 2024-2024 (30M papers) succeeded at 48 GB RSS under
-# a 64 GB cap. Chunk 2025-2999 (57M papers) blew past the cap and OOM-killed.
-# Empirical safe ceiling is ~30M papers per chunk on this box. Big single
-# years (2025 = 45M) get split via `hash(w.id) % N` so each shard stays under
-# the ceiling. Older years group into wider ranges since pre-2010 papers tend
-# to have fewer authors per paper (smaller exploded blow-up).
-#
-# Order is recent → old so an early-bail still covers most authors' most-
-# recent papers (ARG_MAX wins from the latest chunk that resolved them).
+# (label, SQL condition) per range. Ranges are sized to about 30M papers, the
+# most that fit in memory on this machine; 2025 is split in three.
 YEAR_CHUNKS: list[tuple[str, str]] = [
     ("2024", "publication_year = 2024"),  # 30M ✓
     ("2025_a", "publication_year = 2025 AND hash(w.id) % 3 = 0"),  # ~15M
@@ -495,8 +284,6 @@ def _chunk_path(label: str) -> str:
 def _build_works_agg_chunk(db_path: str, label: str, predicate: str) -> None:
     """Aggregate a single chunk (defined by predicate) into its parquet.
     Idempotent — skips if the parquet already exists and is non-empty."""
-    import duckdb  # noqa: F401
-
     out = _chunk_path(label)
     if os.path.exists(out) and os.path.getsize(out) > 0:
         logger.info(
@@ -567,11 +354,6 @@ def resolve_country_via_works(
 
     Returns {oa_id: (country, institution_display_name)}.
     """
-    try:
-        import duckdb  # noqa: F401
-    except ImportError:
-        logger.warning("duckdb not installed — skipping works lookup.")
-        return {}
     if not os.path.exists(db_path):
         logger.warning("DuckDB path not found: %s — skipping works lookup.", db_path)
         return {}
@@ -594,27 +376,14 @@ def resolve_country_via_works(
     con = _open_duckdb(db_path)
     try:
         con.register("query_oa_ids", pd.DataFrame({"id": list(set(oa_ids))}))
-        # Cross-chunk dedup: ARG_MAX picks the (country, inst_name) from the
-        # chunk with the highest last_year per oa_id. Filter via JOIN keeps
-        # only the 606K oa_ids of interest.
-        #
-        # The works table stores au.author.id as a URL ("https://openalex.org/A123")
-        # while the authors table (and therefore the resolved oa_ids passed in)
-        # uses the bare numeric id (123). Normalise the chunk side to the numeric
-        # id so the JOIN matches and the returned keys line up with rec["oa_id"];
-        # otherwise DuckDB tries to cast the URL to INT64 and the whole merge
-        # fails, leaving oa_country_code / oa_last_institution empty.
+        # Per author, the most recent of the ranges (chunks and ids are both URLs).
         rows = con.execute(
             f"""
-            WITH norm AS (
-              SELECT oa_id, country, inst_name, last_year
-              FROM read_parquet('{chunk_glob}')
-            )
             SELECT
               p.oa_id,
               ARG_MAX(p.country,   p.last_year) AS country,
               ARG_MAX(p.inst_name, p.last_year) AS inst_name
-            FROM norm p
+            FROM read_parquet('{chunk_glob}') p
             JOIN query_oa_ids q ON p.oa_id = q.id
             GROUP BY p.oa_id
         """
@@ -684,11 +453,8 @@ def run(
         cache.update(resolve_via_authors(db_path, pending))
         save_cache(cache, cache_path)  # checkpoint: safe to Ctrl+C from here
 
-    # Stage B (JW fuzzy fallback) disabled — manual validation 20-request
-    # sample showed 10% precision on fuzzy matches vs 78% on exact, so the
-    # marginal recall does not offset the homonym noise. The function
-    # `resolve_via_jw` is left defined above in case we want to re-enable it
-    # with a higher threshold (>=0.95) and/or a mandatory field-check.
+    # No fuzzy matching: in a manual check of 20 requests it was right 10% of
+    # the time, against 78% for exact matches.
 
     # mark unresolved names as not_found (so re-runs don't retry)
     for n in unique_norms:
@@ -760,7 +526,7 @@ def main() -> None:
         description="OpenAlex enrichment for the factuality pipeline (DuckDB only)"
     )
     parser.add_argument(
-        "--input", required=True, help="Input CSV (e.g. factuality_author_jw.csv)"
+        "--input", required=True, help="Input CSV (e.g. recommendations.csv)"
     )
     parser.add_argument(
         "--output", required=True, help="Output CSV (input columns + oa_* columns)"

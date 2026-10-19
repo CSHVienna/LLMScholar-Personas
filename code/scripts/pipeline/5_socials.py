@@ -51,8 +51,7 @@ from libs.metrics.similarity import (  # noqa: E402
 from libs.utils import ios  # noqa: E402
 from libs.utils.config import config_default  # noqa: E402
 
-# The coauthorship graph and the PCA are expensive; they are cached here and
-# shared with scripts/legacy/build_valid_calls.py (same authors, same files).
+# The coauthorship graph and the PCA are expensive, so they are cached here.
 CACHE = Path("../results/.cache")
 ETHNICITY_GT = "../results/ethnicity/DataFrameRankings_Genderize_Namsor_*_with_ethnicity.csv"
 TIERS = ["low", "med", "high"]

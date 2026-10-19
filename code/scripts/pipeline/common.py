@@ -1,17 +1,18 @@
 """
-common.py — Definitions shared by the four pipeline scripts.
+common.py — Definitions shared by the pipeline scripts.
 
 The pipeline works on three units:
   setup           model + params
   call            setup + created_at + run_id          (one LLM response)
   recommendation  call + one author of that response   (name, lastname, ...)
 
-Every script writes one CSV per model into its own folder under OUT_DIR:
+Steps 1, 2, 3 and 5 write one CSV per model into their folder under OUT_DIR:
   1_validity/      per call            validity, refusal, duplicates
   2_consistency/   per setup           consistency
   3_factuality/    per recommendation  factuality_* and matched_*
   5_socials/       per call            diversity, parity, popularity, similarity,
                                        connectedness
+Step 4 writes author stats to [data].oa_author_stats; step 6 writes 6_calls.csv.
 """
 
 import re

@@ -6,11 +6,9 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from statsmodels.stats.proportion import proportion_confint
-from tqdm.auto import tqdm
 
 from libs.metrics import constants
 
-tqdm.pandas()
 
 
 def ci95(series: pd.Series) -> float:

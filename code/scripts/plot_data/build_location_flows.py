@@ -1,6 +1,6 @@
 """
 build_location_flows.py — Pre-compute the prompt-country → author-country flow
-table behind the location Sankey figure (issue #37).
+table behind the location Sankey figure.
 
 For every recommendation that was matched to a real author, records the country
 embedded in the prompt (`location`, normalised to ISO-2) and the country

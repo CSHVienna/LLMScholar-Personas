@@ -216,7 +216,7 @@ def build_coauthorship_graph(
         if bounds_file.exists():
             bounds = np.load(bounds_file).tolist()
         else:
-            bounds = _chunk_bounds(con, n_chunks)
+            bounds = chunk_bounds(con, n_chunks)
             np.save(bounds_file, np.array(bounds, dtype=np.int64))
         log.info(
             "Coauthorship graph: scanning oa.works in %d quantile chunks",
@@ -275,7 +275,7 @@ def build_coauthorship_graph(
     return adjacency, index
 
 
-def _chunk_bounds(con, n_chunks: int) -> list[int]:
+def chunk_bounds(con, n_chunks: int) -> list[int]:
     """Boundaries of n_chunks ranges of works.id with about as many works each.
 
     Quantiles, not equal-width ranges: OpenAlex ids are very uneven, and
