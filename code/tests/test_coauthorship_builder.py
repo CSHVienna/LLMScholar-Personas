@@ -85,6 +85,28 @@ def test_numeric_author_ids_give_the_same_graph(tmp_path):
     }
 
 
+def test_a_stopped_build_resumes_from_the_saved_chunks(tmp_path, monkeypatch):
+    """Finished chunks are saved; a rerun loads them instead of rescanning."""
+    import libs.metrics.coauthorship as coauthorship
+
+    db = tmp_path / "oa.duckdb"
+    make_snapshot(db, {1: [100, 200, 300], 2: [300, 400]})
+    authors = ["A100", "A200", "A300", "A400"]
+
+    # First run: keep the chunk files, as if it had stopped before the end.
+    monkeypatch.setattr(coauthorship.shutil, "rmtree", lambda path: None)
+    first, index = build_coauthorship_graph(
+        authors, cache_path=tmp_path / "graph.joblib", oa_duckdb_path=db, n_chunks=2)
+    (tmp_path / "graph.joblib").unlink()
+
+    # Second run on an empty snapshot: the edges can only come from the saved chunks.
+    make_snapshot(db, {})
+    second, _ = build_coauthorship_graph(
+        authors, cache_path=tmp_path / "graph.joblib", oa_duckdb_path=db, n_chunks=2)
+
+    assert edge_set(second, index) == edge_set(first, index)
+
+
 def test_graph_is_symmetric_and_loop_free(tmp_path):
     db = tmp_path / "oa.duckdb"
     make_snapshot(db, {1: [100, 200], 2: [200, 300]})

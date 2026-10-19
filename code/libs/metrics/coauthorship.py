@@ -9,6 +9,7 @@ coauthorship.py — The coauthorship graph and the connectedness metric (paper E
 
 import hashlib
 import logging
+import shutil
 from pathlib import Path
 from typing import Iterable, Mapping, NamedTuple, Sequence
 
@@ -28,10 +29,10 @@ def works_author_key(con) -> str:
     of authors built here carry both, as `author_url` and `author_num`; this
     returns the name of the column to join on.
     """
-    kind = con.execute(
+    row = con.execute(
         "SELECT typeof(a.author.id) FROM oa.works, UNNEST(authorships) AS t(a) LIMIT 1"
-    ).fetchone()[0]
-    return "author_url" if kind == "VARCHAR" else "author_num"
+    ).fetchone()
+    return "author_num" if row and row[0] != "VARCHAR" else "author_url"
 
 
 def author_num(token: str) -> int:
@@ -203,24 +204,20 @@ def build_coauthorship_graph(
         )
         chunk_query = chunk_query.replace("{key}", works_author_key(con))
 
-        # Chunk on id *quantiles*, not on equal-width id ranges: OpenAlex ids
-        # are wildly non-uniform, and equal-width slicing put 91M works in one
-        # bucket against a median of 787k — the fat bucket alone risks the OOM
-        # the chunking exists to prevent.
-        lo, hi = con.execute("SELECT min(id), max(id) FROM oa.works").fetchone()
-        # Inlined rather than bound: approx_quantile takes its quantile list as
-        # a literal. The values are generated here, never user input.
-        cut_points = ", ".join(f"{i / n_chunks:.6f}" for i in range(1, n_chunks))
-        inner = (
-            con.execute(
-                f"SELECT approx_quantile(id, [{cut_points}]) FROM oa.works"
-            ).fetchone()[0]
-            if n_chunks > 1
-            else []
-        )
-        # Deduplicate: repeated quantiles (dense id regions) would yield empty
-        # ranges, and an unsorted boundary list would silently skip works.
-        bounds = sorted({int(lo), *(int(b) for b in inner), int(hi) + 1})
+        # Every finished chunk is saved to its own file, so a run that stops
+        # (crash, reboot) restarts from the first missing chunk. The folder is
+        # named after the population, so another population never reuses it.
+        parts = cache_path.parent / f"{cache_path.stem}_parts" / population_key.replace(":", "_")
+        parts.mkdir(parents=True, exist_ok=True)
+
+        # The chunk boundaries are saved too: approx_quantile is not guaranteed
+        # to give the same numbers twice, and resumed chunks must line up.
+        bounds_file = parts / "bounds.npy"
+        if bounds_file.exists():
+            bounds = np.load(bounds_file).tolist()
+        else:
+            bounds = _chunk_bounds(con, n_chunks)
+            np.save(bounds_file, np.array(bounds, dtype=np.int64))
         log.info(
             "Coauthorship graph: scanning oa.works in %d quantile chunks",
             len(bounds) - 1,
@@ -228,22 +225,22 @@ def build_coauthorship_graph(
 
         chunks = []
         for c, (start, end) in enumerate(zip(bounds, bounds[1:])):
+            part = parts / f"chunk_{c:03d}.npy"
+            if part.exists():
+                chunks.append(np.load(part))
+                log.info("Coauthorship graph: chunk %d/%d — already done", c + 1, len(bounds) - 1)
+                continue
             result = con.execute(chunk_query, [start, end]).fetchnumpy()
-            if len(result["src"]):
-                chunks.append(
-                    np.stack(
-                        [
-                            result["src"].astype(np.int32, copy=False),
-                            result["dst"].astype(np.int32, copy=False),
-                        ],
-                        axis=1,
-                    )
-                )
+            pairs = np.stack(
+                [result["src"].astype(np.int32), result["dst"].astype(np.int32)], axis=1
+            )
+            np.save(part, pairs)
+            chunks.append(pairs)
             log.info(
                 "Coauthorship graph: chunk %d/%d — %d pairs",
                 c + 1,
                 len(bounds) - 1,
-                len(result["src"]),
+                len(pairs),
             )
     finally:
         con.close()
@@ -274,7 +271,25 @@ def build_coauthorship_graph(
         compress=3,
     )
     log.info("Coauthorship graph: saved → %s", cache_path)
+    shutil.rmtree(parts)   # the finished graph is in the cache; the chunks are no longer needed
     return adjacency, index
+
+
+def _chunk_bounds(con, n_chunks: int) -> list[int]:
+    """Boundaries of n_chunks ranges of works.id with about as many works each.
+
+    Quantiles, not equal-width ranges: OpenAlex ids are very uneven, and
+    equal-width slicing put 91M works in one range against a median of 787k.
+    Repeated quantiles (dense id regions) are dropped.
+    """
+    lo, hi = con.execute("SELECT min(id), max(id) FROM oa.works").fetchone()
+    cut_points = ", ".join(f"{i / n_chunks:.6f}" for i in range(1, n_chunks))
+    inner = (
+        con.execute(f"SELECT approx_quantile(id, [{cut_points}]) FROM oa.works").fetchone()[0]
+        if n_chunks > 1
+        else []
+    )
+    return sorted({int(lo), *(int(b) for b in inner), int(hi) + 1})
 
 
 class StructuralMetric(NamedTuple):
