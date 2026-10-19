@@ -6,6 +6,7 @@ Joins the outputs of steps 1, 2, 3 and 5 (one row per call; consistency is per s
 every call of a setup gets the same value) and adds:
   factuality_name / _author     share of the call's authors that pass (step 3)
   factuality_field / _seniority the same, among the authors whose name exists
+  n_authors_found               how many of the call's authors exist
   model_access, model_size, model_class, model_family, model_short_name
                                 from data/models/
   <param>_en                    the params in English (language_en, field_en, ...)
@@ -61,6 +62,7 @@ def factuality_per_call() -> pd.DataFrame:
     recs = recs.assign(author=author_key(recs)).drop_duplicates(CALL + ["author"])
     calls = recs.groupby(CALL, dropna=False)
     out = calls[["factuality_name", "factuality_author"]].mean()
+    out["n_authors_found"] = calls["factuality_name"].sum()
     found = recs[recs["factuality_name"]].groupby(CALL, dropna=False)
     out = out.join(found[["factuality_field", "factuality_seniority"]].mean())
     return out.reset_index()

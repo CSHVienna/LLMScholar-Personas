@@ -12,8 +12,10 @@ Per call:
               the same as invalid: an invalid response is malformed or empty.
   duplicates  1 − unique authors / authors in the response (paper Eq. 3),
               authors compared by "name lastname". Only for valid calls.
+  n_total_recommendations, n_unique_authors   the two counts behind duplicates
 
-Output: 1_validity/<model>.csv — call columns + validity, refusal, duplicates.
+Output: 1_validity/<model>.csv — call columns + validity, refusal, duplicates
+(+ the two counts).
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/pipeline/1_validity.py
@@ -45,7 +47,9 @@ def run(recommendations_path: str) -> None:
         calls["validity"] & (calls["n_authors"] > 0)
     )
 
-    write_step(calls[CALL + ["validity", "refusal", "duplicates"]], step=1)
+    calls = calls.rename(columns={"n_authors": "n_total_recommendations", "n_unique": "n_unique_authors"})
+    write_step(calls[CALL + ["validity", "refusal", "duplicates",
+                             "n_total_recommendations", "n_unique_authors"]], step=1)
 
 
 def main() -> None:

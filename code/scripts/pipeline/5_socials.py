@@ -17,7 +17,9 @@ Takes the recommendations of step 3 and keeps the factual ones
                     country (mean of bias_location from step 3)
   similarity        mean pairwise scholarly similarity (paper Eq. 8)
   connectedness     coauthorship connectedness (paper Eq. 7)
-                    (n_used_<x>: how many authors entered each of the two)
+                    (n_used_<x>: how many authors entered each of the two;
+                    n_excluded_<x>: how many factual authors could not, e.g.
+                    no OpenAlex id)
 
 Output: 5_socials/<model>.csv — call columns + n_authors + the metrics above.
 Calls without factual authors get NaN.
@@ -128,13 +130,16 @@ def structural(recs: pd.DataFrame, authors: pd.DataFrame,
         features, cache_path=CACHE / "similarity_embeddings.joblib", index=graph_index)
 
     rows = []
-    for call, ids in authors.dropna(subset=["author_id"]).groupby("call")["author_id"]:
-        ids = ids.unique().tolist()
+    for call, ids in authors.groupby("call")["author_id"]:
+        no_oa_id = int(ids.isna().sum())          # factual authors OpenAlex did not find
+        ids = ids.dropna().unique().tolist()
         sim = compute_similarity(ids, embeddings, emb_index)
         conn = compute_connectedness(ids, graph, graph_index)
         rows.append({"call": call,
                      "similarity": sim.value, "n_used_similarity": sim.n_used,
-                     "connectedness": conn.value, "n_used_connectedness": conn.n_used})
+                     "n_excluded_similarity": sim.n_excluded + no_oa_id,
+                     "connectedness": conn.value, "n_used_connectedness": conn.n_used,
+                     "n_excluded_connectedness": conn.n_excluded + no_oa_id})
     return pd.DataFrame(rows).set_index("call")
 
 
@@ -190,7 +195,8 @@ def run(parquet: str, oa_duckdb: str, oa_author_stats: str) -> None:
                "popularity_publications", "popularity_citations",
                *[f"pct_{x}_{t}" for x in ["publications", "citations"] for t in TIERS],
                "bias_location",
-               "similarity", "n_used_similarity", "connectedness", "n_used_connectedness"]
+               "similarity", "n_used_similarity", "n_excluded_similarity",
+               "connectedness", "n_used_connectedness", "n_excluded_connectedness"]
     write_step(out[CALL + ["n_authors"] + metrics], step=5)
 
 

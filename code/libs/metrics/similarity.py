@@ -24,7 +24,8 @@ import pandas as pd
 
 from libs.metrics import constants
 from libs.metrics.coauthorship import (
-    StructuralMetric, _population_key, _resolve_indices, build_author_index,
+    StructuralMetric, _population_key, _resolve_indices, author_num, build_author_index,
+    works_author_key,
 )
 from libs.metrics.io import validate_path
 
@@ -163,6 +164,7 @@ def build_author_scholarly_stats(
     u_df = pd.DataFrame(
         {
             "author_url": [f"https://openalex.org/{a}" for a in index],
+            "author_num": [author_num(a) for a in index],
             "idx": list(index.values()),
         }
     )
@@ -173,7 +175,7 @@ def build_author_scholarly_stats(
         SELECT DISTINCT w.id AS work_id, u.idx AS idx, w.cited_by_count AS c
         FROM oa.works w,
              UNNEST(w.authorships) AS t(a)
-             JOIN u ON u.author_url = a.author.id
+             JOIN u ON u.{key} = a.author.id
         WHERE w.id >= ? AND w.id < ?
     """
 
@@ -188,9 +190,10 @@ def build_author_scholarly_stats(
 
         con.register("u_df", u_df)
         con.execute(
-            "CREATE TEMP TABLE u AS "
-            "SELECT author_url::VARCHAR AS author_url, idx::INTEGER AS idx FROM u_df"
+            "CREATE TEMP TABLE u AS SELECT author_url::VARCHAR AS author_url, "
+            "author_num::BIGINT AS author_num, idx::INTEGER AS idx FROM u_df"
         )
+        chunk_query = chunk_query.replace("{key}", works_author_key(con))
 
         lo, hi = con.execute("SELECT min(id), max(id) FROM oa.works").fetchone()
         cut_points = ", ".join(f"{i / n_chunks:.6f}" for i in range(1, n_chunks))

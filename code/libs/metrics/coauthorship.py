@@ -20,6 +20,25 @@ from scipy.sparse.csgraph import connected_components
 from libs.metrics.io import validate_path
 
 
+def works_author_key(con) -> str:
+    """How `oa.works` refers to its authors, so a join can match them.
+
+    Snapshots up to 2026-03 store `authorships[].author.id` as the URL
+    ('https://openalex.org/A123'); from 2026-09 it is the number (123). Tables
+    of authors built here carry both, as `author_url` and `author_num`; this
+    returns the name of the column to join on.
+    """
+    kind = con.execute(
+        "SELECT typeof(a.author.id) FROM oa.works, UNNEST(authorships) AS t(a) LIMIT 1"
+    ).fetchone()[0]
+    return "author_url" if kind == "VARCHAR" else "author_num"
+
+
+def author_num(token: str) -> int:
+    """'A123' (or 'https://openalex.org/A123') → 123."""
+    return int(str(token).rsplit("/", 1)[-1].lstrip("A"))
+
+
 def _population_key(index: Mapping[str, int]) -> str:
     """Fingerprint of the author population an artefact was built for.
 
@@ -136,12 +155,13 @@ def build_coauthorship_graph(
 
     log.info("Coauthorship graph: building over %d authors", n)
 
-    # Join on the full OpenAlex URL rather than parsing it: the snapshot stores
-    # author ids as 'https://openalex.org/A123', and running split_part +
-    # replace + TRY_CAST on billions of authorship rows dominated the runtime.
+    # Join on the id exactly as the snapshot stores it (URL or number, see
+    # works_author_key) rather than parsing it: running split_part + replace +
+    # TRY_CAST on billions of authorship rows dominated the runtime.
     u_df = pd.DataFrame(
         {
             "author_url": [f"https://openalex.org/{a}" for a in index],
+            "author_num": [author_num(a) for a in index],
             "idx": list(index.values()),
         }
     )
@@ -153,7 +173,7 @@ def build_coauthorship_graph(
             SELECT w.id AS work_id, u.idx AS idx
             FROM oa.works w,
                  UNNEST(w.authorships) AS t(a)
-                 JOIN u ON u.author_url = a.author.id
+                 JOIN u ON u.{key} = a.author.id
             WHERE w.id >= ? AND w.id < ? AND length(w.authorships) >= 2
         ),
         multi AS (
@@ -178,9 +198,10 @@ def build_coauthorship_graph(
 
         con.register("u_df", u_df)
         con.execute(
-            "CREATE TEMP TABLE u AS "
-            "SELECT author_url::VARCHAR AS author_url, idx::INTEGER AS idx FROM u_df"
+            "CREATE TEMP TABLE u AS SELECT author_url::VARCHAR AS author_url, "
+            "author_num::BIGINT AS author_num, idx::INTEGER AS idx FROM u_df"
         )
+        chunk_query = chunk_query.replace("{key}", works_author_key(con))
 
         # Chunk on id *quantiles*, not on equal-width id ranges: OpenAlex ids
         # are wildly non-uniform, and equal-width slicing put 91M works in one

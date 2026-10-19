@@ -233,7 +233,7 @@ def resolve_via_authors(db_path: str, norm_names: list[str]) -> dict[str, dict |
         )
         out[norm] = {
             "oa_status": STATUS_FOUND,
-            "oa_id": oa_id,
+            "oa_id": f"https://openalex.org/A{oa_id}",   # authors.id is the number
             "oa_display_name": display_name,
             "oa_works_count": works_count,
             "oa_cited_by_count": cited_by_count,
@@ -479,6 +479,15 @@ YEAR_CHUNKS: list[tuple[str, str]] = [
 ]
 
 
+# The author of an authorship as the OpenAlex URL. Snapshots up to 2026-03 store
+# au.author.id as that URL; from 2026-09 it is the number. typeof() is resolved
+# once per query, not per row.
+AUTHOR_URL = (
+    "CASE WHEN typeof(au.author.id) = 'VARCHAR' THEN au.author.id::VARCHAR "
+    "ELSE 'https://openalex.org/A' || au.author.id::VARCHAR END"
+)
+
+
 def _chunk_path(label: str) -> str:
     return os.path.join(WORKS_AGG_DIR, f"chunk_{label}.parquet")
 
@@ -511,7 +520,7 @@ def _build_works_agg_chunk(db_path: str, label: str, predicate: str) -> None:
             f"""
             COPY (
               SELECT
-                au.author.id                                       AS oa_id,
+                {AUTHOR_URL}                                       AS oa_id,
                 ARG_MAX(inst.country_code, w.publication_year)     AS country,
                 ARG_MAX(inst.display_name, w.publication_year)     AS inst_name,
                 MAX(w.publication_year)                            AS last_year
@@ -520,7 +529,7 @@ def _build_works_agg_chunk(db_path: str, label: str, predicate: str) -> None:
                    UNNEST(au.institutions) AS t2(inst)
               WHERE inst.country_code IS NOT NULL
                 AND ({predicate})
-              GROUP BY au.author.id
+              GROUP BY {AUTHOR_URL}
             ) TO '{out}' (FORMAT PARQUET)
         """
         )
@@ -598,9 +607,7 @@ def resolve_country_via_works(
         rows = con.execute(
             f"""
             WITH norm AS (
-              SELECT
-                TRY_CAST(replace(oa_id, 'https://openalex.org/A', '') AS BIGINT) AS oa_id,
-                country, inst_name, last_year
+              SELECT oa_id, country, inst_name, last_year
               FROM read_parquet('{chunk_glob}')
             )
             SELECT

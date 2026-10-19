@@ -58,7 +58,7 @@ def main() -> None:
     if not args.skip_oa:
         run_step("1/4 openalex", [py, HERE / "openalex.py", "--input", f"{r}/recommendations.csv",
                                   "--output", f"{r}/factuality_oa.csv", "--db_path", args.duckdb,
-                                  "--cache", f"{r}/.oa_cache_random.pkl"])  # new cache: the old one holds most-cited picks
+                                  "--cache", f"{r}/.oa_cache_{Path(args.duckdb).stem}.pkl"])  # one cache per snapshot
     run_step("2/4 location", [py, HERE / "location.py", "--input", f"{r}/factuality_oa.csv",
                               "--output", f"{r}/factuality_location.csv"])
     run_step("3/4 affiliation", [py, HERE / "affiliation.py", "--input", f"{r}/factuality_location.csv",

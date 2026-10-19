@@ -2,16 +2,13 @@
 4_author_stats.py — Step 4: OpenAlex per-author scholarly stats for the
 similarity PCA (paper Eq. 8).
 
-Three of the four stats OpenAlex already publishes, and we extract rather than
+Three of the four stats OpenAlex already publishes, and we read rather than
 recompute them:
 
-    h_index, i10_index, 2yr_mean_citedness   <- summary_stats, raw author files
+    h_index, i10_index, 2yr_mean_citedness   <- authors.summary_stats
 
-They are NOT in the DuckDB dump: its `authors` table has 15 columns and no
-`summary_stats`, because the dbt build that materialised it dropped the field.
-That is why `oa_h_index` / `oa_i10_index` read as 0% covered in
-factuality_full.csv — a build omission, not an OpenAlex limitation. The raw
-records under [data].oa_raw_authors do carry it.
+(The 2026-09 snapshot has that column; earlier ones did not, and their stats
+came from the raw author files, which are no longer on this machine.)
 
 The e-index is the exception: OpenAlex does not publish it, so it needs the
 per-paper citation counts and a full pass over oa.works.
@@ -24,7 +21,7 @@ Stages, each checkpointed to its own file and skipped when that file exists
                            Checked on every run; when step 3 has authors that are
                            not in it yet, it is replaced and the other stages
                            are redone. Extra authors that left are harmless.
-  2. summary_stats.parquet h_index / i10_index / 2yr_mean_citedness (~15 min)
+  2. summary_stats.parquet h_index / i10_index / 2yr_mean_citedness (minutes)
   3. author_work_citations.parquet  one row per (author, paper, citations) (~80 min)
   4. eindex.parquet        h/i10/e aggregated per author (~15 s)
 
@@ -43,6 +40,7 @@ from pathlib import Path
 
 import duckdb
 
+from libs.metrics.coauthorship import works_author_key
 from libs.utils.config import config_default, get_results_path
 from libs.utils.logging import setup_logging
 
@@ -50,16 +48,6 @@ warnings.filterwarnings("ignore")
 logger = setup_logging()
 
 STAGES = ("authors", "summary_stats", "author_work_citations", "eindex")
-
-# Only these keys are parsed out of each raw JSON record. Naming them keeps
-# DuckDB from materialising the big nested fields (topics, affiliations,
-# x_concepts) that make up most of the 66 GB.
-RAW_COLS = """{
-  'id':'VARCHAR', 'updated_date':'VARCHAR',
-  'works_count':'BIGINT', 'cited_by_count':'BIGINT',
-  'summary_stats':'STRUCT("2yr_mean_citedness" DOUBLE, h_index BIGINT, i10_index BIGINT)',
-  'counts_by_year':'STRUCT("year" BIGINT, works_count BIGINT, cited_by_count BIGINT)[]'
-}"""
 
 N_CHUNKS = 32
 
@@ -111,25 +99,30 @@ def stage_authors(con, step3_files: str, out: Path) -> bool:
     return missing > 0
 
 
-def stage_summary_stats(con, raw_glob: str, authors: Path, out: Path) -> None:
-    """h_index, i10_index and 2yr_mean_citedness as OpenAlex publishes them, from
-    the raw author files (the DuckDB dump dropped `summary_stats`). An author can
-    appear in several `updated_date` partitions: the latest record wins."""
+def stage_summary_stats(con, duckdb_path: Path, authors: Path, out: Path) -> None:
+    """h_index, i10_index and 2yr_mean_citedness as OpenAlex publishes them
+    (`summary_stats`), read from the authors table of the snapshot. Snapshots
+    before 2026-09 do not have that column: their stats came from the raw
+    author files, which are no longer on this machine."""
+    con.execute(f"ATTACH '{duckdb_path}' AS oa (READ_ONLY)")
+    cols = [r[0] for r in con.execute(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_catalog = 'oa' AND table_name = 'authors'").fetchall()]
+    if "summary_stats" not in cols:
+        raise SystemExit(f"{duckdb_path} has no authors.summary_stats: use the 2026-09 snapshot or later")
     con.execute(
         f"""
         COPY (
-          SELECT r.id,
-                 CAST(r.updated_date AS DATE)            AS updated_date,
-                 r.works_count,
-                 r.cited_by_count,
-                 r.summary_stats.h_index                 AS h_index,
-                 r.summary_stats.i10_index               AS i10_index,
-                 r.summary_stats."2yr_mean_citedness"    AS two_year_mean_citedness,
-                 r.counts_by_year
-          FROM read_json('{raw_glob}', format='newline_delimited',
-                         compression='gzip', columns={RAW_COLS}) r
-          JOIN read_parquet('{authors}') a ON a.id = r.id
-          QUALIFY row_number() OVER (PARTITION BY r.id ORDER BY r.updated_date DESC) = 1
+          SELECT u.id,
+                 CAST(a.updated_date AS DATE)            AS updated_date,
+                 a.works_count::BIGINT                   AS works_count,
+                 a.cited_by_count::BIGINT                AS cited_by_count,
+                 a.summary_stats.h_index::BIGINT         AS h_index,
+                 a.summary_stats.i10_index::BIGINT       AS i10_index,
+                 a.summary_stats."2yr_mean_citedness"    AS two_year_mean_citedness,
+                 a.counts_by_year
+          FROM read_parquet('{authors}') u
+          JOIN oa.authors a ON a.id = CAST(substr(u.author_id, 2) AS BIGINT)
         ) TO '{out}' (FORMAT parquet)
         """
     )
@@ -142,7 +135,10 @@ def stage_author_work_citations(con, duckdb_path: Path, authors: Path, out: Path
     over oa.works split into N_CHUNKS ranges of works.id (one pass over 490M
     works does not fit in memory). Uncited papers are kept (c = 0)."""
     con.execute(f"ATTACH '{duckdb_path}' AS oa (READ_ONLY)")
-    con.execute(f"CREATE TEMP TABLE u AS SELECT id AS author_url FROM read_parquet('{authors}')")
+    con.execute(f"""CREATE TEMP TABLE u AS
+                    SELECT id AS author_url, CAST(substr(author_id, 2) AS BIGINT) AS author_num
+                    FROM read_parquet('{authors}')""")
+    key = works_author_key(con)          # the snapshot refers to authors by URL or by number
     cuts = ", ".join(f"{i / N_CHUNKS:.6f}" for i in range(1, N_CHUNKS))
     lo, hi = con.execute("SELECT min(id), max(id) FROM oa.works").fetchone()
     inner = con.execute(f"SELECT approx_quantile(id, [{cuts}]) FROM oa.works").fetchone()[0]
@@ -158,9 +154,9 @@ def stage_author_work_citations(con, duckdb_path: Path, authors: Path, out: Path
         con.execute(
             f"""
             COPY (
-              SELECT DISTINCT a.author.id AS author_url, w.id AS work_id, w.cited_by_count AS c
+              SELECT DISTINCT u.author_url, w.id AS work_id, w.cited_by_count::BIGINT AS c
               FROM oa.works w, UNNEST(w.authorships) AS t(a)
-              JOIN u ON u.author_url = a.author.id
+              JOIN u ON u.{key} = a.author.id
               WHERE w.id >= {start} AND w.id < {end}
             ) TO '{part}' (FORMAT parquet)
             """
@@ -214,7 +210,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results", default=None)
     parser.add_argument("--duckdb", default=config_default("oa_duckdb"))
-    parser.add_argument("--raw_authors", default=config_default("oa_raw_authors"))
     parser.add_argument("--out_dir", default=config_default("oa_author_stats"))
     parser.add_argument("--temp_dir", default=config_default("oa_works_tmp_dir"))
     parser.add_argument("--memory_limit", default="32GB")
@@ -224,9 +219,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    for name, value in (("--out_dir", args.out_dir), ("--raw_authors", args.raw_authors)):
-        if not value:
-            parser.error(f"Missing {name} and no matching key in [data] of config.ini.")
+    if not args.out_dir:
+        parser.error("Missing --out_dir and no oa_author_stats in [data] of config.ini.")
 
     results = get_results_path(path=args.results)
     step3_files = str(results / "pipeline" / "3_factuality" / "*.csv")
@@ -252,7 +246,7 @@ def main() -> None:
             t0 = time.time()
             logger.info("=== %s ===", stage)
             if stage == "summary_stats":
-                stage_summary_stats(con, args.raw_authors, paths["authors"], paths[stage])
+                stage_summary_stats(con, Path(args.duckdb), paths["authors"], paths[stage])
             elif stage == "author_work_citations":
                 stage_author_work_citations(con, Path(args.duckdb), paths["authors"], paths[stage])
             else:

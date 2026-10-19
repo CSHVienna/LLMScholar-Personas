@@ -16,22 +16,23 @@ from libs.metrics.coauthorship import build_coauthorship_graph
 duckdb = pytest.importorskip("duckdb")
 
 
-def make_snapshot(path, works):
+def make_snapshot(path, works, numeric_ids=False):
     """Write a DuckDB file with a `works` table shaped like the OA snapshot.
 
-    `works` is ``{work_id: [author_num, ...]}``.
+    `works` is ``{work_id: [author_num, ...]}``. Author ids are URLs, as in the
+    snapshots up to 2026-03, or numbers (`numeric_ids`), as from 2026-09.
     """
     con = duckdb.connect(str(path))
     try:
         # OR REPLACE so a test can overwrite an existing snapshot in place.
+        id_type = "BIGINT" if numeric_ids else "VARCHAR"
         con.execute(
             "CREATE OR REPLACE TABLE works "
-            "(id BIGINT, authorships STRUCT(author STRUCT(id VARCHAR))[])"
+            f"(id BIGINT, authorships STRUCT(author STRUCT(id {id_type}))[])"
         )
+        template = "{'author': {'id': %d}}" if numeric_ids else "{'author': {'id': 'https://openalex.org/A%d'}}"
         for work_id, authors in works.items():
-            listing = ", ".join(
-                "{'author': {'id': 'https://openalex.org/A%d'}}" % a for a in authors
-            )
+            listing = ", ".join(template % a for a in authors)
             con.execute(f"INSERT INTO works VALUES ({work_id}, [{listing}])")
     finally:
         con.close()
@@ -50,6 +51,25 @@ def test_builds_edges_from_shared_works(tmp_path):
     db = tmp_path / "oa.duckdb"
     # Work 1: authors 100, 200, 300 → triangle. Work 2: 300, 400 → one edge.
     make_snapshot(db, {1: [100, 200, 300], 2: [300, 400]})
+
+    adjacency, index = build_coauthorship_graph(
+        ["A100", "A200", "A300", "A400"],
+        cache_path=tmp_path / "graph.joblib",
+        oa_duckdb_path=db,
+    )
+
+    assert edge_set(adjacency, index) == {
+        frozenset(("A100", "A200")),
+        frozenset(("A100", "A300")),
+        frozenset(("A200", "A300")),
+        frozenset(("A300", "A400")),
+    }
+
+
+def test_numeric_author_ids_give_the_same_graph(tmp_path):
+    """The 2026-09 snapshot stores author ids as numbers, not URLs."""
+    db = tmp_path / "oa.duckdb"
+    make_snapshot(db, {1: [100, 200, 300], 2: [300, 400]}, numeric_ids=True)
 
     adjacency, index = build_coauthorship_graph(
         ["A100", "A200", "A300", "A400"],
