@@ -268,6 +268,12 @@ YEAR_CHUNKS: list[tuple[str, str]] = [
 ]
 
 
+# Order of "most recent" for an author's papers: year, then exact date, then
+# the paper's id, then the institution's name — so ties are always broken the
+# same way.
+LATEST = ("{'year': w.publication_year, 'date': w.publication_date, "
+          "'work': w.id, 'inst': inst.display_name}")
+
 # The author of an authorship as the OpenAlex URL. Snapshots up to 2026-03 store
 # au.author.id as that URL; from 2026-09 it is the number. typeof() is resolved
 # once per query, not per row.
@@ -306,17 +312,24 @@ def _build_works_agg_chunk(db_path: str, label: str, predicate: str) -> None:
         con.execute(
             f"""
             COPY (
-              SELECT
-                {AUTHOR_URL}                                       AS oa_id,
-                ARG_MAX(inst.country_code, w.publication_year)     AS country,
-                ARG_MAX(inst.display_name, w.publication_year)     AS inst_name,
-                MAX(w.publication_year)                            AS last_year
-              FROM works AS w,
-                   UNNEST(w.authorships)   AS t1(au),
-                   UNNEST(au.institutions) AS t2(inst)
-              WHERE inst.country_code IS NOT NULL
-                AND ({predicate})
-              GROUP BY {AUTHOR_URL}
+              -- The institution of the author's most recent paper in the range.
+              -- LATEST (see above) breaks ties (same year: two papers, or a paper
+              -- with two institutions) the same way every time, and country and
+              -- institution come from the same row.
+              SELECT oa_id, last.country, last.inst_name,
+                     last_key.year AS last_year, last_key.date AS last_date,
+                     last_key.work AS last_work
+              FROM (
+                SELECT {AUTHOR_URL} AS oa_id,
+                       ARG_MAX({{'country': inst.country_code, 'inst_name': inst.display_name}}, {LATEST}) AS last,
+                       MAX({LATEST}) AS last_key
+                FROM works AS w,
+                     UNNEST(w.authorships)   AS t1(au),
+                     UNNEST(au.institutions) AS t2(inst)
+                WHERE inst.country_code IS NOT NULL
+                  AND ({predicate})
+                GROUP BY {AUTHOR_URL}
+              )
             ) TO '{out}' (FORMAT PARQUET)
         """
         )
@@ -376,16 +389,20 @@ def resolve_country_via_works(
     con = _open_duckdb(db_path)
     try:
         con.register("query_oa_ids", pd.DataFrame({"id": list(set(oa_ids))}))
-        # Per author, the most recent of the ranges (chunks and ids are both URLs).
+        # Per author, the most recent of the ranges (chunks and ids are both URLs),
+        # with the same tie-break as inside a range.
         rows = con.execute(
             f"""
-            SELECT
-              p.oa_id,
-              ARG_MAX(p.country,   p.last_year) AS country,
-              ARG_MAX(p.inst_name, p.last_year) AS inst_name
-            FROM read_parquet('{chunk_glob}') p
-            JOIN query_oa_ids q ON p.oa_id = q.id
-            GROUP BY p.oa_id
+            SELECT oa_id, last.country, last.inst_name
+            FROM (
+              SELECT p.oa_id,
+                     ARG_MAX({{'country': p.country, 'inst_name': p.inst_name}},
+                             {{'year': p.last_year, 'date': p.last_date, 'work': p.last_work,
+                               'inst': p.inst_name}}) AS last
+              FROM read_parquet('{chunk_glob}') p
+              JOIN query_oa_ids q ON p.oa_id = q.id
+              GROUP BY p.oa_id
+            )
         """
         ).fetchall()
         logger.info(

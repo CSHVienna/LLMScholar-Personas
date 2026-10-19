@@ -161,11 +161,11 @@ def fetch_oa_institutions(oa_ids: list[str]) -> dict[str, list[str]]:
         # Register the oa_ids as a virtual table to do an efficient JOIN
         # instead of a giant IN.
         con.register("query_oa_ids", pd.DataFrame({"id": unique}))
-        # Single query: for each author, LIST(DISTINCT inst_name) over
+        # Single query: for each author, the sorted LIST(DISTINCT inst_name) over
         # all chunks → their full affiliation history.
         rows = con.execute(
             f"""
-            SELECT p.oa_id, LIST(DISTINCT p.inst_name) AS institutions
+            SELECT p.oa_id, list_sort(LIST(DISTINCT p.inst_name)) AS institutions
               FROM read_parquet('{chunk_glob}') p
               JOIN query_oa_ids q ON p.oa_id = q.id
              WHERE p.inst_name IS NOT NULL
