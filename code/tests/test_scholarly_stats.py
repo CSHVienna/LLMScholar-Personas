@@ -13,17 +13,24 @@ import pandas as pd
 import pytest
 
 from libs.metrics import constants
-from libs.metrics.io import _scholarly_stats_from_citations, build_author_features
+from libs.metrics.similarity import _scholarly_stats_from_citations, build_author_features, load_author_scholarly_stats
 
 
 def reference_e_index(citations):
-    """LLMScholarBench's formula, transcribed literally: e = -1/N * sum c_i
-    log(c_i / c_total). Papers with no citations drop out of the sum."""
-    n = len(citations)
+    """LLMScholarBench's formula: e = -1/N * sum c_i log(c_i / c_total).
+
+    N counts the CITED papers, not every paper. The reference computes it as
+    `df_author[col_publication].nunique()` over a *citation* table, where a
+    paper with no citations contributes no rows and so cannot be counted. An
+    earlier version of this helper used `len(citations)`, which transcribed the
+    formula but not the shape of the data it runs on — and since the
+    implementation under test had the same slip, the test passed and hid it.
+    """
     c_total = sum(citations)
-    if n == 0 or c_total == 0:
+    n_cited = sum(1 for c in citations if c > 0)
+    if n_cited == 0 or c_total == 0:
         return 0.0
-    return -1 / n * sum(c * math.log(c / c_total) for c in citations if c > 0)
+    return -1 / n_cited * sum(c * math.log(c / c_total) for c in citations if c > 0)
 
 
 def stats_for(per_author):
@@ -109,6 +116,18 @@ def test_e_index_zero_when_nothing_is_cited():
     assert not np.isnan(got)
 
 
+def test_e_index_ignores_uncited_papers_in_the_denominator():
+    """The bug this pins: uncited papers must not dilute the e-index.
+
+    Two authors with the same citation distribution differ only in a tail of
+    uncited papers. Since N counts cited papers, both must score identically —
+    dividing by all papers instead made the second author score 5x lower.
+    """
+    without_tail = stats_for({0: [10, 8, 5]}).loc[0, "e_index"]
+    with_tail = stats_for({0: [10, 8, 5] + [0] * 12}).loc[0, "e_index"]
+    assert with_tail == pytest.approx(without_tail, rel=1e-9)
+
+
 def test_e_index_rewards_spread_over_concentration():
     """The whole point of the metric: same citation total, different shape.
 
@@ -184,17 +203,27 @@ def test_citations_per_paper_age_definition():
     assert features.loc["A2", "citations_per_paper_age"] == pytest.approx((8 / 4) / 2)
 
 
-def test_career_age_zero_does_not_divide_by_zero():
+def test_career_age_zero_yields_zero_not_a_clipped_divisor():
+    """The reference (batch_user_rankings.py:77) returns 0 when career_age is 0.
+
+    Clipping the divisor to 1 instead handed a single-year author their entire
+    citations_per_work, which is the opposite of damping by career length.
+    """
     df = make_authors()
     df["oa_career_age"] = [0, 0]
     features = build_author_features(df)
     assert np.isfinite(features["citations_per_paper_age"]).all()
-    assert np.isfinite(features["works_per_year"]).all()
+    assert (features["citations_per_paper_age"] == 0).all()
 
 
 def test_full_vector_with_stats():
     stats = pd.DataFrame(
-        {"h_index": [7, 2], "i10_index": [5, 0], "e_index": [1.5, 0.3]},
+        {
+            "h_index": [7, 2],
+            "i10_index": [5, 0],
+            "e_index": [1.5, 0.3],
+            "two_year_mean_citedness": [3.1, 0.0],
+        },
         index=["A1", "A2"],
     )
     features = build_author_features(make_authors(), stats=stats)
@@ -206,7 +235,13 @@ def test_full_vector_with_stats():
 def test_authors_missing_from_stats_become_nan():
     """A2 has no stats row: NaN, so the imputer handles it — never a silent 0."""
     stats = pd.DataFrame(
-        {"h_index": [7], "i10_index": [5], "e_index": [1.5]}, index=["A1"]
+        {
+            "h_index": [7],
+            "i10_index": [5],
+            "e_index": [1.5],
+            "two_year_mean_citedness": [3.1],
+        },
+        index=["A1"],
     )
     features = build_author_features(make_authors(), stats=stats)
     assert features.loc["A1", "h_index"] == 7
@@ -232,7 +267,7 @@ def test_pca_consumes_every_column_the_features_frame_carries():
     embedding ignored its output."""
     import numpy as np
 
-    from libs.metrics.io import build_similarity_embeddings
+    from libs.metrics.similarity import build_similarity_embeddings
 
     rng = np.random.default_rng(0)
     n = 60
@@ -264,7 +299,7 @@ def test_missing_base_column_is_an_error_not_a_silent_drop():
     import tempfile
     from pathlib import Path
 
-    from libs.metrics.io import build_similarity_embeddings
+    from libs.metrics.similarity import build_similarity_embeddings
 
     incomplete = pd.DataFrame(
         {"works_count": [1.0, 2.0], "cited_by_count": [3.0, 4.0]}, index=["A1", "A2"]
@@ -274,3 +309,129 @@ def test_missing_base_column_is_an_error_not_a_silent_drop():
             build_similarity_embeddings(
                 incomplete, cache_path=Path(tmp) / "x.joblib"
             )
+
+
+# ── loading the extracted stats ───────────────────────────────────────────────
+
+
+def test_load_author_scholarly_stats_joins_both_sources(tmp_path):
+    """The four stats columns live in two files and must arrive as one frame.
+
+    summary_stats.parquet carries what OpenAlex publishes; eindex.parquet the
+    e-index it does not. Both store the URL form of the id, while the feature
+    builder indexes by the bare token — the loader is what reconciles that.
+    """
+    pd.DataFrame(
+        {
+            "id": ["https://openalex.org/A1", "https://openalex.org/A2"],
+            "h_index": [7, 2],
+            "i10_index": [5, 0],
+            "two_year_mean_citedness": [3.1, 0.4],
+        }
+    ).to_parquet(tmp_path / "summary_stats.parquet", index=False)
+    pd.DataFrame(
+        {
+            "author_url": ["https://openalex.org/A1", "https://openalex.org/A2"],
+            "e_index": [1.5, 0.3],
+        }
+    ).to_parquet(tmp_path / "eindex.parquet", index=False)
+
+    stats = load_author_scholarly_stats(tmp_path)
+
+    assert list(stats.columns) == constants.SIMILARITY_STATS_COLS
+    assert list(stats.index) == ["A1", "A2"]
+    assert stats.loc["A1", "h_index"] == 7
+    assert stats.loc["A1", "e_index"] == pytest.approx(1.5)
+    assert stats.loc["A2", "two_year_mean_citedness"] == pytest.approx(0.4)
+
+
+def test_load_author_scholarly_stats_says_which_file_is_missing(tmp_path):
+    """A missing file means a stage never ran; the error has to name it rather
+    than surface later as an empty feature column."""
+    pd.DataFrame({"id": ["https://openalex.org/A1"], "h_index": [7],
+                  "i10_index": [5], "two_year_mean_citedness": [3.1]}).to_parquet(
+        tmp_path / "summary_stats.parquet", index=False
+    )
+    with pytest.raises(FileNotFoundError, match="eindex.parquet"):
+        load_author_scholarly_stats(tmp_path)
+
+
+# ── the Semantic Scholar block ────────────────────────────────────────────────
+
+
+def _ss_frame():
+    return pd.DataFrame(
+        {
+            "ss_works_count": [12.0, 3.0],
+            "ss_cited_by_count": [300.0, 6.0],
+            "ss_career_age": [8.0, 2.0],
+            "ss_citations_per_paper_age": [3.125, 1.0],
+        },
+        index=pd.Index([111.0, 222.0], name="Researcher_id"),
+    )
+
+
+def _authors_with_researcher_id():
+    return pd.DataFrame(
+        {
+            "author_id": ["A1", "A2", "A3"],
+            "oa_works_count": [10.0, 4.0, 6.0],
+            "oa_cited_by_count": [100.0, 8.0, 12.0],
+            "oa_career_age": [5.0, 2.0, 3.0],
+            # A3 has no Semantic Scholar counterpart.
+            "researcher_id": [111.0, 222.0, np.nan],
+        }
+    )
+
+
+def _stats_frame(index):
+    return pd.DataFrame(
+        {
+            "h_index": [7, 2, 3],
+            "i10_index": [5, 0, 1],
+            "e_index": [1.5, 0.3, 0.7],
+            "two_year_mean_citedness": [3.1, 0.4, 1.0],
+        },
+        index=index,
+    )
+
+
+def test_ss_block_joins_through_researcher_id():
+    """The two blocks are keyed differently — author_id vs Researcher_id — and
+    the per-row researcher_id is the only bridge between them."""
+    authors = _authors_with_researcher_id()
+    features = build_author_features(
+        authors, stats=_stats_frame(["A1", "A2", "A3"]), ss=_ss_frame()
+    )
+
+    assert list(features.columns) == constants.SIMILARITY_FEATURE_COLS_WITH_SS
+    assert features.loc["A1", "ss_works_count"] == pytest.approx(12.0)
+    assert features.loc["A2", "ss_cited_by_count"] == pytest.approx(6.0)
+    # A3 is OpenAlex-only: NaN in the SS block, so the imputer handles it.
+    assert features.loc[["A3"], constants.SIMILARITY_SS_COLS].isna().all().all()
+    # The OpenAlex half must be untouched by the join.
+    assert features.loc["A1", "h_index"] == 7
+
+
+def test_ss_block_omitted_leaves_the_openalex_vector_alone():
+    """Without `ss` the vector must be byte-identical to the OA-only one, so
+    turning the block on is the only thing that changes Sim_i."""
+    authors = _authors_with_researcher_id()
+    stats = _stats_frame(["A1", "A2", "A3"])
+    without = build_author_features(authors, stats=stats)
+    with_ss = build_author_features(authors, stats=stats, ss=_ss_frame())
+
+    assert list(without.columns) == constants.SIMILARITY_FEATURE_COLS_FULL
+    pd.testing.assert_frame_equal(
+        without, with_ss[constants.SIMILARITY_FEATURE_COLS_FULL]
+    )
+
+
+def test_ss_block_needs_the_researcher_id_column():
+    """Asking for the block without the join key must fail loudly, not silently
+    produce four all-NaN columns that the imputer then invents values for."""
+    authors = _authors_with_researcher_id().drop(columns=["researcher_id"])
+    with pytest.raises(ValueError, match="researcher_id"):
+        build_author_features(
+            authors, stats=_stats_frame(["A1", "A2", "A3"]), ss=_ss_frame()
+        )

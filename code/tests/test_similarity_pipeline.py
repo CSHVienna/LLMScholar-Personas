@@ -9,12 +9,8 @@ import pandas as pd
 import pytest
 
 from libs.metrics import constants
-from libs.metrics.aggregators import compute_similarity
-from libs.metrics.io import (
-    build_author_features,
-    build_author_index,
-    build_similarity_embeddings,
-)
+from libs.metrics.coauthorship import build_author_index
+from libs.metrics.similarity import build_author_features, build_similarity_embeddings, compute_similarity
 
 
 def population(n=500, seed=0, missing=0):
@@ -183,3 +179,42 @@ def test_index_alignment_puts_each_author_on_its_own_row(tmp_path):
         shuffled, cache_path=tmp_path / "b.joblib", index=index
     )
     np.testing.assert_allclose(from_ordered, from_shuffled)
+
+
+def test_ss_block_actually_reaches_the_pca(tmp_path):
+    """A feature column the canonical order does not list is silently dropped.
+
+    This pins the regression that made the SS variant identical to the OA one:
+    build_similarity_embeddings ordered columns against a list that predated
+    the SS block, so the four extra columns never reached the fit and the two
+    "variants" came out with correlation 1.00000.
+    """
+    features = build_author_features(population(n=200))
+    rng = np.random.default_rng(0)
+    with_ss = features.copy()
+    for col in constants.SIMILARITY_SS_COLS:
+        with_ss[col] = rng.lognormal(2, 1, size=len(with_ss))
+
+    base, _, base_pipe = build_similarity_embeddings(
+        features, cache_path=tmp_path / "base.joblib"
+    )
+    extended, _, ext_pipe = build_similarity_embeddings(
+        with_ss, cache_path=tmp_path / "ext.joblib"
+    )
+
+    assert base_pipe.named_steps["scale"].n_features_in_ == len(features.columns)
+    assert ext_pipe.named_steps["scale"].n_features_in_ == len(with_ss.columns)
+    # Wider input, so the PCA usually keeps a different number of components;
+    # when it happens to keep the same number the values must still differ.
+    if base.shape == extended.shape:
+        assert not np.allclose(np.nan_to_num(base), np.nan_to_num(extended))
+    else:
+        assert extended.shape[1] != base.shape[1]
+
+
+def test_unknown_feature_column_is_rejected(tmp_path):
+    """Better to fail than to drop a column the caller deliberately added."""
+    features = build_author_features(population(n=50))
+    features["something_new"] = 1.0
+    with pytest.raises(ValueError, match="something_new"):
+        build_similarity_embeddings(features, cache_path=tmp_path / "x.joblib")

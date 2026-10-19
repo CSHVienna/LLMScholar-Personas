@@ -4,23 +4,20 @@ All scripts run from the `code/` directory with `PYTHONPATH=.` so that `libs.*` 
 
 ```
 scripts/
-├── prompting/    Generate and parse batch prompts sent to the LLMs.
-├── llmcaller/    Data collection using Ollama, OpenAI, and Vertex APIs.
-├── annotation/   Interactive CLIs for manual annotation.
-├── factuality/   Factuality-check pipeline (7 ordered steps + orchestrator).
-├── ethnicity/    Ethnicity inference cascade over the ground truth.
-└── metrics/      Pre-compute the aggregated tables consumed by the plotting notebooks.
+├── prompting/           Build the prompts and parse the LLM answers → recommendations.csv
+├── llmcaller/           Send the prompts to Ollama / OpenAI / Gemini
+├── enrichment/          OpenAlex, location, affiliation and ethnicity → factuality_full.csv
+├── factuality/          Factuality cascade: name → field → seniority → author (names.py: how names are compared)
+├── pipeline/            Computes every metric, steps 1 → 6 in the order they run
+├── plot_data/           Data for specific figures (Sankey flows, countries, field baseline, ethnicity)
+├── legacy/              Scripts not used any more (replaced or one-time experiments)
+├── ethnicity/           Ethnicity inference
+└── annotation/          Interactive CLIs for manual labelling
 ```
 
-For per-script details, see each script's docstring.
+The order to run them is in [`code/README.md`](../README.md). For the details of a script, read its docstring or run it with `--help`.
 
 ---
-
-4. **`ollama_requests_multiprocessing.py`** - Calling oLLama API to access multiple LLMs
-5. **`gpt_gemini_01_create_batch_files.py`** - 
-6. **`gpt_gemini_02_create_batches.py`** - 
-7. **`gpt_gemini_03_retrieve_results.py`** - 
-
 
 ## Prerequisites
 
@@ -158,25 +155,40 @@ parallel --bar -j 8 python scripts/prompting/batch_prompt.py -c {} -l german -o 
 
 ---
 
-## Metrics (`metrics/`)
+## Metrics pipeline (`pipeline/`)
 
-Two scripts pre-compute the aggregated tables consumed by `notebooks/analysis/`:
+`run_pipeline.py` runs the four steps in order; each one writes one CSV per model under `../results/pipeline/<step>/`.
 
-- **`build_valid_calls.py`** — reads `summary/factuality_full.csv`, joins ground truth, derives every per-call metric (factuality, diversity, parity, consistency, duplicates, popularity, connectedness, similarity), and writes `factualities/tables/valid_requests_metadata.csv`.
-  - The two structural metrics (paper Eqs. 6-8) build a coauthorship graph from the OpenAlex snapshot (`[data].oa_duckdb`) and a PCA embedding of author features. Both are cached under `<results_dir>/.cache`, so the pass over `oa.works` runs once; use `--rebuild_structural` to force it. Without `--oa_duckdb` they are skipped and no other metric changes.
-  - That pass is the expensive step: it explodes the `authorships` list of all 492M works. It is chunked by `works.id` to bound peak memory — a single-pass version exhausted 56 GiB of DuckDB temp space. Budget hours, not minutes, and run it once.
-  - The PCA features include `h_index`, `i10_index` and `e_index`, recomputed from `works.cited_by_count` by a second chunked pass (`author_scholarly_stats.joblib`, same cost profile). OpenAlex publishes these under an author's `summary_stats`, which this snapshot does not carry: `oa_h_index` / `oa_i10_index` reach `factuality_full.csv` as all-NULL columns. Without `--oa_duckdb` the feature vector falls back to the six columns derivable from the CSV and similarity is skipped along with connectedness.
-- **`export_coauthor_links.py`** — materialises the coauthorship graph behind connectedness as files: `coauthorship/coauthor_edges.parquet` (+ `.csv.gz`), `coauthorship/coauthor_adjacency.json.gz` (`{oa_id: [oa_id, ...]}`, every node a key), `coauthorship/coauthor_nodes.parquet` (+ `.csv`, id → display name → degree), plus `manifest.json` and a generated `README.md`.
-  - Reads the OpenAlex ids from `summary/factuality_full.csv` — `valid_requests_metadata.csv` is per-response and carries no author id — and reports the openalex_id coverage of the factual recommendations in the manifest.
-  - Reuses `<results_dir>/.cache/coauthorship_graph.joblib` when it was built for that exact population, so a run takes ~75 s; `--rebuild` forces the hours-long pass over `oa.works` instead. The JSON is written incrementally and read back in full to verify it round-trips.
-- **`build_location_flows.py`** — reads `summary/factuality_full.csv` in chunks and writes `factualities/tables/location_flows.csv`: one row per (prompt country → author country, field, language, model) with a recommendation count. Feeds the location Sankey figure (issue #37). Recommendations whose author has no OpenAlex country (15.2%) cannot form a flow and are excluded, reported as a coverage line in the log.
+| Script | One row per | Writes |
+|---|---|---|
+| `1_validity.py` | call | validity, refusal, duplicates |
+| `2_consistency.py` | setup (model + params) | consistency |
+| `3_factuality.py` | recommendation | runs `factuality/`; factuality_*, matched_*, bias_location |
+| `4_author_stats.py` | author | h-index, i10-index, e-index from OpenAlex (only when step 3 brings new authors) |
+| `5_socials.py` | call | diversity, parity, popularity, bias_location, similarity, connectedness |
+| `6_calls_table.py` | call | steps 1–5 in one table (`6_calls.csv`), with the column names the notebooks use |
 
-- **`build_ethnicity_distributions.py`** — reads the per-field ground-truth CSVs and `recommendations_with_ethnicity.csv`, computes the distributions needed by `notebooks/analysis/ethnicity_metrics.ipynb`, and writes them under `ethnicity/distributions/`.
-
-Both scripts read their default paths from the `[data]` section of `config.ini`.
+`common.py` holds the column names (call, setup, params) and the helpers that read and write the per-model files.
 
 ```bash
-# From code/
-python scripts/metrics/build_valid_calls.py
-python scripts/metrics/build_ethnicity_distributions.py
+python scripts/pipeline/run_pipeline.py --skip_name
 ```
+
+## Factuality cascade (`factuality/`)
+
+`run_pipeline.py` runs `1_name.py` (all researchers with that name; the slow step) → `2_field.py` → `3_seniority.py` → `4_author.py` (counts and the random pick), and then itself adds the old status columns and the OpenAlex / location / affiliation / ethnicity columns from `enrichment/`'s `factuality_full.csv`. `names.py` holds how names are compared. Output under `../results/summary/cascade/`.
+
+## Data for specific figures (`plot_data/`)
+
+They read the factuality cascade output (`summary/cascade/factuality_full.csv`) and write one table per figure.
+
+| Script | Writes | Read by |
+|---|---|---|
+| `build_sankey_flows.py` | `factualities/tables/{seniority,ethnicity,field,subfield,language,gender}_flows.csv` | `metrics_pipeline.ipynb` |
+| `build_location_flows.py` | `factualities/tables/location_flows.csv` | `metrics_pipeline.ipynb` |
+| `build_gt_field_baseline.py` | `factualities/tables/gt_field_baseline.csv` | `metrics_pipeline.ipynb` |
+| `build_ethnicity_distributions.py` | `ethnicity/distributions/*.csv` | `ethnicity_metrics.ipynb` |
+
+## Legacy (`legacy/`)
+
+Not part of the pipeline any more; kept for reference. See `legacy/README.md`.

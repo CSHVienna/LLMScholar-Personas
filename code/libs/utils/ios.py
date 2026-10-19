@@ -49,23 +49,6 @@ def write_list_to_file(
         f.write(line_separator.join(data_list))
 
 
-def read_list_from_file_llm_prompt(
-    file_path: Path | str, line_separator: str = PROMPT_LINE_SEPARATOR
-) -> List[List[str]]:
-    content = []
-    with open(file_path, "r") as f:
-        item = []
-        for line in f.read().splitlines():
-
-            if line_separator == line:
-                content.append(item)
-                item = []
-            else:
-                item.append(line.strip())
-
-        return content
-
-
 def read_list_from_file(file_path: Path | str) -> List[List[str]]:
     item = []
 

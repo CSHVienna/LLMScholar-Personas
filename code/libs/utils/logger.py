@@ -73,7 +73,3 @@ def debug_msg(msg, level=DebugLevel.LOG):
     return
 
 
-def colored_msg(msg, color=Bcolor.ENDC):
-    print_string = color + u'{}' + Bcolor.ENDC
-    print(print_string.format(msg))
-    return

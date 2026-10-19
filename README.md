@@ -29,8 +29,9 @@ $EDITOR config.ini    # fill in [secrets].keys_dir and every [data].* path
 # 3. Run the pipeline from code/.
 cd code
 export PYTHONPATH=.
-python scripts/factuality/run_factuality_pipeline.py    # 7-step factuality cascade
-python scripts/metrics/build_valid_calls.py             # per-call metrics table
+python scripts/enrichment/run_enrichment.py    # OpenAlex, location, affiliation, ethnicity
+python scripts/pipeline/run_pipeline.py                # validity → consistency → factuality → author stats → socials → table
+python scripts/plot_data/build_sankey_flows.py         # + the other plot_data/ scripts, for specific figures
 jupyter nbconvert --execute notebooks/analysis/metrics_pipeline.ipynb
 ```
 
@@ -43,23 +44,23 @@ The end-to-end pipeline (collect responses → factuality → metrics → figure
 ```
 LLMScholar-Personas/
 ├── code/                 see code/README.md
-│   ├── libs/             Reusable libraries (LLM clients, prompts, metrics, plots).
-│   ├── scripts/          CLI entry points — one folder per pipeline stage.
-│   └── notebooks/        Plot-only notebooks (analysis/, agreement/).
+│   ├── libs/             Shared code (metrics, plots, prompts, utils; legacy/ = unused).
+│   ├── scripts/          Programs you run, one folder per stage (see code/scripts/README.md).
+│   ├── notebooks/        Plot-only notebooks (analysis/, agreement/).
+│   └── tests/            pytest.
 ├── data/                 see data/README.md
 │   ├── context/          Per-language prompt scaffolding.
 │   ├── models/           List of LLMs and their metadata.
 │   └── annotator_agreement/, ethnicity_inference/   Manual labels.
 ├── results/              Pipeline outputs. Path configurable in config.ini.
 ├── requirements.txt
-├── config.ini.example    Template — copy to config.ini and fill in your paths.
-└── REFACTOR.md           Change log for the latest refactor.
+└── config.ini.example    Template — copy to config.ini and fill in your paths.
 ```
 
 Detailed instructions live in the sub-READMEs:
 
 - **[`code/README.md`](code/README.md)** — end-to-end pipeline (data flow, every step, expected outputs, troubleshooting).
-- **[`code/scripts/README.md`](code/scripts/README.md)** — per-CLI documentation for the batch-processing scripts.
+- **[`code/scripts/README.md`](code/scripts/README.md)** — what each script folder is for, and the details of each script.
 - **[`data/README.md`](data/README.md)** — what lives in each subfolder of `data/`.
 
 ---
@@ -67,13 +68,16 @@ Detailed instructions live in the sub-READMEs:
 ## How the pipeline fits together
 
 ```
-prompts (per language)                LLM responses              factuality + metrics            figures
-─────────────────────                ───────────────             ────────────────────            ───────
-scripts/prompting/            →      (collected externally)  →   scripts/factuality/       →     notebooks/analysis/
-batch_params, batch_prompt,                                      run_factuality_pipeline         metrics_pipeline.ipynb,
-batch_parse_results                                              scripts/metrics/                ethnicity_metrics.ipynb,
-                                                                 build_valid_calls,              ...
-                                                                 build_ethnicity_distributions
+prompts + LLM answers          enrichment + factuality             metrics                         figures
+─────────────────────          ───────────────────────             ───────                         ───────
+scripts/prompting/       →     scripts/enrichment/            →    scripts/pipeline/          →    notebooks/analysis/
+scripts/llmcaller/             (OpenAlex, location, ...)           1 validity                      metrics_pipeline.ipynb,
+→ recommendations.csv          scripts/factuality/                 2 consistency                   ...
+                               (name → field → seniority)          3 factuality (the cascade)
+                                                                   4 socials
+                                                                   5 one table → 6_calls.csv
+                                                                   scripts/plot_data/ (data for
+                                                                   specific figures)
 ```
 
 Each stage reads what the previous one wrote. See `code/README.md` for the ordered command list, the schema of every intermediate CSV, and the optional branches (manual annotation, ethnicity inference, inter-annotator agreement).

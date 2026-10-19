@@ -11,7 +11,7 @@ Run from code/ with PYTHONPATH=.:
 import numpy as np
 import pytest
 
-from libs.metrics.io import build_coauthorship_graph
+from libs.metrics.coauthorship import build_coauthorship_graph
 
 duckdb = pytest.importorskip("duckdb")
 

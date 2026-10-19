@@ -28,10 +28,6 @@ def norm(s: Any) -> str:
     return s.lower()
 
 
-def norm_eq(a: Any, b: Any) -> bool:
-    return norm(a) == norm(b) if a and b else False
-
-
 def truthy(v: Any) -> bool:
     """Truthy in the sense of a manual annotator: 'yes', 'y', 'true', '1', 't'."""
     return str(v).strip().lower() in ("yes", "y", "true", "1", "t")

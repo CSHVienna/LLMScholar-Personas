@@ -110,12 +110,6 @@ def iter_instructions(instructions: List[Dict[str, Any]]) -> Iterator[Dict[str, 
         yield inst
 
 
-def iter_locations(locs: List[str]) -> Iterator[str]:
-    """Yield each location string."""
-    for loc in locs:
-        yield loc
-
-
 # ---------------------------
 # Combination generator
 # ---------------------------

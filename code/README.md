@@ -1,325 +1,155 @@
 # LLMScholar-Personas — Code
 
-Pipeline that turns raw LLM responses (one JSON per persona × language × field × subfield × k × run) into the per-call metrics tables and figures used in the paper. The whole pipeline is driven from `code/` with `PYTHONPATH=.` and reads its external paths from `[data]` in `config.ini` (see `config.ini.example`).
+Turns the raw LLM responses (one JSON per persona × language × field × subfield × k × run) into metric tables and the paper's figures.
+
+Everything runs from `code/` with `PYTHONPATH=.`. External paths (Semantic Scholar parquet, OpenAlex DuckDB, results folder) come from `[data]` in `config.ini` (copy `config.ini.example`).
+
+```bash
+cd code
+export PYTHONPATH=.
+PYTHONPATH=. python -m pytest tests/        # 178 tests
+```
+
+---
+
+## Folder layout
 
 ```
 code/
-├── libs/               Shared libraries imported by scripts and notebooks.
-│   ├── llm/            OpenAI / Ollama / Gemini wrappers.
-│   ├── prompt/         Prompt scaffolding (constants + generation).
-│   ├── metrics/        Metric definitions, normalisation maps, aggregators, I/O.
-│   ├── visuals/        Paper-style plots and plot constants.
-│   └── utils/          Config helpers, file I/O, text cleaning.
-├── scripts/            Executable CLIs that produce data on disk.
-│   ├── prompting/      batch_params → batch_prompt → batch_parse_results
-│   ├── annotation/     annotate_responses, annotate_ethnicity, lookup_output
-│   ├── factuality/     7-step factuality cascade + run_factuality_pipeline orchestrator
-│   ├── ethnicity/      BERT + ethnicolr ethnicity cascade
-│   └── metrics/        build_valid_calls, build_ethnicity_distributions
-├── notebooks/          Plot-only Jupyter notebooks.
-│   ├── analysis/       Paper figures (metrics, ethnicity, OA coverage, manual validation)
-│   └── agreement/      Inter-annotator agreement (Cohen κ, Krippendorff α)
-└── tests/              pytest suite (structural metrics, coauthorship builder)
-```
-
-Run the tests from `code/` with `PYTHONPATH=.`:
-
-```bash
-PYTHONPATH=. python -m pytest tests/ -v
+├── scripts/                 Programs you run. Each one says what it does in its docstring (--help).
+│   ├── prompting/           Build the prompts and parse the LLM answers → recommendations.csv
+│   ├── llmcaller/           Send the prompts to Ollama / OpenAI / Gemini
+│   ├── enrichment/          OpenAlex, location, affiliation and ethnicity → factuality_full.csv
+│   ├── factuality/          Factuality cascade: name → field → seniority → author
+│   ├── pipeline/            Computes every metric, steps 1 → 6 in the order they run
+│   ├── plot_data/           Data for specific figures (Sankey flows, countries, field baseline, ethnicity)
+│   ├── legacy/              Scripts not used any more (replaced or one-time experiments)
+│   ├── ethnicity/           Ethnicity inference for the ground truth and the recommendations
+│   └── annotation/          Interactive CLIs for manual labelling
+├── libs/                    Code shared by scripts and notebooks (see "Where things live")
+├── notebooks/
+│   ├── analysis/            Paper figures (plot only: they read the tables, they compute nothing heavy)
+│   ├── agreement/           Inter-annotator agreement
+│   └── legacy/              Old notebooks
+└── tests/                   pytest
 ```
 
 ---
 
-## Pipeline overview
+## Running everything, in order
 
-```
-       prompting                  factuality                      metrics             notebooks
- ┌────────────────┐    ┌─────────────────────────────────┐    ┌──────────────┐    ┌──────────────┐
- │ batch_params   │    │ factuality_author_jw            │    │ build_valid_ │    │ analysis/    │
- │ batch_prompt   │ →  │ → factuality_openalex           │ →  │   calls      │ →  │ metrics_     │
- │ batch_parse_   │    │   → factuality_field_check      │    │ build_ethni- │    │ pipeline     │
- │ results        │    │     → factuality_seniority      │    │   city_dist- │    │              │
- └────────────────┘    │       → factuality_location     │    │   ributions  │    │ ethnicity_   │
-       │                │         → factuality_affiliation│    └──────────────┘    │ metrics      │
-       ↓                │           → factuality_ethnicity│           │            │ ...          │
-  ../results/           └─────────────────────────────────┘           ↓            └──────────────┘
-  summary/                          │                          ../results/                │
-  recommendations.csv               ↓                          factualities/               ↓
-  summary.csv                  ../results/                     tables/                ../results/
-                               summary/                        valid_requests_        plots/
-                               factuality_full.csv             metadata.csv           *.pdf
-
-                               ethnicity (optional, in parallel):
-                               scripts/ethnicity/ethnicity_inference.py
-                               scripts/ethnicity/apply_ethnicity_ground_truth.py
-                               → ../results/ethnicity/, ../results/summary/recommendations_with_ethnicity.csv
-```
-
-The seven factuality steps run in order — each reads the output of the previous one.
-
-| # | Script | Input → Output | What it adds |
-|---|---|---|---|
-| 0   | `factuality_author_jw.py`    | `recommendations.csv` → `factuality_author_jw.csv` | `author_status`, `gt_career_age`, `gt_field`, `gt_gender`, JW sim columns |
-| 0.5 | `factuality_openalex.py`     | `factuality_author_jw.csv` → `factuality_oa.csv` | `oa_id`, `oa_country_code`, `oa_works_count`, `oa_cited_by_count`, etc. (12 cols) |
-| 1   | `factuality_field_check.py`  | `factuality_oa.csv` → `factuality_field.csv` | `field_status`, `field_check_source`, `field_evidence` |
-| 2   | `factuality_seniority.py`    | `factuality_field.csv` → `factuality_seniority.csv` | `seniority_career_age`, `seniority_bucket`, `seniority_status` |
-| 3   | `factuality_location.py`     | `factuality_seniority.csv` → `factuality_location.csv` | `location_llm_iso`, `location_oa_iso`, `location_status` |
-| 3.5 | `factuality_affiliation.py`  | `factuality_location.csv` → `factuality_affiliation.csv` | `affiliation_llm`, `affiliation_oa_all`, `affiliation_status` |
-| 4   | `factuality_ethnicity.py`    | `factuality_affiliation.csv` → `factuality_full.csv` | `perceived_ethnicity` |
-
-> **Naming note (issue #36).** Step 3 keeps its `factuality_location` script/CSV
-> names — it is a pipeline stage producing `location_status`. The *evaluation
-> metric* derived from that column is named `bias_location` and is grouped with
-> the social-representation metrics, not with factuality. Artefacts generated
-> before the rename carry the old column name; `METRIC_RENAME_MAP` in
-> `libs/metrics/constants.py` maps it on load.
-
----
-
-## How to run
-
-### Setup (once)
+### 1. Prompts and LLM answers
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-# (optional) ethnicity inference cascade:
-pip install tensorflow tf-keras ethnicolr
-
-# Configure local paths
-cp config.ini.example config.ini
-$EDITOR config.ini   # fill in [secrets].keys_dir and every [data].* path
-```
-
-Every script is launched from `code/` with `PYTHONPATH=.` so `libs.*` imports resolve:
-
-```bash
-cd code
-export PYTHONPATH=.
-```
-
-### Step by step
-
-#### 1. Prompting — generate prompts and parse LLM responses
-
-```bash
-# 1a. Translate parameters into each language.
-python scripts/prompting/batch_params.py -l english -o ../data/context/
-python scripts/prompting/batch_params.py -l spanish -o ../data/context/
-python scripts/prompting/batch_params.py -l german  -o ../data/context/
-
-# 1b. Expand all (role × task × target × language × location × k × field × subfield) combinations.
+python scripts/prompting/batch_params.py -l english -o ../data/context/   # also spanish, german
 python scripts/prompting/batch_prompt.py -l english -o ../data/context/
-python scripts/prompting/batch_prompt.py -l spanish -o ../data/context/
-python scripts/prompting/batch_prompt.py -l german  -o ../data/context/
-
-# 1c. Hit the LLMs (out of scope here — drop JSON responses under ../results/responses/).
-
-# 1d. Consolidate the JSON responses into a single recommendations.csv + summary.csv.
-python scripts/prompting/batch_parse_results.py \
-  --results_dir ../results \
-  --output_dir ../results/summary
-
-# Parallel variant — one model × language per worker:
-parallel -j 20 python scripts/prompting/batch_parse_results.py \
-  --results_dir ../results \
-  --output_dir ../results/summary_parallel \
-  --model {1} --language {2} \
-  :::: ../data/context/models.txt ::: english german spanish
-```
-
-**Outputs:**
-- `../results/summary/recommendations.csv` — one row per LLM-recommended author (~3.9M rows).
-- `../results/summary/summary.csv` — one row per LLM call (~929K rows) with `valid_flag`.
-
-#### 2. Factuality pipeline — 7 ordered steps
-
-```bash
-# Orchestrator (recommended) — runs every step in order, reads paths from config.ini.
-python scripts/factuality/run_factuality_pipeline.py \
-  --results ../results/summary \
-  --parquet <path_to_ss_parquet> \
-  --duckdb  <path_to_oa_duckdb>
-
-# Skip individual steps if their outputs already exist:
-python scripts/factuality/run_factuality_pipeline.py --skip_jw --skip_oa --skip_field
-```
-
-Or call each step individually (every step accepts `--help`):
-
-```bash
-python scripts/factuality/factuality_author_jw.py    --recommendations ../results/summary/recommendations.csv     --parquet <path_to_ss_parquet> --output ../results/summary/factuality_author_jw.csv
-python scripts/factuality/factuality_openalex.py     --input ../results/summary/factuality_author_jw.csv          --db_path <path_to_oa_duckdb> --output ../results/summary/factuality_oa.csv
-python scripts/factuality/factuality_field_check.py  --input ../results/summary/factuality_oa.csv                 --output ../results/summary/factuality_field.csv
-python scripts/factuality/factuality_seniority.py    --input ../results/summary/factuality_field.csv              --output ../results/summary/factuality_seniority.csv
-python scripts/factuality/factuality_location.py     --input ../results/summary/factuality_seniority.csv          --output ../results/summary/factuality_location.csv
-python scripts/factuality/factuality_affiliation.py  --input ../results/summary/factuality_location.csv           --output ../results/summary/factuality_affiliation.csv
-python scripts/factuality/factuality_ethnicity.py    --input ../results/summary/factuality_affiliation.csv        --ethnicity_lookup ../results/summary/recommendations_with_ethnicity.csv --output ../results/summary/factuality_full.csv
-```
-
-**Output:** `../results/summary/factuality_full.csv` — same rows as `recommendations.csv`, plus all factuality columns added by every step.
-
-#### 3. Ethnicity inference (optional, runs in parallel to factuality)
-
-```bash
-# 3a. Infer perceived ethnicity for every researcher in the ground-truth field CSVs.
-python scripts/ethnicity/apply_ethnicity_ground_truth.py
-
-# 3b. Apply the cascade to the LLM recommendations themselves.
-python scripts/ethnicity/ethnicity_inference.py \
-  --input  ../results/summary/recommendations.csv \
-  --output ../results/summary/recommendations_with_ethnicity.csv
-```
-
-Cascade: BERT `liamliang/demographics_race_v2` (confidence ≥ 0.5) → `ethnicolr` LSTM (confidence ≥ 0.5) → `Unknown`. Categories: White / Asian / Hispanic or Latino / Black or African American / Unknown.
-
-**Outputs:**
-- `../results/ethnicity/researcher_ethnicity_lookup.csv` — unique researcher → ethnicity.
-- `../results/ethnicity/DataFrameRankings_Genderize_Namsor_<Field>_with_ethnicity.csv` — per-field GT CSVs.
-- `../results/summary/recommendations_with_ethnicity.csv` — LLM recs with `perceived_ethnicity`.
-
-#### 4. Annotation (optional, manual)
-
-Interactive CLIs used to produce the manual labels shipped under `data/annotator_agreement/` and `data/ethnicity_inference/`:
-
-```bash
-python scripts/annotation/annotate_responses.py \
-  --results_dir ../results --summary_csv ../results/summary/summary.csv \
-  --output ../data/annotator_agreement/manual_labels_annotator2.csv \
-  --n 100
-
-python scripts/annotation/annotate_ethnicity.py \
-  --lookup ../results/ethnicity/researcher_ethnicity_lookup.csv \
-  --output ../data/ethnicity_inference/manual_labels_annotator1.csv \
-  --sample_csv ../data/ethnicity_inference/sample_100.csv
-
-# Inspect a single LLM response by index:
-python scripts/annotation/lookup_output.py 42 \
-  --results_dir ../results --summary_csv ../results/summary/summary.csv
-```
-
-#### 5. Metrics — pre-compute the analysis tables
-
-```bash
-# 5a. Build the per-call metrics table consumed by every plotting notebook.
-python scripts/metrics/build_valid_calls.py
-# → ../results/factualities/tables/valid_requests_metadata.csv
-
-# 5c. Build the prompt-country -> author-country flow table (location Sankey, issue #37).
-python scripts/metrics/build_location_flows.py
-# → ../results/factualities/tables/location_flows.csv
-
-# 5b. Build the GT/rec ethnicity distributions used by ethnicity_metrics.ipynb.
-python scripts/metrics/build_ethnicity_distributions.py
-# → ../results/ethnicity/distributions/{gt_overall,gt_per_field,rec_overall,rec_per_field,rec_per_model}.csv
-```
-
-Both scripts read their defaults (`ss_parquet`, `results_dir`) from `[data]` in `config.ini`.
-
-##### Structural metrics: connectedness & similarity (paper Eqs. 6-8)
-
-`build_valid_calls.py` also derives the two structural metrics. They are the only metrics
-that need the **OpenAlex snapshot** (`[data].oa_duckdb`) rather than just `factuality_full.csv`,
-because one of them needs a coauthorship graph. Both are computed over `Û_i`, the set of
-unique *factual* authors of a response.
-
-| Metric | What it measures | Definition |
-|---|---|---|
-| `connectedness` | Whether the recommended authors form one collaborating group or scattered individuals | `1 − NormEntropy` over the connected components of the induced subgraph `G[Û_i]` |
-| `similarity` | Whether the recommended authors have similar academic profiles | Mean pairwise cosine of PCA embeddings of 5 author features |
-
-Two cached artefacts are built **once** and reused (`--rebuild_structural` forces a rebuild):
-
-| Artefact | Cost | Cached at |
-|---|---|---|
-| Coauthorship graph (CSR + `author_id → index`) | **~2.5 h** — explodes the `authorships` of all 492M works, chunked by `works.id` quantiles to bound memory | `<results_dir>/.cache/coauthorship_graph.joblib` |
-| Scaler + PCA + author embeddings | seconds | `<results_dir>/.cache/similarity_embeddings.joblib` |
-
-The graph is restricted to the benchmark's ~306k factual authors. That is exact, not an
-approximation: every `Û_i` is a subset of that population and induced subgraphs compose, so
-`G[Û_i] = (G[population])[Û_i]`. It keeps the matrix at 306k² sparse instead of 113M².
-
-The scaler and PCA are fitted **once** over the whole author population and only *applied*
-per response. This departs from a literal reading of the paper (which fits inside each
-response) and is deliberate: with n≈10 authors a per-response PCA is unstable and the values
-stop being comparable across models — see the docstring of `build_similarity_embeddings`.
-
-Four columns reach the output CSV per metric pair:
-
-```
-connectedness, similarity                            the metrics (NaN where undefined)
-n_used_connectedness, n_used_similarity              the n that entered each formula
-n_excluded_connectedness, n_excluded_similarity      Û_i members dropped (no oa_id / no features)
-```
-
-**Both are NaN when fewer than 2 authors are evaluable** — connectedness because `log n = 0`
-at n=1, similarity because there is no pair. No default value is invented. In practice this
-makes them undefined for ~63% of responses, for two structural reasons: `k=1` cannot produce
-a pair at all, and authors matched only in Semantic Scholar have no `oa_id`, hence no graph
-node and no features (~13% of factual authors, reported in `n_excluded_*`).
-
-Use `n_used_*` as the denominator, **not** `n_authors_found`: the latter collapses every
-author without an `oa_id` into a single entry, so subtracting the two goes negative.
-
-#### 6. Notebooks — plot the figures
-
-```bash
-cd notebooks/analysis
-jupyter nbconvert --execute metrics_pipeline.ipynb
-jupyter nbconvert --execute ethnicity_metrics.ipynb
-jupyter nbconvert --execute manual_classification_metrics.ipynb
-jupyter nbconvert --execute oa_productivity_coverage.ipynb
-# Figures land under ../results/plots/.
-```
-
-#### 7. Inter-annotator agreement (optional)
-
-```bash
-cd notebooks/agreement
-jupyter nbconvert --execute inter_annotator_agreement.ipynb
-jupyter nbconvert --execute inter_annotator_agreement_ethnicity.ipynb
-jupyter nbconvert --execute manual_factuality_validation.ipynb
-```
-
-### Run it all at once
-
-For a full clean run, chain the orchestrators:
-
-```bash
-cd code
-export PYTHONPATH=.
+# send the prompts: scripts/llmcaller/ (see scripts/README.md)
 python scripts/prompting/batch_parse_results.py --results_dir ../results --output_dir ../results/summary
-python scripts/factuality/run_factuality_pipeline.py --results ../results/summary
-python scripts/ethnicity/apply_ethnicity_ground_truth.py        # optional, slow
-python scripts/ethnicity/ethnicity_inference.py                 # optional, slow
-python scripts/metrics/build_valid_calls.py
-python scripts/metrics/build_ethnicity_distributions.py
-( cd notebooks/analysis  && jupyter nbconvert --execute *.ipynb )
-( cd notebooks/agreement && jupyter nbconvert --execute *.ipynb )
 ```
+
+Output: `../results/summary/recommendations.csv`, one row per recommended author with the response's `valid_flag` and `run_id`.
+
+### 2. OpenAlex, location, affiliation, ethnicity
+
+```bash
+python scripts/enrichment/run_enrichment.py
+```
+
+Output: `../results/summary/factuality_full.csv`. The cascade below copies its OpenAlex / location / affiliation / ethnicity columns from this file, so it must exist first.
+
+### 3. Metrics pipeline
+
+```bash
+python scripts/pipeline/run_pipeline.py --skip_name     # --skip_name reuses the slow name matching
+python scripts/pipeline/run_pipeline.py --from_step 5   # re-run from a given step
+```
+
+| step | script | one row per | columns |
+|---|---|---|---|
+| 1 | `1_validity.py` | call | validity, refusal, duplicates |
+| 2 | `2_consistency.py` | setup (model + params) | consistency |
+| 3 | `3_factuality.py` (runs `factuality/`) | recommendation | factuality_name/field/seniority/author + matched_* + bias_location |
+| 4 | `4_author_stats.py` | author | h-index, i10-index, e-index from OpenAlex (~95 min, only when step 3 brings new authors) |
+| 5 | `5_socials.py` | call | diversity, parity, popularity, bias_location, similarity, connectedness |
+| 6 | `6_calls_table.py` | call | steps 1–5 in one table, with the column names the notebooks use |
+
+Output: `../results/pipeline/<step>/<model>.csv` (one CSV per model) and `../results/pipeline/6_calls.csv` (all calls, read by the notebooks). Step 4 writes to `[data].oa_author_stats`.
+
+Step 3 leaves out recommendations whose name has a single word (only a first name or only a last name).
+
+**Factuality cascade** (`scripts/factuality/`, run by step 3). For each recommended name:
+`factuality_name` = someone in Semantic Scholar has that name; `factuality_field` = one of them is in the asked field; `factuality_seniority` = one of them has the asked seniority; `factuality_author` = one of them has both. The field and seniority come from the prompt, not from the LLM's answer. The reported researcher is picked at random among those that pass.
+
+### 4. Data for specific figures
+
+```bash
+python scripts/plot_data/build_sankey_flows.py             # asked → actual: seniority, field, gender, ...
+python scripts/plot_data/build_location_flows.py           # prompt country → author country
+python scripts/plot_data/build_gt_field_baseline.py        # field mix of Semantic Scholar
+python scripts/plot_data/build_ethnicity_distributions.py  # for ethnicity_metrics.ipynb
+```
+
+They read the factuality cascade output (`summary/cascade/factuality_full.csv`) and write to `factualities/tables/`.
+
+### 5. Figures
+
+```bash
+cd notebooks/analysis && jupyter nbconvert --execute metrics_pipeline.ipynb
+```
+
+| Notebook | Reads |
+|---|---|
+| `analysis/metrics_pipeline.ipynb` | `pipeline/6_calls.csv` + `factualities/tables/*_flows.csv` |
+| `analysis/ethnicity_metrics.ipynb` | `ethnicity/distributions/*.csv` |
+| `analysis/oa_productivity_coverage.ipynb` | `summary/factuality_full.csv` |
+| `analysis/sensitivity.ipynb` | `pipeline/6_calls.csv` |
+| `analysis/manual_classification_metrics.ipynb` | manual labels vs `valid_flag` |
+| `analysis/scholarly_stats_check.ipynb` | checks of the h/i10/e-index |
+| `analysis/incomplete_names_check.ipynb` | recommendations with only a name or only a last name |
+| `agreement/*.ipynb` | manual labels of two annotators |
+
+### Optional branches
+
+- **Ethnicity** — `scripts/ethnicity/apply_ethnicity_ground_truth.py` (ground truth) and `ethnicity_inference.py` (recommendations).
+- **Annotation** — `scripts/annotation/` (manual labels under `data/`).
 
 ---
 
-## Plots and notebooks
+## Legacy scripts (`scripts/legacy/`)
 
-| Notebook | Inputs | What it produces |
-|---|---|---|
-| `analysis/metrics_pipeline.ipynb` | `factualities/tables/valid_requests_metadata.csv` | Per-call metric panels by language / location / role / task / field / subfield / k / seniority / model / model family — every figure in the paper's main results section. PDFs under `../results/plots/`. |
-| `analysis/ethnicity_metrics.ipynb` | `ethnicity/distributions/*.csv` | Ground-truth vs. LLM-recommendation ethnicity distributions: overall, per field, per model, side-by-side. |
-| `analysis/manual_classification_metrics.ipynb` | `../data/annotator_agreement/manual_labels_annotator2.csv` + `summary/summary.csv` | Confusion matrix and accuracy/precision/recall/F1 of the algorithmic `valid_flag` against manual labels. |
-| `analysis/oa_productivity_coverage.ipynb` | `summary/factuality_full.csv` | OpenAlex coverage diagnostics for productivity tiers (low / med / high `works_count` and `cited_by_count`). |
-| `agreement/inter_annotator_agreement.ipynb` | `../data/annotator_agreement/manual_labels_annotator{1,2}.csv` | Cohen κ and Krippendorff α between two annotators on response validity. |
-| `agreement/inter_annotator_agreement_ethnicity.ipynb` | `../data/ethnicity_inference/manual_labels_annotator{1,2}.csv` | Cohen κ and Krippendorff α between two annotators on perceived ethnicity. |
-| `agreement/manual_factuality_validation.ipynb` | `factuality_full.csv`, `<path_to_ss_parquet>`, `<path_to_oa_duckdb>` | Interactive validator: sample 20 personas, fetch the underlying response JSONs, render SS / OA / LLM side-by-side. |
+Scripts that are not part of the pipeline any more, kept for reference: `build_valid_calls.py` (the old per-call table; replaced by `pipeline/`), the old field and seniority checks and `resolve_homonyms.py` (replaced by the factuality cascade), and one-time tools (`run_similarity.py`, `merge_structural_metrics.py`, `export_coauthor_links.py`, `factuality_seniority_oa.py`). See `scripts/legacy/README.md`.
+
+---
+
+## Where things live (`libs/`)
+
+| Module | Contents |
+|---|---|
+| `metrics/constants.py` | Column names, valid flags, category orders and maps (`GENDER_MAP`, `ETHNICITY_MAP`), seniority rule (`REFERENCE_YEAR`, `JUNIOR_MAX`, `SENIOR_MIN`), translations to English |
+| `metrics/coauthorship.py` | Coauthorship graph and `compute_connectedness` (Eqs. 6-7) |
+| `metrics/similarity.py` | Author features, PCA embeddings and `compute_similarity` (Eq. 8) |
+| `metrics/productivity.py` | Low / med / high tiers of publications and citations |
+| `metrics/aggregators.py` | Averages and confidence intervals for the plots |
+| `metrics/io.py` | Reading the structural-metric variant files |
+| `metrics/agreement.py` | Kappa / alpha for annotator agreement |
+| `visuals/` | Plots and plot styling |
+| `utils/` | Config (`config.py`), files (`ios.py`), logging (`logging.py`) |
+| `prompt/`, `llm/` | Prompt building and the OpenAI client |
+| `legacy/` | Code nothing uses any more, kept for reference. Do not import it in new code. |
+
+---
+
+## Similarity and connectedness, in short
+
+- Both need the OpenAlex id of the authors. Authors found only in Semantic Scholar are skipped.
+- The coauthorship graph (~2.5 h the first time) and the PCA are built once over all recommended authors with an OpenAlex id (305,893) and cached in `../results/.cache/`. Each response is then scored with that same graph and PCA, so values are comparable across models.
+- Both are NaN when fewer than 2 authors can be scored (for example k = 1).
 
 ---
 
 ## Troubleshooting
 
-- **`ModuleNotFoundError: No module named 'libs'`** — you forgot to set `PYTHONPATH`. From `code/`: `export PYTHONPATH=.`.
-- **`KeyError: 'Missing [data].ss_parquet in config.ini'`** — copy `config.ini.example` to `config.ini` and fill in the `[data]` paths.
-- **`FileNotFoundError: ../results/summary/factuality_full.csv`** — the factuality pipeline hasn't run yet, or you point `--results` at the wrong dir.
-- **A notebook fails on the first data-loading cell** — run the corresponding `scripts/metrics/build_*.py` first; notebooks are plotting-only.
-- **`from openai import OpenAI` fails** — install the OpenAI client: `pip install openai` (already in `requirements.txt`).
-- **`grouped_metrics` import error** — make sure the renamed module is on the path; if you imported as `libs.visuals.grouped_metrics_leen`, update to `libs.visuals.grouped_metrics`.
-- **DuckDB / parquet temp space errors** — set `[data].oa_works_tmp_dir` in `config.ini` to a directory with plenty of free space (the OpenAlex enrichment step writes ~20 chunk parquets there).
+- `ModuleNotFoundError: No module named 'libs'` → run from `code/` with `PYTHONPATH=.`.
+- `KeyError: Missing [data].ss_parquet` → fill in `config.ini`.
+- A notebook fails on its first data cell → run the script that writes the table it reads (step 4 above).
+- DuckDB runs out of temp space → set `[data].oa_works_tmp_dir` to a disk with room (not `/tmp`).

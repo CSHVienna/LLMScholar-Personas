@@ -44,15 +44,7 @@ PROMPT_VAR_COLORS = {
     "model": "#9a9a9a",
 }
 
-ETHNICITY_MAP = {
-    "White": "White",
-    "Asian": "Asian",
-    "Black or African American": "Black",
-    "Hispanic or Latino": "Hispanic",
-    "American Indian or Alaska Native": "American Indian",
-}
-
-GENDER_MAP = {"male": "Male", "female": "Female", "unisex": "Neutral"}
+from libs.metrics.constants import ETHNICITY_MAP, GENDER_MAP  # noqa: E402,F401
 
 MODEL_FAMILY_COLORS = {
     # ─────────────────────────

@@ -14,10 +14,7 @@ import pytest
 duckdb = pytest.importorskip("duckdb")
 
 from libs.metrics import constants  # noqa: E402
-from libs.metrics.io import (  # noqa: E402
-    build_author_features,
-    build_author_scholarly_stats,
-)
+from libs.metrics.similarity import build_author_features, build_author_scholarly_stats  # noqa: E402
 
 # A1: 5 papers, citations 10/8/5/4/3 → h=4, i10=1
 # A2: 2 papers, 50 + the shared 8    → h=2, i10=1
@@ -137,7 +134,36 @@ def test_feature_vector_carries_the_stats_through(populated, tmp_path):
             "oa_career_age": [10, 4],
         }
     )
+    # The pipeline hands build_author_features the join of two sources: the
+    # summary_stats extracted from the raw OpenAlex author files and the e_index
+    # computed here from oa.works. Mirror that join rather than pretending one
+    # pass produces all four columns.
+    extracted = pd.DataFrame(
+        {"two_year_mean_citedness": [2.5, 0.4]}, index=["A1", "A2"]
+    )
+    stats = stats.join(extracted)
+
     features = build_author_features(authors, stats=stats)
     assert list(features.columns) == constants.SIMILARITY_FEATURE_COLS_FULL
     assert features.loc["A1", "h_index"] == 4
     assert np.isfinite(features.loc["A1", "e_index"])
+    assert features.loc["A1", "two_year_mean_citedness"] == pytest.approx(2.5)
+
+
+def test_feature_vector_rejects_incomplete_stats(populated, tmp_path):
+    """Dropping a stats column must fail loudly, not produce an all-NaN feature.
+
+    An all-NaN column reaches SimpleImputer, which cannot learn a median for it,
+    and whatever it does instead shifts every PCA axis and so every Sim_i.
+    """
+    stats = run_stats(populated, tmp_path)  # h/i10/e only, no summary_stats join
+    authors = pd.DataFrame(
+        {
+            "author_id": ["A1"],
+            "oa_works_count": [5],
+            "oa_cited_by_count": [30],
+            "oa_career_age": [10],
+        }
+    )
+    with pytest.raises(ValueError, match="two_year_mean_citedness"):
+        build_author_features(authors, stats=stats)

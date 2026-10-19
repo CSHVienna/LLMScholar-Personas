@@ -1,5 +1,5 @@
 """Loaders for the distribution CSVs produced by
-``scripts/metrics/build_ethnicity_distributions.py``.
+``scripts/plot_data/build_ethnicity_distributions.py``.
 
 Consolidates the I/O + reindex-by-order pattern used by
 ``notebooks/analysis/ethnicity_metrics.ipynb``.

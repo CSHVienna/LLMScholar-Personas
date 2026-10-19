@@ -198,19 +198,31 @@ def namsor_batch(
 # ─── Pipeline ────────────────────────────────────────────────────────────────
 
 
-def build_unique_batch(df: pd.DataFrame, mode: str = "split") -> pd.DataFrame:
+def build_unique_batch(
+    df: pd.DataFrame, mode: str = "split", use_country: bool = True
+) -> pd.DataFrame:
     """Return a deduplicated DataFrame keyed on the payload fields the endpoint needs.
 
     mode "split" → columns id, firstName, lastName, countryIso2
     mode "full"  → columns id, name, countryIso2 (firstName + lastName joined,
                    so NamSor does its own splitting — that is the whole point of
                    the diasporaFull endpoint)
+
+    use_country False → countryIso2 is blanked out, so no country is sent at all.
+    Note that `location` holds the country injected into the *prompt*, not the
+    recommended author's real affiliation, so feeding it back to NamSor can bias
+    the inference toward the very geography under audit. This flag exists to
+    measure that effect.
     """
     work = pd.DataFrame(
         {
             "firstName": df["name"].fillna("").astype(str).str.strip(),
             "lastName": df["lastname"].fillna("").astype(str).str.strip(),
-            "countryIso2": df["location"].map(country_to_iso2).fillna(""),
+            "countryIso2": (
+                df["location"].map(country_to_iso2).fillna("")
+                if use_country
+                else ""
+            ),
         }
     )
 
@@ -263,10 +275,12 @@ def run(
     sleep: float,
     endpoint: str = "us_race",
     sep: str = ",",
+    use_country: bool = True,
 ) -> None:
     cfg = ENDPOINTS[endpoint]
     log(f"Endpoint: {endpoint} — {cfg['label']}")
     log(f"  URL: {cfg['url']}  ({cfg['credits']} credits/name)")
+    log(f"  countryIso2: {'sent when known' if use_country else 'NOT sent (--no-country)'}")
 
     log(f"Reading {input_path} …")
     df = pd.read_csv(
@@ -277,15 +291,16 @@ def run(
     )
     log(f"Loaded {len(df):,} rows.")
 
-    work = build_unique_batch(df, mode=cfg["mode"])
+    work = build_unique_batch(df, mode=cfg["mode"], use_country=use_country)
     log(f"Unique (firstName, lastName, countryIso2) triples: {len(work):,}")
 
     # Country coverage report
-    n_with_country = (work["countryIso2"] != "").sum()
-    log(
-        f"  with countryIso2  : {n_with_country:,}  ({100*n_with_country/max(len(work),1):.1f}%)"
-    )
-    log(f"  without countryIso2: {len(work)-n_with_country:,}")
+    if use_country:
+        n_with_country = (work["countryIso2"] != "").sum()
+        log(
+            f"  with countryIso2  : {n_with_country:,}  ({100*n_with_country/max(len(work),1):.1f}%)"
+        )
+        log(f"  without countryIso2: {len(work)-n_with_country:,}")
 
     if limit is not None:
         work = work.head(limit).reset_index(drop=True)
@@ -459,6 +474,15 @@ def build_parser() -> argparse.Namespace:
         ),
     )
     p.add_argument(
+        "--no-country",
+        action="store_true",
+        help=(
+            "Do not send countryIso2 at all. Use this to check how much the "
+            "prompt-derived country moves NamSor's inference (it is the country "
+            "asked of the LLM, not the author's real affiliation)."
+        ),
+    )
+    p.add_argument(
         "--sep",
         default=",",
         help="Input CSV field separator (use ';' for the semicolon-delimited files).",
@@ -482,4 +506,5 @@ if __name__ == "__main__":
         sleep=args.sleep,
         endpoint=args.endpoint,
         sep=args.sep,
+        use_country=not args.no_country,
     )

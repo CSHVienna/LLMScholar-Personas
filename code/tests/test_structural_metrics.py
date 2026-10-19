@@ -9,8 +9,11 @@ import pandas as pd
 import pytest
 from scipy import sparse
 
-from libs.metrics.aggregators import compute_connectedness, compute_similarity
-from libs.metrics.io import build_author_features, build_author_index
+from libs.metrics.coauthorship import compute_connectedness
+from libs.metrics.similarity import build_author_features, compute_similarity
+from libs.metrics import constants
+from libs.metrics.coauthorship import _population_key as io_population_key
+from libs.metrics.coauthorship import build_author_index
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -287,19 +290,18 @@ def test_build_author_features_derives_the_base_columns():
     features = build_author_features(df)
 
     # Without `stats` the vector stays on what factuality_full.csv can supply;
-    # h_index / i10_index / e_index only appear once the snapshot pass has run.
+    # the summary_stats columns only appear once the extraction has run.
     assert list(features.columns) == [
         "works_count",
         "cited_by_count",
-        "citations_per_work",
         "career_age",
-        "works_per_year",
         "citations_per_paper_age",
     ]
-    assert features.loc["A1", "citations_per_work"] == pytest.approx(10.0)
-    # career_age 0 must not divide by zero — clipped to 1.
-    assert features.loc["A2", "works_per_year"] == pytest.approx(4.0)
-    assert features.loc["A2", "citations_per_work"] == pytest.approx(0.0)
+    # This fixture has no year columns, so career_age falls back to oa_career_age.
+    assert features.loc["A1", "career_age"] == pytest.approx(20.0)
+    assert features.loc["A1", "citations_per_paper_age"] == pytest.approx((100 / 10) / 20)
+    # career_age 0 yields 0, following the reference guard — not a clipped divisor.
+    assert features.loc["A2", "citations_per_paper_age"] == pytest.approx(0.0)
 
 
 def test_build_author_features_deduplicates_authors():
@@ -320,3 +322,129 @@ def test_build_author_index_is_stable_and_sorted():
     assert index == {"A1": 0, "A2": 1, "A3": 2}
     # Rebuilding from a different input order gives the same mapping.
     assert build_author_index(["A2", "A3", "A1"]) == index
+
+
+def test_cached_graph_is_sliced_for_a_subset_population(tmp_path):
+    """A narrower population must reuse the cached graph, not rebuild it.
+
+    Coauthorship between two authors is independent of who else is in the
+    matrix, so the induced subgraph is exact — and a rebuild costs ~3 h over
+    oa.works. Passing no duckdb path proves no scan was attempted: the call
+    would fail if it tried.
+    """
+    import joblib
+    from scipy import sparse
+
+    from libs.metrics.coauthorship import build_author_index, build_coauthorship_graph
+
+    full_ids = ["A1", "A2", "A3", "A4"]
+    index = build_author_index(full_ids)
+    # A1-A2, A2-A3, A3-A4
+    A = sparse.csr_matrix(
+        [[0, 1, 0, 0], [1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0]], dtype=np.int8
+    )
+    cache = tmp_path / "graph.joblib"
+    joblib.dump(
+        {
+            "adjacency": A,
+            "index": index,
+            "population_key": io_population_key(index),
+        },
+        cache,
+    )
+
+    adjacency, sub_index = build_coauthorship_graph(
+        ["A2", "A3"], cache_path=cache, oa_duckdb_path="/nonexistent.duckdb"
+    )
+
+    assert list(sub_index) == ["A2", "A3"]
+    assert adjacency.shape == (2, 2)
+    # A2-A3 survives; the edges to A1 and A4 leave with their nodes.
+    assert adjacency[sub_index["A2"], sub_index["A3"]] == 1
+    assert adjacency.nnz == 2
+
+
+# ── structural variants ───────────────────────────────────────────────────────
+
+
+def _variant_parquet(path, *, rows, similarity):
+    """A structural_metrics_<variant>.parquet carrying the call keys."""
+    df = pd.DataFrame(
+        {k: [f"{k}{i}" for i in range(rows)] for k in constants.CALL_KEYS}
+    )
+    df["connectedness"] = np.linspace(0, 1, rows)
+    df["similarity"] = similarity
+    for c in (
+        "n_excluded_connectedness",
+        "n_excluded_similarity",
+        "n_used_connectedness",
+        "n_used_similarity",
+    ):
+        df[c] = 2
+    df.to_parquet(path, index=False)
+    return df
+
+
+def test_apply_structural_variant_swaps_only_the_structural_columns(tmp_path):
+    """Every other metric, the row order and the row count must survive, or the
+    plots downstream would silently be comparing different things."""
+    from libs.metrics.io import apply_structural_variant
+
+    tables = tmp_path / "factualities" / "tables"
+    tables.mkdir(parents=True)
+    variant = _variant_parquet(
+        tables / "structural_metrics_oa_inter.parquet", rows=4,
+        similarity=[0.9, 0.8, 0.7, 0.6],
+    )
+
+    calls = variant[constants.CALL_KEYS].copy()
+    calls["similarity"] = [0.1, 0.2, 0.3, 0.4]
+    calls["connectedness"] = 0.0
+    calls["n_used_similarity"] = 9
+    calls["validity"] = [1, 1, 0, 1]  # an unrelated metric
+
+    out = apply_structural_variant(calls, tmp_path, "oa_inter")
+
+    assert list(out.columns) == list(calls.columns)
+    assert len(out) == len(calls)
+    assert out["similarity"].tolist() == [0.9, 0.8, 0.7, 0.6]
+    assert out["n_used_similarity"].tolist() == [2, 2, 2, 2]
+    assert out["validity"].tolist() == [1, 1, 0, 1]
+
+
+def test_apply_structural_variant_nans_rows_the_variant_lacks(tmp_path):
+    """Under a narrower population a response can drop out of the metric; NaN
+    is the honest value, not the previous variant's number left behind."""
+    from libs.metrics.io import apply_structural_variant
+
+    tables = tmp_path / "factualities" / "tables"
+    tables.mkdir(parents=True)
+    _variant_parquet(
+        tables / "structural_metrics_oa_inter.parquet", rows=2, similarity=[0.9, 0.8]
+    )
+
+    calls = pd.DataFrame(
+        {k: [f"{k}{i}" for i in range(3)] for k in constants.CALL_KEYS}
+    )
+    calls["similarity"] = [0.1, 0.2, 0.3]
+    calls["connectedness"] = 0.0
+
+    out = apply_structural_variant(calls, tmp_path, "oa_inter")
+    assert out["similarity"].tolist()[:2] == [0.9, 0.8]
+    assert pd.isna(out["similarity"].iloc[2])
+
+
+def test_load_structural_variant_rejects_an_unknown_name(tmp_path):
+    from libs.metrics.io import load_structural_variant
+
+    with pytest.raises(ValueError, match="variant must be one of"):
+        load_structural_variant(tmp_path, "whatever")
+
+
+def test_load_structural_variant_says_how_to_build_a_missing_one(tmp_path):
+    """The error has to name the command, or the next person re-derives it."""
+    from libs.metrics.io import load_structural_variant
+
+    (tmp_path / "factualities" / "tables").mkdir(parents=True)
+    with pytest.raises(FileNotFoundError, match="run_similarity.py"):
+        load_structural_variant(tmp_path, "oa_inter")

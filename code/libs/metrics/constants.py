@@ -22,6 +22,21 @@ REFUSED_FLAG = "refused"
 ETHNICITY_ORDER = ["Asian", "Black", "White", "Hispanic", "American Indian"]
 GENDER_ORDER = ["Female", "Male", "Neutral"]
 
+# Raw labels in the ground truth → the categories above.
+ETHNICITY_MAP = {
+    "White": "White",
+    "Asian": "Asian",
+    "Black or African American": "Black",
+    "Hispanic or Latino": "Hispanic",
+    "American Indian or Alaska Native": "American Indian",
+}
+GENDER_MAP = {"male": "Male", "female": "Female", "unisex": "Neutral"}
+
+# Seniority from career age = REFERENCE_YEAR − first publication year.
+REFERENCE_YEAR = 2025
+JUNIOR_MAX = 10  # career_age <= 10 → Junior
+SENIOR_MIN = 20  # career_age >= 20 → Senior  (11–19 → neither)
+
 NEEDED_COLS = [
     "model",
     "role",
@@ -52,6 +67,11 @@ NEEDED_COLS = [
     # oa_id) so they can be counted as exclusions instead of vanishing.
     "oa_career_age",
     "researcher_id",
+    # career_age follows the reference as (last - first) + 1, computed here from
+    # the two year columns rather than read from oa_career_age, which is
+    # (last - first) and so reports 0 for an author active in a single year.
+    "oa_first_pub_year",
+    "oa_last_pub_year",
 ]
 
 #######################################################################################################################
@@ -194,31 +214,66 @@ STRUCTURAL_USED_COLS = {
 }
 
 # Feature vector for scholarly similarity, base half: everything derivable from
-# the columns factuality_openalex.py already writes into factuality_full.csv.
+# the columns openalex.py already writes into factuality_full.csv.
 # Note that oa_h_index / oa_i10_index are NOT among them — the columns exist but
-# are 0% covered (0 of 3,907,448 rows), because the OpenAlex DuckDB snapshot has
-# no summary_stats. The real h-index arrives via SIMILARITY_STATS_COLS below;
-# citations_per_work remains as its cheap surrogate for runs without the snapshot.
+# are 0% covered (0 of 3,907,448 rows). That is NOT an OpenAlex limitation: the
+# raw author records under /code/openalex/oa_data/data/authors/ do carry
+# summary_stats (h_index, i10_index, 2yr_mean_citedness); the dbt build that
+# materialised the DuckDB dump dropped the field. Those three arrive via
+# SIMILARITY_STATS_COLS below, extracted from the raw files.
+#
+# These four mirror the reference PCA's OpenAlex block
+# (GTBuilder/APS/code/batch_authors_pca.py), minus min_year / max_year which are
+# dropped by decision — see build_author_features. `citations_per_work` and
+# `works_per_year` used to sit here and were removed: neither appears in the
+# reference PCA nor in section B6 of paper 1, and since the PCA is fitted on the
+# whole vector, two invented columns tilt every axis and so shift every Sim_i.
 SIMILARITY_FEATURE_COLS = [
     "works_count",              # productivity: raw publication volume
     "cited_by_count",           # impact: raw accumulated citations
-    "citations_per_work",       # impact per unit of output (h-index surrogate)
-    "career_age",               # career stage: span of active years
-    "works_per_year",           # productivity intensity over the career
-    "citations_per_paper_age",  # citations_per_work damped by career length
+    "career_age",               # career stage: (last - first) + 1 active years
+    "citations_per_paper_age",  # citations per work, damped by career length
 ]
 
-# Second half: recomputed from the snapshot by io.build_author_scholarly_stats,
-# which is the only way to get them — see the note above. Appended to the base
+# Second half: the three OpenAlex summary_stats plus the e-index. The first
+# three are extracted from the raw author files; only e_index has to be computed
+# from oa.works, because OpenAlex does not publish it. Appended to the base
 # vector when that pass has run, dropped when it has not, so the pipeline still
 # works without --oa_duckdb.
 SIMILARITY_STATS_COLS = [
-    "h_index",    # impact concentration: h papers with >= h citations each
-    "i10_index",  # papers with at least 10 citations
-    "e_index",    # entropy of the per-paper citation distribution
+    "h_index",                   # impact concentration: h papers with >= h citations
+    "i10_index",                 # papers with at least 10 citations
+    "e_index",                   # entropy of the per-paper citation distribution
+    "two_year_mean_citedness",   # OpenAlex 2yr_mean_citedness; in the reference PCA
 ]
 
 SIMILARITY_FEATURE_COLS_FULL = SIMILARITY_FEATURE_COLS + SIMILARITY_STATS_COLS
+
+# Semantic Scholar block. The reference PCA concatenates two blocks over two
+# corpora — 10 OpenAlex columns plus 8 `aps_*` ones measuring the same families
+# inside the APS journals — and these four are the same idea with Semantic
+# Scholar as the second corpus. They deliberately mirror
+# SIMILARITY_FEATURE_COLS one-for-one: h/i10/e/2yr have no counterpart here
+# because the SS snapshot carries no per-paper citation counts.
+#
+# `ss_career_age` is (Last_year - First_year) + 1, computed here. The parquet's
+# own `Career_age` column is NOT used: it is `Year - First_year` over a panel
+# that runs 1950-2019, verified over all 138,791,971 rows, and never freezes at
+# Last_year the way its author intended — she asked for it to be discarded.
+#
+# Coverage note: the SS snapshot only spans 6 fields and sees ~2 papers per
+# author over ~10 years, against ~38 years in OpenAlex, so its First_year runs
+# ~17 years late. Inside this block that is the point — it measures standing
+# within the SS corpus, exactly as `aps_*` does within APS — but it makes these
+# columns unusable as a measure of career length in absolute terms.
+SIMILARITY_SS_COLS = [
+    "ss_works_count",              # Productivity
+    "ss_cited_by_count",           # Citations
+    "ss_career_age",               # (Last_year - First_year) + 1
+    "ss_citations_per_paper_age",  # derived, same formula as the OA block
+]
+
+SIMILARITY_FEATURE_COLS_WITH_SS = SIMILARITY_FEATURE_COLS_FULL + SIMILARITY_SS_COLS
 
 # Minimum share of variance the retained PCA components must explain (Eq. 8).
 SIMILARITY_PCA_VARIANCE = 0.90
@@ -394,7 +449,7 @@ BENCHMARK_MODEL_GROUPS_LABEL_MAP = {
 # (`fact_author_field`, `fact_epoch_requested`, ...).
 # Status values are {<prefix>_match | <prefix>_mismatch | <prefix>_unknown |
 # not_applicable}; only the first two are evaluable — same rule as step 6 of
-# scripts/metrics/build_valid_calls.py.
+# scripts/legacy/build_valid_calls.py.
 FACTUALITY_TASK_STATUS_COLS = {
     "factuality_field": "field_status",
     "factuality_seniority": "seniority_status",
@@ -538,7 +593,7 @@ SENIORITY_SHORT_MAP = {
 }
 
 # Same idea as SENIORITY_SHORT_MAP but also accepts the ES/DE variants of the
-# LLM `target` column (used by factuality_seniority.py).
+# LLM `target` column (used by scripts/factuality/).
 LLM_TARGET_TO_BUCKET = {
     "Senior Professor": "Senior",
     "Profesor(a) Sénior": "Senior",
