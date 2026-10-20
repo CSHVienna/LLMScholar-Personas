@@ -99,6 +99,7 @@ cd notebooks/analysis && jupyter nbconvert --execute metrics_pipeline.ipynb
 | `analysis/sensitivity.ipynb` | `pipeline/6_calls.csv` (filtered on `OA_VARIANT`) |
 | `analysis/manual_classification_metrics.ipynb` | manual labels vs `valid_flag` |
 | `analysis/scholarly_stats_check.ipynb` | checks of the h/i10/e-index |
+| `analysis/openalex_field_validation.ipynb` | how often the OpenAlex field agrees with Semantic Scholar's (72% / 83%) |
 | `analysis/incomplete_names_check.ipynb` | recommendations with only a name or only a last name |
 | `agreement/*.ipynb` | manual labels of two annotators |
 

@@ -14,8 +14,9 @@ Two published classifications of OpenAlex are used, none made up here:
 
 Validated on 5,671 authors with a name that is unique in both Semantic Scholar
 and OpenAlex and the same first-publication year (±2): the main topics field
-agrees with Semantic Scholar's field for 72.5% of them, the main concept for
-71.4%, both together (when they agree) for 83%.
+agrees with Semantic Scholar's field for 72.3% of them, the main concept for
+71.8%, both together (when they agree) for 82.8%. See
+notebooks/analysis/openalex_field_validation.ipynb.
 
 SUBFIELDS gives, for each subfield of our prompts, the OpenAlex subfields that
 correspond to it; it is only used to break ties. Forensic Psychology,
