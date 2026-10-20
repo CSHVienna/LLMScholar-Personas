@@ -2,10 +2,15 @@
 6_calls_table.py — Step 6: one table with every metric of every call, for the
 notebooks.
 
-Joins the outputs of steps 1, 2, 3 and 5 (one row per call; consistency is per setup, so
-every call of a setup gets the same value) and adds:
-  factuality_name / _author     share of the call's authors that pass (step 3)
+Joins the outputs of steps 1, 2, 3 and 5 (one row per call and OpenAlex
+variant; consistency is per setup, so every call of a setup gets the same value)
+and adds:
+  oa_variant                    how the OpenAlex author was chosen (common.VARIANTS);
+                                filter on it — every call appears once per variant
+  factuality_name / _author     share of the call's authors that pass (step 3,
+                                Semantic Scholar; the same in every variant)
   factuality_field / _seniority the same, among the authors whose name exists
+  oa_factuality_*               the same four shares for the checks in OpenAlex
   n_authors_found               how many of the call's authors exist
   model_access, model_size, model_class, model_family, model_short_name
                                 from data/models/
@@ -27,7 +32,7 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import CALL, OUT_DIR, SETUP, author_key, logger, read_step  # noqa: E402
+from common import CALL, OUT_DIR, SETUP, VARIANTS, author_key, logger, read_step  # noqa: E402
 
 from libs.metrics.constants import (  # noqa: E402
     FIELD_NORM_MAP, LANGUAGE_NORM_MAP, LOCATION_NORM_MAP, ROLE_NORM_MAP,
@@ -55,16 +60,18 @@ ENGLISH = {"language": LANGUAGE_NORM_MAP, "location": LOCATION_NORM_MAP,
            "task": TASK_NORM_MAP, "target": TARGET_NORM_MAP, "role": ROLE_NORM_MAP}
 
 
-def factuality_per_call() -> pd.DataFrame:
-    """Share of each call's authors that pass each check (each name once)."""
-    recs = read_step(3, CALL + ["name", "lastname", "factuality_name", "factuality_field",
-                                "factuality_seniority", "factuality_author"])
+def factuality_per_call(variant: str) -> pd.DataFrame:
+    """Share of each call's authors that pass each check (each name once), in
+    Semantic Scholar (factuality_*) and in OpenAlex (oa_factuality_*)."""
+    checks = [f"{p}factuality_{s}" for p in ["", "oa_"] for s in ["name", "field", "seniority", "author"]]
+    recs = read_step(3, CALL + ["name", "lastname"] + checks, variant=variant)
     recs = recs.assign(author=author_key(recs)).drop_duplicates(CALL + ["author"])
     calls = recs.groupby(CALL, dropna=False)
-    out = calls[["factuality_name", "factuality_author"]].mean()
+    out = calls[[f"{p}factuality_{s}" for p in ["", "oa_"] for s in ["name", "author"]]].mean()
     out["n_authors_found"] = calls["factuality_name"].sum()
-    found = recs[recs["factuality_name"]].groupby(CALL, dropna=False)
-    out = out.join(found[["factuality_field", "factuality_seniority"]].mean())
+    for p in ["", "oa_"]:   # field and seniority: among the authors whose name exists
+        found = recs[recs[f"{p}factuality_name"]].groupby(CALL, dropna=False)
+        out = out.join(found[[f"{p}factuality_field", f"{p}factuality_seniority"]].mean())
     return out.reset_index()
 
 
@@ -88,10 +95,14 @@ def model_metadata(models: pd.Series) -> pd.DataFrame:
 
 
 def run() -> None:
-    calls = read_step(1)                                   # every call, valid or not
-    calls = calls.merge(read_step(2), on=SETUP, how="left")
-    calls = calls.merge(factuality_per_call(), on=CALL, how="left")
-    calls = calls.merge(read_step(5), on=CALL, how="left")
+    base = read_step(1)                                    # every call, valid or not
+    base = base.merge(read_step(2), on=SETUP, how="left")
+    tables = []
+    for variant in VARIANTS:
+        t = base.merge(factuality_per_call(variant), on=CALL, how="left")
+        t = t.merge(read_step(5, variant=variant), on=CALL, how="left")
+        tables.append(t.assign(oa_variant=variant))
+    calls = pd.concat(tables, ignore_index=True)
 
     calls[["validity", "refusal"]] = calls[["validity", "refusal"]].astype(int)
     calls = calls.rename(columns=NOTEBOOK_NAMES)
@@ -107,7 +118,7 @@ def run() -> None:
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     calls.to_csv(OUTPUT, index=False)
-    logger.info("Wrote %s (%d calls × %d columns)", OUTPUT, *calls.shape)
+    logger.info("Wrote %s (%d rows = calls × variants, %d columns)", OUTPUT, *calls.shape)
 
 
 if __name__ == "__main__":

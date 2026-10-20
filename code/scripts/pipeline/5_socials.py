@@ -21,8 +21,12 @@ Takes the recommendations of step 3 and keeps the factual ones
                     n_excluded_<x>: how many factual authors could not, e.g.
                     no OpenAlex id)
 
-Output: 5_socials/<model>.csv — call columns + n_authors + the metrics above.
-Calls without factual authors get NaN.
+Runs once per OpenAlex variant (common.VARIANTS). The coauthorship graph and the
+PCA are built once, over the authors of all variants, so the variants are
+scored in the same space.
+
+Output: 5_socials/<variant>/<model>.csv — call columns + n_authors + the metrics
+above. Calls without factual authors get NaN.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/pipeline/5_socials.py
@@ -37,7 +41,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import CALL, OUT_DIR, read_step, write_step  # noqa: E402
+from common import CALL, OUT_DIR, VARIANTS, read_step, write_step  # noqa: E402
 
 from libs.metrics.coauthorship import build_coauthorship_graph, compute_connectedness  # noqa: E402
 from libs.metrics.constants import (  # noqa: E402
@@ -112,22 +116,26 @@ def openalex_id(oa_id: pd.Series) -> pd.Series:
 
 # ── Similarity and connectedness ──────────────────────────────────────────────
 
-def structural(recs: pd.DataFrame, authors: pd.DataFrame,
-               oa_duckdb: str, oa_author_stats: str) -> pd.DataFrame:
-    """Similarity and connectedness of each call's factual authors.
-
-    The coauthorship graph and the PCA are built over every recommended author
-    with an OpenAlex id (305,893 people), and then each call is scored on its
-    factual authors only. Authors without an OpenAlex id are skipped.
-    """
-    population = recs.dropna(subset=["author_id"]).drop_duplicates("author_id")
+def graph_and_embeddings(population: pd.DataFrame, oa_duckdb: str, oa_author_stats: str) -> dict:
+    """The coauthorship graph and the PCA embeddings, built once over every
+    recommended author with an OpenAlex id in any variant, so that all variants
+    are scored in the same space."""
+    population = population.dropna(subset=["author_id"]).drop_duplicates("author_id")
     graph, graph_index = build_coauthorship_graph(
         population["author_id"], cache_path=CACHE / "coauthorship_graph.joblib",
         oa_duckdb_path=oa_duckdb, temp_dir=CACHE / "duckdb_tmp")
     features = build_author_features(population, stats=load_author_scholarly_stats(oa_author_stats))
     embeddings, emb_index, _ = build_similarity_embeddings(
         features, cache_path=CACHE / "similarity_embeddings.joblib", index=graph_index)
+    return {"graph": graph, "graph_index": graph_index,
+            "embeddings": embeddings, "emb_index": emb_index}
 
+
+def structural(authors: pd.DataFrame, model: dict) -> pd.DataFrame:
+    """Similarity and connectedness of each call's factual authors. Authors
+    without an OpenAlex id are skipped (and counted in n_excluded_*)."""
+    graph, graph_index = model["graph"], model["graph_index"]
+    embeddings, emb_index = model["embeddings"], model["emb_index"]
     rows = []
     for call, ids in authors.groupby("call")["author_id"]:
         no_oa_id = int(ids.isna().sum())          # factual authors OpenAlex did not find
@@ -145,10 +153,23 @@ def structural(recs: pd.DataFrame, authors: pd.DataFrame,
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def run(parquet: str, oa_duckdb: str, oa_author_stats: str) -> None:
-    recs = read_step(3)
-    recs["call"] = recs.groupby(CALL, dropna=False).ngroup()
-    recs["author_id"] = openalex_id(recs["oa_id"])
-    recs["field_en"] = recs["field"].map(FIELD_NORM_MAP).fillna(recs["field"])
+    recs = {}
+    for variant in VARIANTS:
+        r = read_step(3, variant=variant)
+        r["call"] = r.groupby(CALL, dropna=False).ngroup()
+        r["author_id"] = openalex_id(r["oa_id"])
+        r["field_en"] = r["field"].map(FIELD_NORM_MAP).fillna(r["field"])
+        recs[variant] = r
+    model = graph_and_embeddings(pd.concat(recs.values()), oa_duckdb, oa_author_stats)
+    # The ground truth takes minutes to read, so it is cached; delete the
+    # pickle if the ground-truth files change.
+    gt = ios.cached_pickle(OUT_DIR / ".gt_shares.pkl", lambda: ground_truth_shares(parquet))
+    for variant in VARIANTS:
+        write_step(socials(recs[variant], model, gt), step=5, variant=variant)
+
+
+def socials(recs: pd.DataFrame, model: dict, gt: dict) -> pd.DataFrame:
+    """All the metrics of step 5 for one variant."""
 
     # The authors we score: factual, each researcher once per call.
     authors = recs[recs["factuality_author"]].drop_duplicates(["call", "researcher_id"]).copy()
@@ -159,9 +180,7 @@ def run(parquet: str, oa_duckdb: str, oa_author_stats: str) -> None:
     out["n_authors"] = authors.groupby("call").size()
     out["n_authors"] = out["n_authors"].fillna(0).astype(int)
 
-    # Gender and ethnicity. The ground truth takes minutes to read, so it is
-    # cached; delete the pickle if the ground-truth files change.
-    gt = ios.cached_pickle(OUT_DIR / ".gt_shares.pkl", lambda: ground_truth_shares(parquet))
+    # Gender and ethnicity.
     for col, categories in [("gender", GENDER_ORDER), ("ethnicity", ETHNICITY_ORDER)]:
         out[f"diversity_{col}"] = diversity(authors, col, categories)
         out[f"parity_{col}"] = parity(authors, col, categories, gt[col])
@@ -186,7 +205,7 @@ def run(parquet: str, oa_duckdb: str, oa_author_stats: str) -> None:
             out[f"pct_{name}_{tier}"] = tier_shares[tier]
         out[f"popularity_{name}"] = tier_shares["high"]
 
-    out = out.join(structural(recs, authors, oa_duckdb, oa_author_stats))
+    out = out.join(structural(authors, model))
 
     metrics = ["diversity_gender", "diversity_ethnicity", "diversity_location",
                "diversity_publications", "diversity_citations",
@@ -196,7 +215,7 @@ def run(parquet: str, oa_duckdb: str, oa_author_stats: str) -> None:
                "bias_location",
                "similarity", "n_used_similarity", "n_excluded_similarity",
                "connectedness", "n_used_connectedness", "n_excluded_connectedness"]
-    write_step(out[CALL + ["n_authors"] + metrics], step=5)
+    return out[CALL + ["n_authors"] + metrics]
 
 
 def main() -> None:

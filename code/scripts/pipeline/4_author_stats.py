@@ -16,8 +16,9 @@ per-paper citation counts and a full pass over oa.works.
 Stages, each checkpointed to its own file and skipped when that file exists
 (unless step 3 brought new authors):
 
-  1. authors.parquet       the author population: every OpenAlex id in step 3
-                           (recommendations of valid calls with a complete name).
+  1. authors.parquet       the author population: every OpenAlex id in step 3,
+                           in any variant (recommendations of valid calls with a
+                           complete name).
                            Checked on every run; when step 3 has authors that are
                            not in it yet, it is replaced and the other stages
                            are redone. Extra authors that left are harmless.
@@ -234,7 +235,7 @@ def main() -> None:
         parser.error("Missing --out_dir and no oa_author_stats in [data] of config.ini.")
 
     results = get_results_path(path=args.results)
-    step3_files = str(results / "pipeline" / "3_factuality" / "*.csv")
+    step3_files = str(results / "pipeline" / "3_factuality" / "*" / "*.csv")   # every variant
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -1,16 +1,18 @@
 """
 run_pipeline.py — Runs the factuality cascade, from the recommendations to
-cascade/factuality_full.csv.
+cascade/factuality_full_<variant>.csv.
 
   1. 1_name.py               every researcher whose name matches → candidates_name.parquet
   2. 2_field.py              ... in the asked field               → candidates_field.parquet
   3. 3_seniority.py          ... with the asked seniority         → candidates_seniority.parquet
   4. 4_author.py             counts per recommendation + one researcher at random
                                                                    → factuality_cascade.csv
-  5. build_full() (here)     → factuality_full.csv, the format the metrics read:
+  5. build_full() (here)     → factuality_full_<variant>.csv, the format the metrics
+     read, once per OpenAlex variant (random, most_cited; see scripts/enrichment/):
      - copies the OpenAlex, location, affiliation and ethnicity columns from
-       ../results/summary/factuality_full.csv (written by scripts/enrichment/;
-       same rows in the same order, checked on name and lastname; only read)
+       ../results/summary/factuality_full_<variant>.csv (written by
+       scripts/enrichment/; same rows in the same order, checked on name and
+       lastname; only read)
      - turns the True/False of the cascade into the old status columns:
          author_status     found | hallucinated
          field_status      field_match | field_mismatch | not_applicable (name not found)
@@ -62,6 +64,7 @@ OLD_COLS = [
     "oa_cited_by_count", "oa_h_index", "oa_i10_index", "oa_first_pub_year",
     "oa_last_pub_year", "oa_career_age", "oa_country_code",
     "oa_last_institution", "oa_match_score",
+    "oa_n_name", "oa_n_field", "oa_n_seniority", "oa_n_author",
     "location_llm_country", "location_llm_iso", "location_oa_iso",
     "location_oa_institution",
     "affiliation_llm", "affiliation_oa_all", "affiliation_best_match_score",
@@ -168,8 +171,9 @@ def main() -> None:
                         default="../results/summary/recommendations.csv")
     parser.add_argument("--parquet", default=config_default("ss_parquet"))
     parser.add_argument("--out_dir", default="../results/summary/cascade")
-    parser.add_argument("--old_full", default="../results/summary/factuality_full.csv",
-                        help="Output of scripts/enrichment/; only read, for its OpenAlex columns")
+    parser.add_argument("--enrichment", default="../results/summary",
+                        help="Folder with factuality_full_<variant>.csv of scripts/enrichment/ (only read)")
+    parser.add_argument("--variants", nargs="+", default=["random", "most_cited"])
     parser.add_argument("--skip_name", action="store_true",
                         help="Reuse an existing candidates_name.parquet (the slow step)")
     args = parser.parse_args()
@@ -177,8 +181,8 @@ def main() -> None:
     rec = args.recommendations
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    if (out / "factuality_full.csv").resolve() == Path(args.old_full).resolve():
-        parser.error("--out_dir would overwrite the enrichment factuality_full.csv")
+    if out.resolve() == Path(args.enrichment).resolve():
+        parser.error("--out_dir would overwrite the enrichment files")
 
     if not args.skip_name:
         run_step("1_name.py", "--recommendations", rec,
@@ -193,9 +197,10 @@ def main() -> None:
     run_step("4_author.py", "--recommendations", rec,
              "--cascade_dir", str(out),
              "--output", str(out / "factuality_cascade.csv"))
-    logger.info("── step 5: factuality_full.csv")
-    build_full(str(out / "factuality_cascade.csv"), args.old_full, args.parquet,
-               str(out / "factuality_full.csv"))
+    for v in args.variants:
+        logger.info("── step 5: factuality_full_%s.csv", v)
+        build_full(str(out / "factuality_cascade.csv"), f"{args.enrichment}/factuality_full_{v}.csv",
+                   args.parquet, str(out / f"factuality_full_{v}.csv"))
 
 
 if __name__ == "__main__":

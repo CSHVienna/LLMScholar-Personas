@@ -6,9 +6,11 @@ All scripts run from the `code/` directory with `PYTHONPATH=.` so that `libs.*` 
 scripts/
 ├── prompting/           Build the prompts and parse the LLM answers → recommendations.csv
 ├── llmcaller/           Send the prompts to Ollama / OpenAI / Gemini
-├── enrichment/          OpenAlex, location, affiliation and ethnicity → factuality_full.csv
+├── openalex_cascade/    The OpenAlex author of each recommendation (name → field → seniority → subfield)
+├── enrichment/          OpenAlex, location, affiliation and ethnicity of that author → factuality_full_<variant>.csv
 ├── factuality/          Factuality cascade: name → field → seniority → author (names.py: how names are compared)
 ├── pipeline/            Computes every metric, steps 1 → 6 in the order they run
+├── run_all.py           Runs openalex_cascade → enrichment → factuality → pipeline → plot_data
 ├── plot_data/           Data for specific figures (Sankey flows, countries, field baseline, ethnicity)
 ├── legacy/              Scripts not used any more (replaced or one-time experiments)
 ├── ethnicity/           Ethnicity inference
@@ -157,22 +159,22 @@ parallel --bar -j 8 python scripts/prompting/batch_prompt.py -c {} -l german -o 
 
 ## Metrics pipeline (`pipeline/`)
 
-`run_pipeline.py` runs the four steps in order; each one writes one CSV per model under `../results/pipeline/<step>/`.
+`run_pipeline.py` runs the steps in order (`--from_step N` to resume); `run_all.py` runs it after the factuality cascade. Steps 3 and 5 run once per OpenAlex variant (`random`, `most_cited`; see `common.VARIANTS`) and write under `../results/pipeline/<step>/<variant>/`.
 
 | Script | One row per | Writes |
 |---|---|---|
 | `1_validity.py` | call | validity, refusal, duplicates |
 | `2_consistency.py` | setup (model + params) | consistency |
-| `3_factuality.py` | recommendation | runs `factuality/`; factuality_*, matched_*, bias_location |
-| `4_author_stats.py` | author | h-index, i10-index, e-index from OpenAlex (only when step 3 brings new authors) |
-| `5_socials.py` | call | diversity, parity, popularity, bias_location, similarity, connectedness |
-| `6_calls_table.py` | call | steps 1–5 in one table (`6_calls.csv`), with the column names the notebooks use |
+| `3_factuality.py` | recommendation, per variant | factuality_*, matched_* (Semantic Scholar), oa_factuality_*, oa_matched_* (OpenAlex), bias_location |
+| `4_author_stats.py` | author | h-index, i10-index, e-index from OpenAlex, for the authors of all variants (only when step 3 brings new authors) |
+| `5_socials.py` | call, per variant | diversity, parity, popularity, bias_location, similarity, connectedness |
+| `6_calls_table.py` | call × variant | steps 1–5 in one table (`6_calls.csv`, with an `oa_variant` column), with the column names the notebooks use |
 
-`common.py` holds the column names (call, setup, params) and the helpers that read and write the per-model files.
+`common.py` holds the column names (call, setup, params), the variants and the helpers that read and write the per-model files.
 
-```bash
-python scripts/pipeline/run_pipeline.py --skip_name
-```
+## OpenAlex cascade (`openalex_cascade/`)
+
+Chooses the OpenAlex author of each recommendation like the factuality cascade chooses the Semantic Scholar one. See `openalex_cascade/README.md`.
 
 ## Factuality cascade (`factuality/`)
 
@@ -180,7 +182,7 @@ python scripts/pipeline/run_pipeline.py --skip_name
 
 ## Data for specific figures (`plot_data/`)
 
-They read the factuality cascade output (`summary/cascade/factuality_full.csv`) and write one table per figure.
+They read the factuality cascade output (`summary/cascade/factuality_full_<variant>.csv`) and write one table per figure; `build_sankey_flows.py` and `build_location_flows.py` take `--variant` and write to `factualities/tables/<variant>/`.
 
 | Script | Writes | Read by |
 |---|---|---|

@@ -7,12 +7,16 @@ The pipeline works on three units:
   recommendation  call + one author of that response   (name, lastname, ...)
 
 Steps 1, 2, 3 and 5 write one CSV per model into their folder under OUT_DIR:
-  1_validity/      per call            validity, refusal, duplicates
-  2_consistency/   per setup           consistency
-  3_factuality/    per recommendation  factuality_* and matched_*
-  5_socials/       per call            diversity, parity, popularity, similarity,
-                                       connectedness
+  1_validity/                per call            validity, refusal, duplicates
+  2_consistency/             per setup           consistency
+  3_factuality/<variant>/    per recommendation  factuality_*, matched_*, oa_matched_*
+  5_socials/<variant>/       per call            diversity, parity, popularity,
+                                                 similarity, connectedness
 Step 4 writes author stats to [data].oa_author_stats; step 6 writes 6_calls.csv.
+
+Steps 3 and 5 run once per OpenAlex variant (VARIANTS): how the OpenAlex author
+of each recommendation was chosen among the ones that pass the same checks
+(scripts/openalex_cascade/). Steps 1 and 2 do not depend on OpenAlex.
 """
 
 import re
@@ -27,6 +31,7 @@ logger = setup_logging()
 RECOMMENDATIONS = "../results/summary/recommendations.csv"
 OUT_DIR = Path("../results/pipeline")
 FOLDERS = {1: "1_validity", 2: "2_consistency", 3: "3_factuality", 5: "5_socials"}
+VARIANTS = ["random", "most_cited"]
 
 # Prompt params: name in recommendations.csv → name in the outputs.
 PARAMS = {
@@ -71,20 +76,26 @@ def has_full_name(df: pd.DataFrame) -> pd.Series:
     return author_key(df).str.split().str.len().fillna(0) >= 2
 
 
-def write_step(df: pd.DataFrame, step: int) -> None:
-    """One CSV per model into the step's folder."""
+def step_folder(step: int, variant: str | None = None) -> Path:
     folder = OUT_DIR / FOLDERS[step]
+    return folder / variant if variant else folder
+
+
+def write_step(df: pd.DataFrame, step: int, variant: str | None = None) -> None:
+    """One CSV per model into the step's folder (and variant)."""
+    folder = step_folder(step, variant)
     folder.mkdir(parents=True, exist_ok=True)
     for model, part in df.groupby("model"):
         part.to_csv(folder / f"{re.sub(r'[^\w.-]', '_', model)}.csv", index=False)
     logger.info("Wrote %d files (%d rows) to %s", df["model"].nunique(), len(df), folder)
 
 
-def read_step(step: int, columns: list[str] | None = None) -> pd.DataFrame:
-    """All the per-model CSVs of a step, as one table."""
-    files = sorted((OUT_DIR / FOLDERS[step]).glob("*.csv"))
+def read_step(step: int, columns: list[str] | None = None, variant: str | None = None) -> pd.DataFrame:
+    """All the per-model CSVs of a step (and variant), as one table."""
+    folder = step_folder(step, variant)
+    files = sorted(folder.glob("*.csv"))
     if not files:
-        raise SystemExit(f"No files in {OUT_DIR / FOLDERS[step]}: run step {step} first")
+        raise SystemExit(f"No files in {folder}: run step {step} first")
     return pd.concat(
         (pd.read_csv(f, usecols=columns, low_memory=False) for f in files),
         ignore_index=True,

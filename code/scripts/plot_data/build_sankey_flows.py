@@ -7,7 +7,7 @@ keeping the slicing dimensions, and let the notebook stay plotting-only. The
 source CSV is 6.8 GB, so no figure should ever touch it directly.
 
 Six flows, each written to its own CSV under
-<results_dir>/factualities/tables/:
+<results_dir>/factualities/tables/<variant>/:
 
   seniority_flows.csv  asked seniority   -> actual seniority (Semantic Scholar)
                        plus the OpenAlex verdict as a separate `source_gt`,
@@ -175,27 +175,16 @@ def main() -> None:
     parser.add_argument("--results", default=None)
     parser.add_argument("--flows", nargs="*", choices=FLOWS, default=list(FLOWS))
     parser.add_argument("--chunksize", type=int, default=2_000_000)
-    parser.add_argument(
-        "--input",
-        default=None,
-        help="File under <results>/summary/ to read. Defaults to the output of "
-             "the factuality cascade (cascade/factuality_full.csv).",
-    )
-    parser.add_argument(
-        "--out_dir",
-        default=None,
-        help="Where to write the flow CSVs (default: <results>/factualities/tables).",
-    )
+    parser.add_argument("--variant", default="random",
+                        help="OpenAlex variant: reads cascade/factuality_full_<variant>.csv and "
+                             "writes to <results>/factualities/tables/<variant>/")
     args = parser.parse_args()
 
     results = get_results_path(path=args.results)
-    if args.input:
-        fact_path = results / "summary" / args.input
-    else:
-        fact_path = results / "summary" / "cascade" / "factuality_full.csv"
+    fact_path = results / "summary" / "cascade" / f"factuality_full_{args.variant}.csv"
     if not fact_path.exists():
         parser.error(f"Not found: {fact_path}")
-    out_dir = Path(args.out_dir) if args.out_dir else results / "factualities" / "tables"
+    out_dir = results / "factualities" / "tables" / args.variant
     out_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("Reading %s", fact_path)

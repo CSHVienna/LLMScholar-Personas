@@ -8,7 +8,7 @@ OpenAlex assigns to that author (`location_oa_iso`). The output is a long table
 that the plotting notebook aggregates however it needs — globally, per field,
 per language or per model.
 
-Output: <results_dir>/factualities/tables/location_flows.csv
+Output: <results_dir>/factualities/tables/<variant>/location_flows.csv
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/plot_data/build_location_flows.py
@@ -120,16 +120,9 @@ def main() -> None:
         default=None,
         help="Results directory (default: [data].results_dir in config.ini).",
     )
-    parser.add_argument(
-        "--input",
-        default=None,
-        help="File under <results>/summary/ to read (default: cascade/factuality_full.csv).",
-    )
-    parser.add_argument(
-        "--output",
-        default=None,
-        help="Output CSV (default: <results>/factualities/tables/location_flows.csv).",
-    )
+    parser.add_argument("--variant", default="random",
+                        help="OpenAlex variant: reads cascade/factuality_full_<variant>.csv and "
+                             "writes <results>/factualities/tables/<variant>/location_flows.csv")
     parser.add_argument(
         "--chunksize",
         type=int,
@@ -139,10 +132,8 @@ def main() -> None:
     args = parser.parse_args()
 
     results = Path(args.results) if args.results else get_results_path()
-    fact_path = results / "summary" / (args.input or "cascade/factuality_full.csv")
-    out_path = Path(args.output) if args.output else (
-        results / "factualities" / "tables" / "location_flows.csv"
-    )
+    fact_path = results / "summary" / "cascade" / f"factuality_full_{args.variant}.csv"
+    out_path = results / "factualities" / "tables" / args.variant / "location_flows.csv"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     logger.info("Reading %s", fact_path)

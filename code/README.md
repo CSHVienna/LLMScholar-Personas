@@ -19,10 +19,12 @@ code/
 ├── scripts/                 Programs you run. Each one says what it does in its docstring (--help).
 │   ├── prompting/           Build the prompts and parse the LLM answers → recommendations.csv
 │   ├── llmcaller/           Send the prompts to Ollama / OpenAI / Gemini
-│   ├── enrichment/          OpenAlex, location, affiliation and ethnicity → factuality_full.csv
-│   ├── factuality/          Factuality cascade: name → field → seniority → author
+│   ├── openalex_cascade/    The OpenAlex author of each recommendation: name → field → seniority → subfield
+│   ├── enrichment/          OpenAlex, location, affiliation and ethnicity of that author → factuality_full_<variant>.csv
+│   ├── factuality/          Factuality cascade on Semantic Scholar: name → field → seniority → author
 │   ├── pipeline/            Computes every metric, steps 1 → 6 in the order they run
 │   ├── plot_data/           Data for specific figures (Sankey flows, countries, field baseline, ethnicity)
+│   ├── run_all.py           Runs openalex_cascade → enrichment → factuality → pipeline → plot_data
 │   ├── legacy/              Scripts not used any more (replaced or one-time experiments)
 │   ├── ethnicity/           Ethnicity inference for the ground truth and the recommendations
 │   └── annotation/          Interactive CLIs for manual labelling
@@ -49,49 +51,41 @@ python scripts/prompting/batch_parse_results.py --results_dir ../results --outpu
 
 Output: `../results/summary/recommendations.csv`, one row per recommended author with the response's `valid_flag` and `run_id`.
 
-### 2. OpenAlex, location, affiliation, ethnicity
+### 2. Everything else: one command
 
 ```bash
-python scripts/enrichment/run_enrichment.py
+python scripts/run_all.py                    # all stages
+python scripts/run_all.py --skip_name        # reuse the Semantic Scholar name matches (the slow step)
+python scripts/run_all.py --from pipeline    # start at a given stage
 ```
 
-Output: `../results/summary/factuality_full.csv`. The cascade below copies its OpenAlex / location / affiliation / ethnicity columns from this file, so it must exist first.
+| stage | folder | what it does |
+|---|---|---|
+| 1 | `openalex_cascade/` | every OpenAlex author with each recommended name; their field (two published classifications, see its README) and subfields; the pick per recommendation, once per **variant** |
+| 2 | `enrichment/` | OpenAlex, location, affiliation and ethnicity of the picked author → `summary/factuality_full_<variant>.csv` |
+| 3 | `factuality/` | the factuality cascade on Semantic Scholar → `summary/cascade/factuality_full_<variant>.csv` |
+| 4 | `pipeline/` | every metric (table below) → `pipeline/6_calls.csv` |
+| 5 | `plot_data/` | data for specific figures → `factualities/tables/<variant>/` |
 
-### 3. Metrics pipeline
+**Variants.** When several OpenAlex authors with the recommended name pass the same checks (field, seniority, subfield), the last tie-break is either **random** or the **most cited**. Random can land on small or split OpenAlex profiles and the most cited on a famous namesake, so both are computed and reported: `6_calls.csv` has every call once per variant (`oa_variant` column). Semantic Scholar metrics are the same in both.
 
-```bash
-python scripts/pipeline/run_pipeline.py --skip_name     # --skip_name reuses the slow name matching
-python scripts/pipeline/run_pipeline.py --from_step 5   # re-run from a given step
-```
+**Factuality cascade** (`scripts/factuality/`). For each recommended name:
+`factuality_name` = someone in Semantic Scholar has that name; `factuality_field` = one of them is in the asked field; `factuality_seniority` = one of them has the asked seniority; `factuality_author` = one of them has both. The field and seniority come from the prompt, not from the LLM's answer. The reported researcher is picked at random among those that pass. The same four checks on OpenAlex are `oa_factuality_*`.
+
+**Metrics pipeline** (`scripts/pipeline/`, also runnable alone with `run_pipeline.py [--from_step N]`):
 
 | step | script | one row per | columns |
 |---|---|---|---|
 | 1 | `1_validity.py` | call | validity, refusal, duplicates |
 | 2 | `2_consistency.py` | setup (model + params) | consistency |
-| 3 | `3_factuality.py` (runs `factuality/`) | recommendation | factuality_name/field/seniority/author + matched_* + bias_location |
-| 4 | `4_author_stats.py` | author | h-index, i10-index, e-index from OpenAlex (~95 min, only when step 3 brings new authors) |
-| 5 | `5_socials.py` | call | diversity, parity, popularity, bias_location, similarity, connectedness |
-| 6 | `6_calls_table.py` | call | steps 1–5 in one table, with the column names the notebooks use |
+| 3 | `3_factuality.py` | recommendation, per variant | factuality_* + matched_* (Semantic Scholar), oa_factuality_* + oa_matched_* (OpenAlex), bias_location |
+| 4 | `4_author_stats.py` | author | h-index, i10-index, e-index from OpenAlex, for the authors of all variants (~95 min, only when step 3 brings new authors) |
+| 5 | `5_socials.py` | call, per variant | diversity, parity, popularity, bias_location, similarity, connectedness |
+| 6 | `6_calls_table.py` | call × variant | steps 1–5 in one table, with the column names the notebooks use |
 
-Output: `../results/pipeline/<step>/<model>.csv` (one CSV per model) and `../results/pipeline/6_calls.csv` (all calls, read by the notebooks). Step 4 writes to `[data].oa_author_stats`.
+Step 3 leaves out recommendations whose name has a single word (only a first name or only a last name). Step 5 builds the coauthorship graph and the PCA once, over the authors of all variants, so both variants are scored in the same space.
 
-Step 3 leaves out recommendations whose name has a single word (only a first name or only a last name).
-
-**Factuality cascade** (`scripts/factuality/`, run by step 3). For each recommended name:
-`factuality_name` = someone in Semantic Scholar has that name; `factuality_field` = one of them is in the asked field; `factuality_seniority` = one of them has the asked seniority; `factuality_author` = one of them has both. The field and seniority come from the prompt, not from the LLM's answer. The reported researcher is picked at random among those that pass.
-
-### 4. Data for specific figures
-
-```bash
-python scripts/plot_data/build_sankey_flows.py             # asked → actual: seniority, field, gender, ...
-python scripts/plot_data/build_location_flows.py           # prompt country → author country
-python scripts/plot_data/build_gt_field_baseline.py        # field mix of Semantic Scholar
-python scripts/plot_data/build_ethnicity_distributions.py  # for ethnicity_metrics.ipynb
-```
-
-They read the factuality cascade output (`summary/cascade/factuality_full.csv`) and write to `factualities/tables/`.
-
-### 5. Figures
+### 3. Figures
 
 ```bash
 cd notebooks/analysis && jupyter nbconvert --execute metrics_pipeline.ipynb
@@ -99,10 +93,10 @@ cd notebooks/analysis && jupyter nbconvert --execute metrics_pipeline.ipynb
 
 | Notebook | Reads |
 |---|---|
-| `analysis/metrics_pipeline.ipynb` | `pipeline/6_calls.csv` + `factualities/tables/*_flows.csv` |
+| `analysis/metrics_pipeline.ipynb` | `pipeline/6_calls.csv` (filtered on `OA_VARIANT`) + `factualities/tables/<variant>/*_flows.csv` |
 | `analysis/ethnicity_metrics.ipynb` | `ethnicity/distributions/*.csv` |
 | `analysis/oa_productivity_coverage.ipynb` | `summary/factuality_full.csv` |
-| `analysis/sensitivity.ipynb` | `pipeline/6_calls.csv` |
+| `analysis/sensitivity.ipynb` | `pipeline/6_calls.csv` (filtered on `OA_VARIANT`) |
 | `analysis/manual_classification_metrics.ipynb` | manual labels vs `valid_flag` |
 | `analysis/scholarly_stats_check.ipynb` | checks of the h/i10/e-index |
 | `analysis/incomplete_names_check.ipynb` | recommendations with only a name or only a last name |
@@ -142,7 +136,7 @@ Scripts that are not part of the pipeline any more, kept for reference: `build_v
 ## Similarity and connectedness, in short
 
 - Both need the OpenAlex id of the authors. Authors found only in Semantic Scholar are skipped.
-- The coauthorship graph (~2.5 h the first time) and the PCA are built once over all recommended authors with an OpenAlex id (305,893) and cached in `../results/.cache/`. Each response is then scored with that same graph and PCA, so values are comparable across models.
+- The coauthorship graph (~1 h the first time, resumable) and the PCA are built once over all recommended authors with an OpenAlex id, in any variant, and cached in `../results/.cache/`. Each response is then scored with that same graph and PCA, so values are comparable across models and variants.
 - Both are NaN when fewer than 2 authors can be scored (for example k = 1).
 
 ---
@@ -151,5 +145,5 @@ Scripts that are not part of the pipeline any more, kept for reference: `build_v
 
 - `ModuleNotFoundError: No module named 'libs'` → run from `code/` with `PYTHONPATH=.`.
 - `KeyError: Missing [data].ss_parquet` → fill in `config.ini`.
-- A notebook fails on its first data cell → run the script that writes the table it reads (step 4 above).
+- A notebook fails on its first data cell → run `scripts/run_all.py` (or the stage that writes the table it reads).
 - DuckDB runs out of temp space → set `[data].oa_works_tmp_dir` to a disk with room (not `/tmp`).

@@ -29,9 +29,7 @@ $EDITOR config.ini    # fill in [secrets].keys_dir and every [data].* path
 # 3. Run the pipeline from code/.
 cd code
 export PYTHONPATH=.
-python scripts/enrichment/run_enrichment.py    # OpenAlex, location, affiliation, ethnicity
-python scripts/pipeline/run_pipeline.py                # validity → consistency → factuality → author stats → socials → table
-python scripts/plot_data/build_sankey_flows.py         # + the other plot_data/ scripts, for specific figures
+python scripts/run_all.py      # OpenAlex cascade → enrichment → factuality → metrics → figure data
 jupyter nbconvert --execute notebooks/analysis/metrics_pipeline.ipynb
 ```
 
@@ -68,16 +66,15 @@ Detailed instructions live in the sub-READMEs:
 ## How the pipeline fits together
 
 ```
-prompts + LLM answers          enrichment + factuality             metrics                         figures
-─────────────────────          ───────────────────────             ───────                         ───────
-scripts/prompting/       →     scripts/enrichment/            →    scripts/pipeline/          →    notebooks/analysis/
-scripts/llmcaller/             (OpenAlex, location, ...)           1 validity                      metrics_pipeline.ipynb,
-→ recommendations.csv          scripts/factuality/                 2 consistency                   ...
-                               (name → field → seniority)          3 factuality (the cascade)
-                                                                   4 socials
-                                                                   5 one table → 6_calls.csv
-                                                                   scripts/plot_data/ (data for
-                                                                   specific figures)
+prompts + LLM answers     scripts/run_all.py
+─────────────────────     ─────────────────────────────────────────────────────────────────────────
+scripts/prompting/   →    1 openalex_cascade/  the OpenAlex author of each recommendation (per variant)
+scripts/llmcaller/        2 enrichment/        OpenAlex, location, affiliation, ethnicity of that author
+→ recommendations.csv     3 factuality/        the factuality cascade on Semantic Scholar
+                          4 pipeline/          validity, consistency, factuality, author stats, socials
+                                               → 6_calls.csv (one table, oa_variant column)
+                          5 plot_data/         data for specific figures
+                                                                  →  notebooks/analysis/
 ```
 
 Each stage reads what the previous one wrote. See `code/README.md` for the ordered command list, the schema of every intermediate CSV, and the optional branches (manual annotation, ethnicity inference, inter-annotator agreement).
