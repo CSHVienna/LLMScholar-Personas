@@ -95,7 +95,7 @@ cd notebooks/analysis && jupyter nbconvert --execute metrics_pipeline.ipynb
 |---|---|
 | `analysis/metrics_pipeline.ipynb` | `pipeline/6_calls.csv` (filtered on `OA_VARIANT`) + `factualities/tables/<variant>/*_flows.csv` |
 | `analysis/ethnicity_metrics.ipynb` | `ethnicity/distributions/*.csv` |
-| `analysis/oa_productivity_coverage.ipynb` | `summary/factuality_full.csv` |
+| `analysis/oa_productivity_coverage.ipynb` | `summary/factuality_full_<variant>.csv` (filtered on `OA_VARIANT`) |
 | `analysis/sensitivity.ipynb` | `pipeline/6_calls.csv` (filtered on `OA_VARIANT`) |
 | `analysis/manual_classification_metrics.ipynb` | manual labels vs `valid_flag` |
 | `analysis/scholarly_stats_check.ipynb` | checks of the h/i10/e-index |

@@ -178,7 +178,7 @@ Chooses the OpenAlex author of each recommendation like the factuality cascade c
 
 ## Factuality cascade (`factuality/`)
 
-`run_pipeline.py` runs `1_name.py` (all researchers with that name; the slow step) → `2_field.py` → `3_seniority.py` → `4_author.py` (counts and the random pick), and then itself adds the old status columns and the OpenAlex / location / affiliation / ethnicity columns from `enrichment/`'s `factuality_full.csv`. `names.py` holds how names are compared. Output under `../results/summary/cascade/`.
+`run_pipeline.py` runs `1_name.py` (all researchers with that name; the slow step) → `2_field.py` → `3_seniority.py` → `4_author.py` (counts and the random pick), and then itself adds the old status columns and the OpenAlex / location / affiliation / ethnicity columns from `enrichment/`'s `factuality_full_<variant>.csv`, once per variant. `names.py` holds how names are compared. Output under `../results/summary/cascade/`.
 
 ## Data for specific figures (`plot_data/`)
 
