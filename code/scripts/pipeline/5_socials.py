@@ -1,8 +1,9 @@
 """
 5_socials.py — Step 5: social representation of every valid call.
 
-Takes the recommendations of step 3 and keeps the factual ones
-(factuality_author = True), each researcher once per call. Per call:
+Takes the recommendations of step 3 and keeps the authors that exist: the
+name is in Semantic Scholar or in OpenAlex (factuality_name or
+oa_factuality_name), each name once per call. Per call:
 
   diversity_<x>     how spread the call's authors are over the categories of x
                     (normalised entropy, paper Eq. 9). NaN with fewer than 2.
@@ -18,7 +19,7 @@ Takes the recommendations of step 3 and keeps the factual ones
   similarity        mean pairwise scholarly similarity (paper Eq. 8)
   connectedness     coauthorship connectedness (paper Eq. 7)
                     (n_used_<x>: how many authors entered each of the two;
-                    n_excluded_<x>: how many factual authors could not, e.g.
+                    n_excluded_<x>: how many found authors could not, e.g.
                     no OpenAlex id)
 
 Runs once per OpenAlex variant (common.VARIANTS). The coauthorship graph and the
@@ -26,7 +27,7 @@ PCA are built once, over the authors of all variants, so the variants are
 scored in the same space.
 
 Output: 5_socials/<variant>/<model>.csv — call columns + n_authors + the metrics
-above. Calls without factual authors get NaN.
+above. Calls without found authors get NaN.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/pipeline/5_socials.py
@@ -41,7 +42,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import CALL, OUT_DIR, VARIANTS, read_step, write_step  # noqa: E402
+from common import CALL, OUT_DIR, VARIANTS, author_key, read_step, write_step  # noqa: E402
 
 from libs.metrics.coauthorship import build_coauthorship_graph, compute_connectedness  # noqa: E402
 from libs.metrics.constants import (  # noqa: E402
@@ -132,13 +133,13 @@ def graph_and_embeddings(population: pd.DataFrame, oa_duckdb: str, oa_author_sta
 
 
 def structural(authors: pd.DataFrame, model: dict) -> pd.DataFrame:
-    """Similarity and connectedness of each call's factual authors. Authors
+    """Similarity and connectedness of each call's found authors. Authors
     without an OpenAlex id are skipped (and counted in n_excluded_*)."""
     graph, graph_index = model["graph"], model["graph_index"]
     embeddings, emb_index = model["embeddings"], model["emb_index"]
     rows = []
     for call, ids in authors.groupby("call")["author_id"]:
-        no_oa_id = int(ids.isna().sum())          # factual authors OpenAlex did not find
+        no_oa_id = int(ids.isna().sum())          # found only in Semantic Scholar
         ids = ids.dropna().unique().tolist()
         sim = compute_similarity(ids, embeddings, emb_index)
         conn = compute_connectedness(ids, graph, graph_index)
@@ -171,8 +172,9 @@ def run(parquet: str, oa_duckdb: str, oa_author_stats: str) -> None:
 def socials(recs: pd.DataFrame, model: dict, gt: dict) -> pd.DataFrame:
     """All the metrics of step 5 for one variant."""
 
-    # The authors we score: factual, each researcher once per call.
-    authors = recs[recs["factuality_author"]].drop_duplicates(["call", "researcher_id"]).copy()
+    # The authors we score: the name exists in Semantic Scholar or OpenAlex, each name once per call.
+    exists = recs["factuality_name"] | recs["oa_factuality_name"]
+    authors = recs[exists].assign(author=author_key(recs[exists])).drop_duplicates(["call", "author"])
     authors["gender"] = authors["gt_gender"].str.strip().str.lower().map(GENDER_MAP)
     authors["ethnicity"] = authors["perceived_ethnicity"].map(ETHNICITY_MAP)
 

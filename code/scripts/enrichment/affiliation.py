@@ -30,8 +30,8 @@ Output columns added:
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/enrichment/affiliation.py \\
-      --input  ../results/summary/factuality_location.csv \\
-      --output ../results/summary/factuality_affiliation.csv
+      --input  ../results/summary/factuality_location_random.csv \\
+      --output ../results/summary/factuality_affiliation_random.csv
 """
 
 import argparse
@@ -346,7 +346,7 @@ def main() -> None:
     )
     add_io_args(
         parser,
-        input_help="Path to factuality_location.csv (output of step 3)",
+        input_help="Path to factuality_location_<variant>.csv (output of location.py)",
     )
     args = parser.parse_args()
 

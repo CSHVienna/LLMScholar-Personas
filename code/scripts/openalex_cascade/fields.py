@@ -16,7 +16,7 @@ Validated on 5,671 authors with a name that is unique in both Semantic Scholar
 and OpenAlex and the same first-publication year (±2): the main topics field
 agrees with Semantic Scholar's field for 72.4% of them, the main concept for
 77.8%, both together (when they agree) for 83.9%. See
-notebooks/analysis/openalex_field_validation.ipynb.
+notebooks/analysis/checks/openalex_field.ipynb.
 
 SUBFIELDS gives, for each subfield of our prompts, the OpenAlex subfields that
 correspond to it; it is only used to break ties. Forensic Psychology,

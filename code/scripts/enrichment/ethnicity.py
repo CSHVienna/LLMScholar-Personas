@@ -16,9 +16,9 @@ Output columns added:
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/enrichment/ethnicity.py \\
-      --input             ../results/summary/factuality_affiliation.csv \\
+      --input             ../results/summary/factuality_affiliation_random.csv \\
       --ethnicity_lookup  ../results/summary/recommendations_with_ethnicity.csv \\
-      --output            ../results/summary/factuality_full.csv
+      --output            ../results/summary/factuality_full_random.csv
 """
 
 import argparse
@@ -79,7 +79,7 @@ def main() -> None:
     )
     add_io_args(
         parser,
-        input_help="Path to factuality_location.csv (output of step 4)",
+        input_help="Path to factuality_affiliation_<variant>.csv (output of affiliation.py)",
         output_help="Output CSV path (final factuality dataset)",
     )
     parser.add_argument(

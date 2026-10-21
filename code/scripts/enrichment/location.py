@@ -18,8 +18,8 @@ Output columns added:
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/enrichment/location.py \\
-      --input  ../results/summary/factuality_oa.csv \\
-      --output ../results/summary/factuality_location.csv
+      --input  ../results/summary/factuality_oa_random.csv \\
+      --output ../results/summary/factuality_location_random.csv
 """
 
 import argparse
@@ -109,7 +109,7 @@ def main() -> None:
     )
     add_io_args(
         parser,
-        input_help="Path to factuality_oa.csv (output of openalex.py)",
+        input_help="Path to factuality_oa_<variant>.csv (output of openalex.py)",
     )
     args = parser.parse_args()
 

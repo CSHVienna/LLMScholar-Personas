@@ -30,7 +30,7 @@ $EDITOR config.ini    # fill in [secrets].keys_dir and every [data].* path
 cd code
 export PYTHONPATH=.
 python scripts/run_all.py      # OpenAlex cascade → enrichment → factuality → metrics → figure data
-jupyter nbconvert --execute notebooks/analysis/metrics_pipeline.ipynb
+jupyter nbconvert --execute notebooks/analysis/figures/metrics.ipynb
 ```
 
 The end-to-end pipeline (collect responses → factuality → metrics → figures) lives in **[`code/README.md`](code/README.md)**.

@@ -62,9 +62,12 @@ def load(path: str, columns: list[str]) -> pd.DataFrame:
 
 def author_key(df: pd.DataFrame) -> pd.Series:
     """The recommended author as written by the LLM: "name lastname",
-    lowercased. NaN when both are empty."""
+    lowercased, with punctuation and extra spaces removed ("J. Smith" and
+    "j  smith" are the same author; accents are already removed by the parser).
+    NaN when both are empty."""
     full = (df["name"].fillna("").astype(str) + " "
-            + df["lastname"].fillna("").astype(str)).str.strip().str.lower()
+            + df["lastname"].fillna("").astype(str)).str.lower()
+    full = full.str.replace(r"[\W\d_]+", " ", regex=True).str.split().str.join(" ")
     return full.where(full != "")
 
 

@@ -186,10 +186,10 @@ They read the factuality cascade output (`summary/cascade/factuality_full_<varia
 
 | Script | Writes | Read by |
 |---|---|---|
-| `build_sankey_flows.py` | `factualities/tables/{seniority,ethnicity,field,subfield,language,gender}_flows.csv` | `metrics_pipeline.ipynb` |
-| `build_location_flows.py` | `factualities/tables/location_flows.csv` | `metrics_pipeline.ipynb` |
-| `build_gt_field_baseline.py` | `factualities/tables/gt_field_baseline.csv` | `metrics_pipeline.ipynb` |
-| `build_ethnicity_distributions.py` | `ethnicity/distributions/*.csv` | `ethnicity_metrics.ipynb` |
+| `build_sankey_flows.py` | `factualities/tables/<variant>/{seniority,ethnicity,field,subfield,language,gender}_flows.csv` | `analysis/figures/metrics.ipynb` |
+| `build_location_flows.py` | `factualities/tables/<variant>/location_flows.csv` | `analysis/figures/metrics.ipynb` |
+| `build_gt_field_baseline.py` | `factualities/tables/gt_field_baseline.csv` | `analysis/figures/metrics.ipynb` |
+| `build_ethnicity_distributions.py` | `ethnicity/distributions/*.csv` | `analysis/figures/ethnicity.ipynb` |
 
 ## Legacy (`legacy/`)
 

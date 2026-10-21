@@ -11,7 +11,8 @@ Per call:
   refusal     True if the LLM declined and said why (valid_flag refused). Not
               the same as invalid: an invalid response is malformed or empty.
   duplicates  1 − unique authors / authors in the response (paper Eq. 3),
-              authors compared by "name lastname". Only for valid calls.
+              authors compared by "name lastname" normalized (common.author_key).
+              Only for valid calls.
   n_total_recommendations, n_unique_authors   the two counts behind duplicates
 
 Output: 1_validity/<model>.csv — call columns + validity, refusal, duplicates

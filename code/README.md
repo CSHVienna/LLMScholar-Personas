@@ -30,9 +30,10 @@ code/
 │   └── annotation/          Interactive CLIs for manual labelling
 ├── libs/                    Code shared by scripts and notebooks (see "Where things live")
 ├── notebooks/
-│   ├── analysis/            Paper figures (plot only: they read the tables, they compute nothing heavy)
+│   ├── analysis/figures/    Paper figures (plot only: they read the tables)
+│   ├── analysis/checks/     Checks of the data behind the metrics
 │   ├── agreement/           Inter-annotator agreement
-│   └── legacy/              Old notebooks
+│   └── legacy/              Notebooks of the pipeline before the factuality cascade
 └── tests/                   pytest
 ```
 
@@ -85,23 +86,33 @@ python scripts/run_all.py --from pipeline    # start at a given stage
 
 Step 3 leaves out recommendations whose name has a single word (only a first name or only a last name). Step 5 builds the coauthorship graph and the PCA once, over the authors of all variants, so both variants are scored in the same space.
 
-### 3. Figures
+### 3. Figures and checks
 
 ```bash
-cd notebooks/analysis && jupyter nbconvert --execute metrics_pipeline.ipynb
+cd notebooks/analysis/figures && jupyter nbconvert --execute metrics.ipynb
 ```
 
-| Notebook | Reads |
-|---|---|
-| `analysis/metrics_pipeline.ipynb` | `pipeline/6_calls.csv` (filtered on `OA_VARIANT`) + `factualities/tables/<variant>/*_flows.csv` |
-| `analysis/ethnicity_metrics.ipynb` | `ethnicity/distributions/*.csv` |
-| `analysis/oa_productivity_coverage.ipynb` | `summary/factuality_full_<variant>.csv` (filtered on `OA_VARIANT`) |
-| `analysis/sensitivity.ipynb` | `pipeline/6_calls.csv` (filtered on `OA_VARIANT`) |
-| `analysis/manual_classification_metrics.ipynb` | manual labels vs `valid_flag` |
-| `analysis/scholarly_stats_check.ipynb` | checks of the h/i10/e-index |
-| `analysis/openalex_field_validation.ipynb` | how often the OpenAlex field agrees with Semantic Scholar's (72% / 78% / 84%) |
-| `analysis/incomplete_names_check.ipynb` | recommendations with only a name or only a last name |
-| `agreement/*.ipynb` | manual labels of two annotators |
+The notebooks only read tables written by `run_all.py`; they compute nothing heavy. `OA_VARIANT = 'random'` (or `'most_cited'`) at the top picks the OpenAlex variant.
+
+**`analysis/figures/`: the paper's figures**
+
+| Notebook | Shows | Reads |
+|---|---|---|
+| `metrics.ipynb` | every per-call metric by persona, context, field, model…, the trade-off plots and the Sankeys | `pipeline/6_calls.csv` + `factualities/tables/<variant>/*_flows.csv` |
+| `sensitivity.ipynb` | which prompt variables move each metric (sensitivity analysis) | `pipeline/6_calls.csv` |
+| `ethnicity.ipynb` | perceived ethnicity: ground truth vs recommendations | `ethnicity/distributions/*.csv` |
+
+**`analysis/checks/`: checks of the data behind the metrics**
+
+| Notebook | Checks | Reads |
+|---|---|---|
+| `openalex_field.ipynb` | how often the OpenAlex field agrees with Semantic Scholar's (72% / 78% / 84%) | `openalex_cascade/*.parquet`, `cascade/candidates_name.parquet` |
+| `openalex_coverage.ipynb` | why publications / citations are NaN for some authors | `summary/factuality_full_<variant>.csv` |
+| `scholarly_stats.ipynb` | h-index, i10-index and e-index against a hand-written formula | `[data].oa_author_stats` |
+| `incomplete_names.ipynb` | recommendations with only a first name or only a last name | `cascade/factuality_cascade.csv` |
+| `validity_flags.ipynb` | the automatic `valid_flag` against manual labels | `summary/summary.csv` + manual labels |
+
+**`agreement/`**: inter-annotator agreement of the manual labels. **`legacy/`**: notebooks of the pipeline before the factuality cascade.
 
 ### Optional branches
 

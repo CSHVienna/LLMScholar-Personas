@@ -448,6 +448,22 @@ def _draw_label_column(
             )
 
 
+# Metrics whose values are tiny get more decimals in the bar labels.
+DECIMALS = {"duplicates": 4, "refusals": 4}
+
+
+def _value_label(val: float, metric: str = "") -> str:
+    """2 decimals (more for DECIMALS); values that would round to 0.00 keep
+    enough digits to show they are not 0."""
+    if metric in DECIMALS:
+        return f"{val:.{DECIMALS[metric]}f}"
+    if val == 0 or abs(val) >= 0.005:
+        return f"{val:.2f}"
+    if abs(val) >= 0.0005:
+        return f"{val:.3f}"
+    return "<0.001"
+
+
 def _draw_metric_panel(
     ax: plt.Axes,
     metric: str,
@@ -547,7 +563,9 @@ def _draw_metric_panel(
                 continue
             is_best = best is not None and abs(val - best) < 1e-9
             low_n = n < 3
-            ax.barh(yv, val, height=0.55, color=color, alpha=0.92, zorder=2)
+            # A value > 0 gets at least a thin bar, so it does not look like 0.
+            bar = max(val, 0.004) if val > 0 else val
+            ax.barh(yv, bar, height=0.55, color=color, alpha=0.92, zorder=2)
             ci_val = ci if (np.isfinite(ci) and not low_n) else 0.0
             if ci_val:
                 ax.errorbar(
@@ -561,7 +579,7 @@ def _draw_metric_panel(
                     zorder=3,
                 )
 
-            txt = f'{val:.2f}{"*" if low_n else ""}'
+            txt = f'{_value_label(val, metric)}{"*" if low_n else ""}'
             fw = "bold" if is_best else "normal"
             gap = ci_val + 0.015
             x_out = val + gap  # outside (right of bar)

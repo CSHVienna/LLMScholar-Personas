@@ -2,7 +2,7 @@
 ``scripts/plot_data/build_ethnicity_distributions.py``.
 
 Consolidates the I/O + reindex-by-order pattern used by
-``notebooks/analysis/ethnicity_metrics.ipynb``.
+``notebooks/analysis/figures/ethnicity.ipynb``.
 """
 
 from __future__ import annotations

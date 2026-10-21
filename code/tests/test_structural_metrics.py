@@ -388,7 +388,7 @@ def _variant_parquet(path, *, rows, similarity):
 def test_apply_structural_variant_swaps_only_the_structural_columns(tmp_path):
     """Every other metric, the row order and the row count must survive, or the
     plots downstream would silently be comparing different things."""
-    from libs.metrics.io import apply_structural_variant
+    from libs.legacy.structural_variants import apply_structural_variant
 
     tables = tmp_path / "factualities" / "tables"
     tables.mkdir(parents=True)
@@ -415,7 +415,7 @@ def test_apply_structural_variant_swaps_only_the_structural_columns(tmp_path):
 def test_apply_structural_variant_nans_rows_the_variant_lacks(tmp_path):
     """Under a narrower population a response can drop out of the metric; NaN
     is the honest value, not the previous variant's number left behind."""
-    from libs.metrics.io import apply_structural_variant
+    from libs.legacy.structural_variants import apply_structural_variant
 
     tables = tmp_path / "factualities" / "tables"
     tables.mkdir(parents=True)
@@ -435,7 +435,7 @@ def test_apply_structural_variant_nans_rows_the_variant_lacks(tmp_path):
 
 
 def test_load_structural_variant_rejects_an_unknown_name(tmp_path):
-    from libs.metrics.io import load_structural_variant
+    from libs.legacy.structural_variants import load_structural_variant
 
     with pytest.raises(ValueError, match="variant must be one of"):
         load_structural_variant(tmp_path, "whatever")
@@ -443,7 +443,7 @@ def test_load_structural_variant_rejects_an_unknown_name(tmp_path):
 
 def test_load_structural_variant_says_how_to_build_a_missing_one(tmp_path):
     """The error has to name the command, or the next person re-derives it."""
-    from libs.metrics.io import load_structural_variant
+    from libs.legacy.structural_variants import load_structural_variant
 
     (tmp_path / "factualities" / "tables").mkdir(parents=True)
     with pytest.raises(FileNotFoundError, match="run_similarity.py"):
