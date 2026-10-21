@@ -9,13 +9,13 @@ Two published classifications of OpenAlex are used, none made up here:
             Life Sciences domain except Pharmacology; Sociology is the
             "Sociology and Political Science" subfield of Social Sciences.
   concepts  The level-0 concepts OpenAlex inherited from Microsoft Academic
-            Graph (deprecated, frozen in the 2025-11 legacy snapshot). Their
-            names are ours (CONCEPT_MAP).
+            Graph, still in the snapshot's author records (`x_concepts`).
+            Their names are ours (CONCEPT_MAP).
 
 Validated on 5,671 authors with a name that is unique in both Semantic Scholar
 and OpenAlex and the same first-publication year (±2): the main topics field
-agrees with Semantic Scholar's field for 72.3% of them, the main concept for
-71.8%, both together (when they agree) for 82.8%. See
+agrees with Semantic Scholar's field for 72.4% of them, the main concept for
+77.8%, both together (when they agree) for 83.9%. See
 notebooks/analysis/openalex_field_validation.ipynb.
 
 SUBFIELDS gives, for each subfield of our prompts, the OpenAlex subfields that

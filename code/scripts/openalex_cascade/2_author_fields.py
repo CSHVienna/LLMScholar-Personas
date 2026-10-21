@@ -6,13 +6,14 @@ For every OpenAlex author found in step 1:
                   (of all 26) with most of their papers, read from
                   `authors.topics`. None when that field is not one of ours.
   field_concepts  our field for the author's main level-0 concept (inherited
-                  from Microsoft Academic Graph), read from the legacy author
-                  records. None when that concept is not one of ours.
+                  from Microsoft Academic Graph), read from `x_concepts` in the
+                  snapshot's author files. None when that concept is not one of ours.
   subfields       the author's 3 OpenAlex subfields with most papers (for the
                   tie-break on the prompt's subfield).
 See fields.py for both classifications and how they were validated.
 
-The concepts come from the legacy snapshot (58 GB of author records, ~15 min);
+The DuckDB database has no concepts, so they are read from the snapshot's
+parquet author files (55 GB, same 2026-09 release as the database, ~15 min);
 they are extracted once into author_concepts_level0.parquet, next to the output,
 and reused.
 
@@ -39,7 +40,7 @@ from libs.utils.logging import setup_logging  # noqa: E402
 
 logger = setup_logging()
 
-LEGACY_AUTHORS = "/code/openalex/oa_data/legacy-data/authors/updated_date=*/part_*.gz"
+SNAPSHOT_AUTHORS = "/code/openalex/oa_data/data/parquet/authors/updated_date=*/part_*.parquet"
 
 TOPICS = """
 SELECT u.oa_id, t.field.display_name AS oa_field, t.subfield.display_name AS oa_subfield,
@@ -53,9 +54,7 @@ GROUP BY ALL
 CONCEPTS = """
 COPY (
   SELECT r.id AS oa_id, c.display_name AS concept, c.score
-  FROM read_json('{legacy}', format='newline_delimited', compression='gzip',
-                 columns={{'id': 'VARCHAR',
-                           'x_concepts': 'STRUCT(display_name VARCHAR, level INTEGER, score DOUBLE)[]'}}) r
+  FROM read_parquet('{authors}') r
   JOIN candidates u ON u.oa_id = r.id,
        UNNEST(r.x_concepts) AS x(c)
   WHERE c.level = 0
@@ -63,7 +62,7 @@ COPY (
 """
 
 
-def run(candidates: str, duckdb_path: str, legacy: str, output: str) -> None:
+def run(candidates: str, duckdb_path: str, authors: str, output: str) -> None:
     cand = pd.read_parquet(candidates, columns=["oa_id"]).drop_duplicates()
     con = duckdb.connect()
     con.register("candidates", cand)
@@ -82,12 +81,12 @@ def run(candidates: str, duckdb_path: str, legacy: str, output: str) -> None:
             .sort_values("n", ascending=False).groupby("oa_id").head(3)
             .groupby("oa_id")["oa_subfield"].agg(list).rename("subfields"))
 
-    # Concepts: the main level-0 concept, extracted once from the legacy records.
+    # Concepts: the main level-0 concept, extracted once from the snapshot's author files.
     concepts_file = Path(output).with_name("author_concepts_level0.parquet")
     if not concepts_file.exists():
-        logger.info("Reading the legacy author records (~15 min)")
+        logger.info("Reading the snapshot's author files (~15 min)")
         con.execute("SET memory_limit='48GB'")
-        con.execute(CONCEPTS.format(legacy=legacy, out=concepts_file))
+        con.execute(CONCEPTS.format(authors=authors, out=concepts_file))
     concepts = pd.read_parquet(concepts_file)
     main_concept = concepts.sort_values("score", ascending=False).drop_duplicates("oa_id")
     main_concept["field_concepts"] = main_concept["concept"].map(CONCEPT_MAP)
@@ -108,10 +107,10 @@ def main() -> None:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--candidates", required=True)
     parser.add_argument("--duckdb", default=config_default("oa_duckdb"))
-    parser.add_argument("--legacy_authors", default=LEGACY_AUTHORS)
+    parser.add_argument("--snapshot_authors", default=SNAPSHOT_AUTHORS)
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
-    run(args.candidates, args.duckdb, args.legacy_authors, args.output)
+    run(args.candidates, args.duckdb, args.snapshot_authors, args.output)
 
 
 if __name__ == "__main__":

@@ -18,8 +18,8 @@ seniority, then of the asked subfield.
 
 An author is of the asked field when their main topics field **or** their main
 concept is that field. `fields.py` has both mappings and how they were validated
-(5,671 authors identified in both Semantic Scholar and OpenAlex: 72.3% / 71.8%
-agreement with Semantic Scholar's field, 82.8% when both agree;
+(5,671 authors identified in both Semantic Scholar and OpenAlex: 72.4% / 77.8%
+agreement with Semantic Scholar's field, 83.9% when both agree;
 `notebooks/analysis/openalex_field_validation.ipynb`). It needs the
-2026-09 snapshot or later (`authors.topics`) and the legacy author records
-(concepts).
+2026-09 snapshot or later: the DuckDB database for topics and the snapshot's
+parquet author files for concepts (`x_concepts`, not loaded in the database).
