@@ -163,11 +163,11 @@ parallel --bar -j 8 python scripts/prompting/batch_prompt.py -c {} -l german -o 
 
 | Script | One row per | Writes |
 |---|---|---|
-| `1_validity.py` | call | validity, refusal, duplicates |
+| `1_validity.py` | call | validity, refusal, duplicates (names normalized: `common.author_key`) |
 | `2_consistency.py` | setup (model + params) | consistency |
 | `3_factuality.py` | recommendation, per variant | factuality_*, matched_* (Semantic Scholar), oa_factuality_*, oa_matched_* (OpenAlex), bias_location |
 | `4_author_stats.py` | author | h-index, i10-index, e-index from OpenAlex, for the authors of all variants (only when step 3 brings new authors) |
-| `5_socials.py` | call, per variant | diversity, parity, popularity, bias_location, similarity, connectedness |
+| `5_socials.py` | call, per variant | diversity, parity, popularity, bias_location, similarity, connectedness, over the authors whose name exists in Semantic Scholar or OpenAlex |
 | `6_calls_table.py` | call × variant | steps 1–5 in one table (`6_calls.csv`, with an `oa_variant` column), with the column names the notebooks use |
 
 `common.py` holds the column names (call, setup, params), the variants and the helpers that read and write the per-model files.

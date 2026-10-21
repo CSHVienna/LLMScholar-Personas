@@ -7,7 +7,7 @@ Everything runs from `code/` with `PYTHONPATH=.`. External paths (Semantic Schol
 ```bash
 cd code
 export PYTHONPATH=.
-PYTHONPATH=. python -m pytest tests/        # 178 tests
+PYTHONPATH=. python -m pytest tests/        # 159 tests
 ```
 
 ---
@@ -84,7 +84,7 @@ python scripts/run_all.py --from pipeline    # start at a given stage
 | 5 | `5_socials.py` | call, per variant | diversity, parity, popularity, bias_location, similarity, connectedness |
 | 6 | `6_calls_table.py` | call × variant | steps 1–5 in one table, with the column names the notebooks use |
 
-Step 3 leaves out recommendations whose name has a single word (only a first name or only a last name). Step 5 builds the coauthorship graph and the PCA once, over the authors of all variants, so both variants are scored in the same space.
+Names are compared normalized (lowercase, no punctuation or extra spaces: `common.author_key`), so "J. Smith" and "j smith" are the same author in duplicates, consistency and the per-call factuality. Step 3 leaves out recommendations whose name has a single word (only a first name or only a last name). Step 5 scores the authors whose name exists in Semantic Scholar or in OpenAlex (`factuality_name` or `oa_factuality_name`), each name once per call; it builds the coauthorship graph and the PCA once, over the authors of all variants, so both variants are scored in the same space.
 
 ### 3. Figures and checks
 
@@ -107,7 +107,7 @@ The notebooks only read tables written by `run_all.py`; they compute nothing hea
 | Notebook | Checks | Reads |
 |---|---|---|
 | `openalex_field.ipynb` | how often the OpenAlex field agrees with Semantic Scholar's (72% / 78% / 84%) | `openalex_cascade/*.parquet`, `cascade/candidates_name.parquet` |
-| `openalex_coverage.ipynb` | why publications / citations are NaN for some authors | `summary/factuality_full_<variant>.csv` |
+| `openalex_coverage.ipynb` | why publications / citations are NaN for some authors | `summary/cascade/factuality_full_<variant>.csv` |
 | `scholarly_stats.ipynb` | h-index, i10-index and e-index against a hand-written formula | `[data].oa_author_stats` |
 | `incomplete_names.ipynb` | recommendations with only a first name or only a last name | `cascade/factuality_cascade.csv` |
 | `validity_flags.ipynb` | the automatic `valid_flag` against manual labels | `summary/summary.csv` + manual labels |
@@ -147,7 +147,7 @@ Scripts that are not part of the pipeline any more, kept for reference: `build_v
 
 ## Similarity and connectedness, in short
 
-- Both need the OpenAlex id of the authors. Authors found only in Semantic Scholar are skipped.
+- They score the same authors as the rest of step 5 (name in Semantic Scholar or OpenAlex), but need their OpenAlex id: authors found only in Semantic Scholar are skipped and counted in `n_excluded_*`.
 - The coauthorship graph (~1 h the first time, resumable) and the PCA are built once over all recommended authors with an OpenAlex id, in any variant, and cached in `../results/.cache/`. Each response is then scored with that same graph and PCA, so values are comparable across models and variants.
 - Both are NaN when fewer than 2 authors can be scored (for example k = 1).
 

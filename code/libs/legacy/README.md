@@ -1,6 +1,6 @@
 # libs/legacy
 
-Code that nothing in `scripts/`, `notebooks/` or `tests/` uses any more. It was
+Code that nothing in `scripts/` or the current `notebooks/` uses any more. It was
 moved here so the active modules only contain what is in use.
 
 Kept for reference only — do not import it in new code. Several functions use
@@ -15,3 +15,4 @@ constants that no longer exist and would fail if called.
 | `utils_constants.py` | `libs/utils/constants.py` (was empty) |
 | `discover_keys.py` | `libs/utils/discover_keys.py` (a standalone CLI) |
 | `unused_functions.py` | single unused functions from `visuals/`, `prompt/`, `utils/`, `factuality/` |
+| `structural_variants.py` | `libs/metrics/io.py` (similarity/connectedness per population variant, from `scripts/legacy/run_similarity.py`; only `notebooks/legacy/` and its tests use it) |
