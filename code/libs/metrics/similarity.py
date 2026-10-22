@@ -2,7 +2,7 @@
 similarity.py — Scholarly similarity between authors (paper Eq. 8).
 
   load_author_scholarly_stats   h-index, i10-index, e-index and 2yr citedness per
-                                author (files written by pipeline/4_author_stats.py)
+                                author (files written by scripts/7_metrics/2_author_stats.py)
   load_ss_author_features       optional Semantic Scholar block of features
   build_author_features         one feature vector per author
   build_similarity_embeddings   impute → log1p → standardise → PCA → unit vectors
@@ -254,7 +254,7 @@ def load_author_scholarly_stats(
     i10_index, 2yr_mean_citedness (authors.summary_stats).
     ``eindex.parquet`` holds the e-index, which OpenAlex does not publish and
     which therefore has to be computed from per-paper citation counts. Both are
-    produced by scripts/pipeline/4_author_stats.py.
+    produced by scripts/7_metrics/2_author_stats.py.
 
     Returned indexed by the bare author id token (``A5023888391``), matching
     what :func:`build_author_features` expects, not the URL form the parquets
@@ -268,7 +268,7 @@ def load_author_scholarly_stats(
     missing = [str(p) for p in (summary_fn, eindex_fn) if not p.exists()]
     if missing:
         raise FileNotFoundError(
-            f"Missing {missing}. Run scripts/pipeline/4_author_stats.py "
+            f"Missing {missing}. Run scripts/7_metrics/2_author_stats.py "
             "to build them (the summary_stats stage takes ~15 min, the e-index "
             "pass over oa.works ~80 min; both are checkpointed)."
         )

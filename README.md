@@ -29,7 +29,7 @@ $EDITOR config.ini    # fill in [secrets].keys_dir and every [data].* path
 # 3. Run the pipeline from code/.
 cd code
 export PYTHONPATH=.
-python scripts/run_all.py      # OpenAlex cascade → enrichment → factuality → metrics → figure data
+python scripts/run_all.py      # validity → factuality (SS) → OpenAlex → metrics → figure data
 jupyter nbconvert --execute notebooks/analysis/figures/metrics.ipynb
 ```
 
@@ -43,7 +43,7 @@ The end-to-end pipeline (collect responses → factuality → metrics → figure
 LLMScholar-Personas/
 ├── code/                 see code/README.md
 │   ├── libs/             Shared code (metrics, plots, prompts, utils; legacy/ = unused).
-│   ├── scripts/          Programs you run, one folder per stage (see code/scripts/README.md).
+│   ├── scripts/          Programs you run, folders numbered in the order they run (see code/scripts/README.md).
 │   ├── notebooks/        Plot-only notebooks (analysis/, agreement/).
 │   └── tests/            pytest.
 ├── data/                 see data/README.md
@@ -68,16 +68,17 @@ Detailed instructions live in the sub-READMEs:
 ```
 prompts + LLM answers     scripts/run_all.py
 ─────────────────────     ─────────────────────────────────────────────────────────────────────────
-scripts/prompting/   →    1 openalex_cascade/  the OpenAlex author of each recommendation (per variant)
-scripts/llmcaller/        2 enrichment/        OpenAlex, location, affiliation, ethnicity of that author
-→ recommendations.csv     3 factuality/        the factuality cascade on Semantic Scholar
-                          4 pipeline/          validity, consistency, factuality, author stats, socials
-                                               → 6_calls.csv (one table, oa_variant column)
-                          5 plot_data/         data for specific figures
+scripts/1_prompting/ →    3_validity/          validity, refusal, duplicates; consistency  (every call)
+scripts/2_llmcaller/      4_factuality/        the factuality cascade on Semantic Scholar  (valid calls)
+→ recommendations.csv     5_openalex_cascade/  the OpenAlex author                         (factuality_author = True)
+                          6_enrichment/        country, institution, works, citations      (factuality_author = True)
+                          7_metrics/           factuality, author stats, socials (factuality_author = True)
+                                               → pipeline/calls.csv (one table)
+                          8_plot_data/         data for specific figures
                                                                   →  notebooks/analysis/
 ```
 
-Each stage reads what the previous one wrote. See `code/README.md` for the ordered command list, the schema of every intermediate CSV, and the optional branches (manual annotation, ethnicity inference, inter-annotator agreement).
+A funnel: each stage only passes on what survived the previous one. See `code/README.md` for the ordered command list, the schema of every intermediate CSV, and the optional branches (manual annotation, ethnicity inference, inter-annotator agreement).
 
 ---
 

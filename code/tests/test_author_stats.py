@@ -1,4 +1,4 @@
-"""Tests for scripts/pipeline/4_author_stats.py on a tiny snapshot shaped like
+"""Tests for scripts/7_metrics/2_author_stats.py on a tiny snapshot shaped like
 OpenAlex 2026-09 (authors referred to by number in works.authorships).
 
 Run from code/ with PYTHONPATH=.:
@@ -11,7 +11,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "pipeline" / "4_author_stats.py"
+_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "7_metrics" / "2_author_stats.py"
 _spec = importlib.util.spec_from_file_location("author_stats", _SCRIPT)
 st = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(st)
