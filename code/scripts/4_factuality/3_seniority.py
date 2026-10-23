@@ -18,7 +18,7 @@ only the rows whose seniority was asked for that name.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/4_factuality/3_seniority.py \\
-      --recommendations ../results/summary/recommendations.csv \\
+      --recommendations ../results/summary/recommendations_valid.csv \\
       --input           ../results/summary/cascade/candidates_name.parquet \\
       --output          ../results/summary/cascade/candidates_seniority.parquet
 """

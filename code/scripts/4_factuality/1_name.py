@@ -14,7 +14,7 @@ Output: candidates_name.parquet, one row per (query, researcher):
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/4_factuality/1_name.py \\
-      --recommendations ../results/summary/recommendations.csv \\
+      --recommendations ../results/summary/recommendations_valid.csv \\
       --output          ../results/summary/cascade/candidates_name.parquet
 """
 

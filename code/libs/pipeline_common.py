@@ -26,6 +26,8 @@ from libs.utils.logging import setup_logging
 logger = setup_logging()
 
 RECOMMENDATIONS = "../results/summary/recommendations.csv"
+# The rows of the valid calls, written by 3_validity/1_validity.py; input of 4_factuality/.
+RECOMMENDATIONS_VALID = "../results/summary/recommendations_valid.csv"
 OUT_DIR = Path("../results/pipeline")
 
 # Prompt params: name in recommendations.csv → name in the outputs.

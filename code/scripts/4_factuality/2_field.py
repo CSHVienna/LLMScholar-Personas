@@ -11,7 +11,7 @@ only the rows whose Field was asked for that name.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/4_factuality/2_field.py \\
-      --recommendations ../results/summary/recommendations.csv \\
+      --recommendations ../results/summary/recommendations_valid.csv \\
       --input           ../results/summary/cascade/candidates_name.parquet \\
       --output          ../results/summary/cascade/candidates_field.parquet
 """
