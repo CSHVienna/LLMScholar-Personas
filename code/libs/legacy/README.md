@@ -16,3 +16,4 @@ constants that no longer exist and would fail if called.
 | `discover_keys.py` | `libs/utils/discover_keys.py` (a standalone CLI) |
 | `unused_functions.py` | single unused functions from `visuals/`, `prompt/`, `utils/`, `factuality/` |
 | `structural_variants.py` | `libs/metrics/io.py` (similarity/connectedness per population variant, from `scripts/legacy/run_similarity.py`; only `notebooks/legacy/` and its tests use it) |
+| `sensitivity_barchart.py` | `libs/visuals/sensitivity_barchart.py` (bar-chart companion of the sensitivity heatmap; no notebook draws it) |

@@ -873,9 +873,9 @@ ROW_GROUPS: Dict[str, List[str]] = {
 # Column groups (metrics, partitioned into technical / social)
 COL_GROUPS: Dict[str, List[str]] = {
     'technical': [
-        'validity', 'refusals', 'consistency', 'duplicates',
-        'factuality_author', 'factuality_field',
-        'factuality_seniority',
+        # In the order of the pipeline (validity, then the factuality cascade).
+        'validity', 'refusals', 'duplicates', 'consistency',
+        'factuality_field', 'factuality_seniority', 'factuality_author',
     ],
     'social': [
         'bias_location',

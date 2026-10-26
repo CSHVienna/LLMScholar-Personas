@@ -29,7 +29,7 @@ $EDITOR config.ini    # fill in [secrets].keys_dir and every [data].* path
 # 3. Run the pipeline from code/.
 cd code
 export PYTHONPATH=.
-python scripts/run_all.py      # validity → factuality (SS) → OpenAlex → metrics → figure data
+python scripts/run_all.py      # ground truth → graph → validity → factuality → enrichment → metrics → figure data
 jupyter nbconvert --execute notebooks/analysis/figures/metrics.ipynb
 ```
 
@@ -66,15 +66,18 @@ Detailed instructions live in the sub-READMEs:
 ## How the pipeline fits together
 
 ```
-prompts + LLM answers     scripts/run_all.py
-─────────────────────     ─────────────────────────────────────────────────────────────────────────
-scripts/1_prompting/ →    3_validity/          validity, refusal, duplicates; consistency  (every call)
-scripts/2_llmcaller/      4_factuality/        the factuality cascade on Semantic Scholar  (valid calls)
-→ recommendations.csv     5_openalex_cascade/  the OpenAlex author                         (factuality_author = True)
-                          6_enrichment/        country, institution, works, citations      (factuality_author = True)
-                          7_metrics/           factuality, author stats, socials (factuality_author = True)
-                                               → pipeline/calls.csv (one table)
-                          8_plot_data/         data for specific figures
+scripts/run_all.py
+─────────────────────────────────────────────────────────────────────────────────────────────
+1_ground_truth/   every Semantic Scholar researcher + their OpenAlex author (through their
+                  papers, Jaro-Winkler; by name otherwise) and its metadata → ground_truth.parquet
+2_graph/          author stats, coauthorship graph and similarity PCA over the ground truth
+3_prompting/ + 4_llmcaller/  prompts and LLM answers → recommendations.csv   (run by hand)
+5_validity/       validity, refusal, duplicates; consistency          (every call)
+6_factuality/     the factuality cascade on Semantic Scholar          (valid calls)
+                  the picked researcher brings their ground-truth data
+7_enrichment/     LLM answer vs that data: country, affiliation; ethnicity
+8_metrics/        factuality, socials (factuality_author = True) → pipeline/calls.csv
+9_plot_data/      data for specific figures
                                                                   →  notebooks/analysis/
 ```
 

@@ -1,5 +1,5 @@
 """
-pipeline_common.py — Definitions shared by scripts/3_validity/ and scripts/7_metrics/.
+pipeline_common.py — Definitions shared by scripts/5_validity/ and scripts/8_metrics/.
 
 The pipeline works on three units:
   setup           model + params
@@ -7,12 +7,12 @@ The pipeline works on three units:
   recommendation  call + one author of that response   (name, lastname, ...)
 
 Each step writes one CSV per model into its folder under OUT_DIR:
-  validity/      per call            validity, refusal, duplicates      (3_validity/1)
-  consistency/   per setup           consistency                        (3_validity/2)
-  factuality/    per recommendation  factuality_*, matched_*, bias_location  (7_metrics/1)
-  socials/       per call            diversity, parity, popularity,     (7_metrics/3)
+  validity/      per call            validity, refusal, duplicates      (5_validity/1)
+  consistency/   per setup           consistency                        (5_validity/2)
+  factuality/    per recommendation  factuality_*, matched_*, bias_location  (8_metrics/1)
+  socials/       per call            diversity, parity, popularity,     (8_metrics/3)
                                      similarity, connectedness
-7_metrics/2 writes author stats to [data].oa_author_stats; 7_metrics/4 writes
+8_metrics/2 writes author stats to [data].oa_author_stats; 8_metrics/4 writes
 OUT_DIR/calls.csv, every metric of every call in one table.
 """
 
@@ -26,7 +26,7 @@ from libs.utils.logging import setup_logging
 logger = setup_logging()
 
 RECOMMENDATIONS = "../results/summary/recommendations.csv"
-# The rows of the valid calls, written by 3_validity/1_validity.py; input of 4_factuality/.
+# The rows of the valid calls, written by 5_validity/1_validity.py; input of 6_factuality/.
 RECOMMENDATIONS_VALID = "../results/summary/recommendations_valid.csv"
 OUT_DIR = Path("../results/pipeline")
 

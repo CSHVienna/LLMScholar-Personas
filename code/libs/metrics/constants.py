@@ -216,7 +216,7 @@ SIMILARITY_FEATURE_COLS = [
 
 # Second half: the three OpenAlex summary_stats plus the e-index (computed from
 # oa.works, OpenAlex does not publish it). All four come from
-# scripts/7_metrics/2_author_stats.py.
+# scripts/2_graph/1_author_stats.py.
 SIMILARITY_STATS_COLS = [
     "h_index",                   # impact concentration: h papers with >= h citations
     "i10_index",                 # papers with at least 10 citations
@@ -555,7 +555,7 @@ FACTUALITY_STATUS_UNKNOWN = FACTUALITY_LOCATION_STATUS["UNKNOWN"]
 #######################################################################################################################
 
 # The seniority asked in the prompt (`target`, in EN/ES/DE) → Junior / Senior
-# (used by scripts/4_factuality/).
+# (used by scripts/6_factuality/).
 LLM_TARGET_TO_BUCKET = {
     "Senior Professor": "Senior",
     "Profesor(a) Sénior": "Senior",

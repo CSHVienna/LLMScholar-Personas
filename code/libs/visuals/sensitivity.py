@@ -15,14 +15,16 @@ def create_grid(fe_models, metrics=None, figsize_per_panel=(5, 6), nrows=1, shar
         metrics = list(fe_models.keys())
 
     ncols = int(np.ceil(len(metrics) / nrows))
-    fig, axes = plt.subplots(nrows, int(ncols), figsize=(figsize_per_panel[0] * ncols, figsize_per_panel[1] * nrows), sharey=sharey)
+    # squeeze=False: always a 2-D array of axes, also with a single panel.
+    fig, axes = plt.subplots(nrows, int(ncols), figsize=(figsize_per_panel[0] * ncols, figsize_per_panel[1] * nrows),
+                             sharey=sharey, squeeze=False)
 
     grid = {}
     for row in range(nrows):
         for col in range(ncols):
             idx = row * ncols + col
             if idx < len(metrics):
-                ax = axes[row, col] if nrows > 1 else axes[col]
+                ax = axes[row, col]
                 grid[metrics[idx]] = {'ax': ax, 'irow': row, 'icol': col, 'index': idx, 'ncols':ncols, 'nrows':nrows}
 
     return fig, grid

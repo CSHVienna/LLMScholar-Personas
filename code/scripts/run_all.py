@@ -1,26 +1,30 @@
 """
-run_all.py — Runs everything after the LLM answers are parsed (scripts/1_prompting/,
-2_llmcaller/), in the order of the funnel: each stage only passes on what
-survived the previous one.
+run_all.py — Runs everything, in order.
 
-  3_validity/          validity, refusal, duplicates of every call; consistency
-                       of the valid ones
-  4_factuality/        the cascade on Semantic Scholar, only for the valid calls
-                       (name → field → seniority → author)
-  5_openalex_cascade/  the OpenAlex author, only for factuality_author = True
-  6_enrichment/        their country, institution, works and citations from
-                       OpenAlex; perceived ethnicity for all
-  7_metrics/           factuality and bias_location per recommendation, author
-                       stats, socials (only factuality_author = True) and one
-                       table with every metric of every call (calls.csv)
-  8_plot_data/         data for specific figures
+  1_ground_truth/  every Semantic Scholar researcher with their OpenAlex author
+                   (through their papers, Jaro-Winkler; the cascade by name
+                   otherwise) and its metadata → ground_truth.parquet
+  2_graph/         author stats, coauthorship graph and similarity PCA over the
+                   whole ground truth
+  (3_prompting/ and 4_llmcaller/ build the prompts and get the LLM answers; they
+   are run by hand, see scripts/README.md)
+  5_validity/      validity, refusal, duplicates of every call; consistency of
+                   the valid ones
+  6_factuality/    the cascade on Semantic Scholar, only for the valid calls
+                   (name → field → seniority → author); the picked researcher
+                   brings their ground-truth data
+  7_enrichment/    the LLM's answer vs that data: country, affiliation; ethnicity
+  8_metrics/       factuality and bias_location per recommendation, socials (only
+                   factuality_author = True) and one table with every metric of
+                   every call (calls.csv)
+  9_plot_data/     data for specific figures
 
-Each folder has its own scripts; this one only calls them in order.
+Steps 1 and 2 do not depend on the LLM answers: once built, start at 5_validity.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/run_all.py
-  python scripts/run_all.py --skip_name             # reuse the Semantic Scholar name matches (slow)
-  python scripts/run_all.py --from 7_metrics        # start at a given folder
+  python scripts/run_all.py --from 5_validity      # the ground truth and the graph already built
+  python scripts/run_all.py --skip_name            # reuse the Semantic Scholar name matches (slow)
 """
 
 import argparse
@@ -29,7 +33,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-STAGES = ["3_validity", "4_factuality", "5_openalex_cascade", "6_enrichment", "7_metrics", "8_plot_data"]
+STAGES = ["1_ground_truth", "2_graph", "5_validity", "6_factuality", "7_enrichment", "8_metrics", "9_plot_data"]
 
 
 def run(script: str, *args: str) -> None:
@@ -47,22 +51,24 @@ def main() -> None:
     args = parser.parse_args()
     todo = STAGES[STAGES.index(args.start):]
 
-    if "3_validity" in todo:
-        run("3_validity/1_validity.py")
-        run("3_validity/2_consistency.py")
-    if "4_factuality" in todo:
-        run("4_factuality/run_pipeline.py", *(["--skip_name"] if args.skip_name else []))
-    if "5_openalex_cascade" in todo:
-        run("5_openalex_cascade/run_pipeline.py")
-    if "6_enrichment" in todo:
-        run("6_enrichment/run_enrichment.py")
-    if "7_metrics" in todo:
-        run("7_metrics/run_pipeline.py")
-    if "8_plot_data" in todo:
-        run("8_plot_data/build_sankey_flows.py")
-        run("8_plot_data/build_location_flows.py")
-        run("8_plot_data/build_gt_field_baseline.py")
-        run("8_plot_data/build_ethnicity_distributions.py")
+    if "1_ground_truth" in todo:
+        run("1_ground_truth/run_pipeline.py")
+    if "2_graph" in todo:
+        run("2_graph/run_pipeline.py")
+    if "5_validity" in todo:
+        run("5_validity/1_validity.py")
+        run("5_validity/2_consistency.py")
+    if "6_factuality" in todo:
+        run("6_factuality/run_pipeline.py", *(["--skip_name"] if args.skip_name else []))
+    if "7_enrichment" in todo:
+        run("7_enrichment/run_enrichment.py")
+    if "8_metrics" in todo:
+        run("8_metrics/run_pipeline.py")
+    if "9_plot_data" in todo:
+        run("9_plot_data/build_sankey_flows.py")
+        run("9_plot_data/build_location_flows.py")
+        run("9_plot_data/build_gt_field_baseline.py")
+        run("9_plot_data/build_ethnicity_distributions.py")
 
 
 if __name__ == "__main__":

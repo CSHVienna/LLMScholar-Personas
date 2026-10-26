@@ -11,3 +11,4 @@ Scripts that are not part of the pipeline any more. Kept for reference only.
 | `run_similarity.py`, `merge_structural_metrics.py` | One-time recomputation of similarity variants (`oa`, `oa_ss`, `oa_inter`) |
 | `export_coauthor_links.py` | One-time export of the coauthorship graph to `results/coauthorship/` |
 | `factuality_seniority_oa.py` | One-time analysis: seniority with OpenAlex career ages |
+| `2_doi_match.py` | OpenAlex author through the papers by last name + most shared papers; replaced by `5_openalex_cascade/2_jw_match.py` (Jaro-Winkler), 2026-10-23 |

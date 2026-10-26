@@ -139,16 +139,16 @@ PLOT_LABELS |= {
 }
 
 PLOT_METRICS = [
-    # Output quality (response-level)
+    # In the order of the pipeline: 5_validity (validity, refusals, duplicates,
+    # then consistency), then the factuality cascade (name → field → seniority
+    # → author; factuality_name is added by the metrics notebook).
     "validity",
     "refusals",
-    # Consistency / duplicates
-    "consistency",
     "duplicates",
-    # Factuality block
-    "factuality_author",  # author
+    "consistency",
     "factuality_field",
     "factuality_seniority",
+    "factuality_author",
     # Bias block (social representation, see BIAS_METRICS)
     "bias_location",
     # Diversity block (order: gender, ethnicity, publications, citations)
