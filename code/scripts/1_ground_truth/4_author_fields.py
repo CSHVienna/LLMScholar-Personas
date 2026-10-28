@@ -21,8 +21,8 @@ Output: author_fields.parquet — oa_id, field_topics, field_concepts, subfields
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/1_ground_truth/5_author_fields.py \\
-      --candidates ../results/summary/openalex_cascade/candidates.parquet \\
-      --output     ../results/summary/openalex_cascade/author_fields.parquet
+      --candidates ../results/1_ground_truth/candidates.parquet \\
+      --output     ../results/1_ground_truth/author_fields.parquet
 """
 
 import argparse

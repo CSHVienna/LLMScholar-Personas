@@ -1,16 +1,13 @@
 """
-4_ethnicity.py — Step 4 of run_enrichment.py: perceived ethnicity of the recommended name.
+4_ethnicity.py — Step 4 of run_enrichment.py: perceived ethnicity of the picked researcher.
 
-Joins the pre-computed `perceived_ethnicity` column from
-`recommendations_with_ethnicity.csv` (produced previously by the BERT+LSTM
-cascade) onto the output of 3_affiliation.py, only for the recommendations
-with factuality_author = True, like the rest of the enrichment; the others keep
-it empty.
-
-We do NOT re-run the cascade — it's an expensive operation that already ran
-once over the full recommendations dataset. The lookup is built as
-(name, lastname) → perceived_ethnicity, which is valid because the cascade
-output only depends on the author's name.
+Takes `perceived_ethnicity` from the ground-truth ethnicity table
+(results/1_ground_truth/ethnicity/researcher_ethnicity_lookup.csv: one row per Semantic Scholar
+researcher, inferred from their name by scripts/ethnicity/) by the researcher_id
+the factuality cascade picked, the same source as the classes and the parity
+reference of 8_metrics/2_socials.py. Only the recommendations with
+factuality_author = True get it, like the rest of the enrichment; the others
+keep it empty.
 
 Output columns added:
   perceived_ethnicity   {Asian | White | Black or African American
@@ -19,9 +16,9 @@ Output columns added:
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/7_enrichment/4_ethnicity.py \\
-      --input             ../results/summary/factuality_affiliation.csv \\
-      --ethnicity_lookup  ../results/summary/recommendations_with_ethnicity.csv \\
-      --output            ../results/summary/factuality_full.csv
+      --input             ../results/7_enrichment/factuality_affiliation.csv \\
+      --ethnicity_lookup  ../results/1_ground_truth/ethnicity/researcher_ethnicity_lookup.csv \\
+      --output            ../results/7_enrichment/factuality_full.csv
 """
 
 import argparse
@@ -34,23 +31,16 @@ from libs.utils.logging import log_value_counts, setup_logging
 
 logger = setup_logging()
 
-LOOKUP_COLS = ["name", "lastname", "perceived_ethnicity"]
+LOOKUP_COLS = ["Researcher_id", "perceived_ethnicity"]
 
 
-def _build_lookup(lookup_path: str) -> dict[tuple[str, str], str]:
-    """Build a (name, lastname) → perceived_ethnicity dict from the lookup CSV."""
+def _build_lookup(lookup_path: str) -> pd.Series:
+    """researcher_id → perceived_ethnicity, from the ground-truth ethnicity table."""
     logger.info("Loading ethnicity lookup: %s", lookup_path)
-    df = pd.read_csv(lookup_path, low_memory=False, usecols=LOOKUP_COLS)
+    df = pd.read_csv(lookup_path, usecols=LOOKUP_COLS)
+    df["Researcher_id"] = df["Researcher_id"].astype("int64")
     logger.info("Lookup rows: %d", len(df))
-
-    df = df.dropna(subset=["name", "lastname", "perceived_ethnicity"])
-    df["name"] = df["name"].astype(str).str.strip()
-    df["lastname"] = df["lastname"].astype(str).str.strip()
-
-    df = df.drop_duplicates(subset=["name", "lastname"], keep="first")
-    logger.info("Unique (name, lastname) pairs: %d", len(df))
-
-    return dict(zip(zip(df["name"], df["lastname"]), df["perceived_ethnicity"]))
+    return df.drop_duplicates("Researcher_id").set_index("Researcher_id")["perceived_ethnicity"]
 
 
 def run(input_path: str, lookup_path: str, output_path: str) -> None:
@@ -58,18 +48,17 @@ def run(input_path: str, lookup_path: str, output_path: str) -> None:
     df = read_input_csv(input_path, logger=logger)
 
     author = df["factuality_author"].astype(str) == "True"
-    names = df.loc[author, "name"].fillna("").astype(str).str.strip()
-    lastnames = df.loc[author, "lastname"].fillna("").astype(str).str.strip()
+    ids = pd.to_numeric(df.loc[author, "researcher_id"], errors="coerce").astype("Int64")
 
     df["perceived_ethnicity"] = None
-    df.loc[author, "perceived_ethnicity"] = [
-        lookup.get((n, l), "Unknown") for n, l in zip(names, lastnames)
-    ]
+    df.loc[author, "perceived_ethnicity"] = ids.map(lookup).to_numpy()
 
-    n_unknown = (df.loc[author, "perceived_ethnicity"] == "Unknown").sum()
+    missing = df.loc[author, "perceived_ethnicity"].isna().sum()
     logger.info(
-        "Lookup hits: %d / %d with factuality_author = True  (Unknown: %d)",
-        author.sum() - n_unknown, author.sum(), n_unknown,
+        "Ethnicity of the picked researcher: %d / %d with factuality_author = True "
+        "(not in the table: %d; Unknown in the table: %d)",
+        author.sum() - missing, author.sum(), missing,
+        (df.loc[author, "perceived_ethnicity"] == "Unknown").sum(),
     )
 
     write_output_csv(df, output_path, logger=logger)
@@ -81,7 +70,7 @@ def run(input_path: str, lookup_path: str, output_path: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Step 4 of run_enrichment.py: join pre-computed perceived_ethnicity from recommendations_with_ethnicity.csv"
+        description="Step 4 of run_enrichment.py: perceived_ethnicity of the picked researcher, from the ground-truth ethnicity table"
     )
     add_io_args(
         parser,
@@ -91,7 +80,7 @@ def main() -> None:
     parser.add_argument(
         "--ethnicity_lookup",
         required=True,
-        help="Path to recommendations_with_ethnicity.csv",
+        help="Path to researcher_ethnicity_lookup.csv",
     )
     args = parser.parse_args()
 

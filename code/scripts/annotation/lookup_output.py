@@ -2,7 +2,7 @@
 Lookup the raw LLM output for a given summary.csv row index.
 
 Usage:
-  python scripts/annotation/lookup_output.py <index> [--results_dir ../results] [--summary_csv ../results/summary/summary.csv]
+  python scripts/annotation/lookup_output.py <index> [--results_dir ../results] [--summary_csv ../results/3_recommendations/summary.csv]
 """
 
 import argparse
@@ -22,7 +22,7 @@ def main():
     )
     parser.add_argument("--results_dir", default="../results")
     parser.add_argument(
-        "--summary_csv", default="../results/summary/summary.csv"
+        "--summary_csv", default="../results/3_recommendations/summary.csv"
     )
     args = parser.parse_args()
 

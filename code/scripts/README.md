@@ -36,11 +36,11 @@ That single `PYTHONPATH=.` makes `libs.*` importable from every script under `sc
 
 ## Ground truth (`1_ground_truth/`)
 
-Once, for every researcher of the Semantic Scholar parquet: their papers with DOI (API) → their OpenAlex author, the one who signs those papers, chosen by Jaro-Winkler on the names (threshold 1.35, `notebooks/analysis/checks/jw_threshold.ipynb`) → for the researchers without one, the cascade by name, field and seniority → the metadata of that author joined to the parquet: `summary/ground_truth/ground_truth.parquet`. See `1_ground_truth/README.md`.
+Once, for every researcher of the Semantic Scholar parquet: their papers with DOI (API) → their OpenAlex author, the one who signs those papers, chosen by Jaro-Winkler on the names (threshold 1.35, `notebooks/analysis/checks/jw_threshold.ipynb`) → for the researchers without one, the cascade by name, field and seniority → the metadata of that author joined to the parquet: `1_ground_truth/ground_truth.parquet`. See `1_ground_truth/README.md`.
 
 ## Graph (`2_graph/`)
 
-`run_pipeline.py` runs `1_author_stats.py` (h / i10 / e-index of every OpenAlex author of the ground truth → `summary/ground_truth/author_stats/`) and `2_model.py` (coauthorship graph and similarity PCA over all of them, cached in `../results/.cache/*_gt.joblib`; `libs/metrics/structural_model.py`).
+`run_pipeline.py` runs `1_author_stats.py` (h / i10 / e-index of every OpenAlex author of the ground truth → `2_graph/author_stats/`) and `2_model.py` (coauthorship graph and similarity PCA over all of them, cached in `../results/2_graph/cache/*_gt.joblib`; `libs/metrics/structural_model.py`).
 
 ## Batch processing (`3_prompting/`)
 
@@ -100,7 +100,7 @@ python scripts/3_prompting/batch_prompt.py -c 42 -l spanish
 
 ```bash
 # From code/, parse every combination in parallel
-nice -n 10 parallel -j 20 python scripts/3_prompting/batch_parse_results.py --results_dir ../results --output_dir ../results/summary_parallel --model {1} --language {2} :::: ../data/context/models.txt ::: english german spanish
+nice -n 10 parallel -j 20 python scripts/3_prompting/batch_parse_results.py --results_dir ../results --output_dir ../results/3_recommendations --model {1} --language {2} :::: ../data/context/models.txt ::: english german spanish
 ```
 
 ## LLMs Caller (`4_llmcaller/`)
@@ -171,37 +171,37 @@ parallel --bar -j 8 python scripts/3_prompting/batch_prompt.py -c {} -l german -
 
 | Script | One row per | Writes |
 |---|---|---|
-| `1_validity.py` | call | validity, refusal, duplicates (names normalized: `libs/pipeline_common.author_key`) → `../results/pipeline/validity/`; the recommendations of the valid calls → `../results/summary/recommendations_valid.csv`, the input of `6_factuality/` |
-| `2_consistency.py` | setup (model + params) | consistency of the valid calls → `../results/pipeline/consistency/` |
+| `1_validity.py` | call | validity, refusal, duplicates (names normalized: `libs/pipeline_common.author_key`) → `../results/5_validity/validity/`; the recommendations of the valid calls, each author once per call (repeated names left out after measuring duplicates) and only complete names (`has_full_name`: a single first or last name is left out) → `../results/5_validity/recommendations_valid.csv`, the input of `6_factuality/`. Both filters are applied only here |
+| `2_consistency.py` | setup (model + params) | consistency of the valid calls → `../results/5_validity/consistency/` |
 
 ## Factuality cascade (`6_factuality/`)
 
-`run_pipeline.py` reads the recommendations of valid calls (`../results/summary/recommendations_valid.csv`, from `5_validity/1_validity.py`), runs `1_name.py` (all researchers with that name; the slow step) → `2_field.py` → `3_seniority.py` → `4_author.py` (counts and the random pick), and then itself adds the status columns and the ground truth of the picked researcher (`cascade/factuality_ss.csv`) with the ground-truth data of the picked researcher (OpenAlex included, from `1_ground_truth/`), and keeps the rows with `factuality_author = True` (`cascade/factual_authors.csv`). `names.py` holds how names are compared. Output under `../results/summary/cascade/`.
+`run_pipeline.py` reads the recommendations of valid calls, each author once per call and only complete names (`../results/5_validity/recommendations_valid.csv`, from `5_validity/1_validity.py`; the names are searched with the same normalization as duplicates), runs `1_name.py` (all researchers with that name; the slow step) → `2_field.py` → `3_seniority.py` → `4_author.py` (counts and the pick: uniform among the candidates that pass, reproducible per name), and then itself adds the status columns and the ground truth of the picked researcher (`6_factuality/factuality_ss.csv`) with the ground-truth data of the picked researcher (OpenAlex included, from `1_ground_truth/`), and keeps the rows with `factuality_author = True` (`6_factuality/factual_authors.csv`). `names.py` holds how names are compared. Output under `../results/6_factuality/`.
 
 ## Enrichment (`7_enrichment/`)
 
-`run_enrichment.py` runs `1_openalex.py` (the OpenAlex columns of the picked researcher, from the ground truth; only factuality_author = True, the rest get `oa_status = not_searched`) → `2_location.py` (prompt country vs OpenAlex country) → `3_affiliation.py` (LLM affiliations vs OpenAlex institutions) → `4_ethnicity.py` (perceived ethnicity of the name, for all), each reading the previous one's output, and writes `summary/factuality_full.csv`.
+`run_enrichment.py` runs `1_openalex.py` (the OpenAlex columns of the picked researcher, from the ground truth; only factuality_author = True, the rest get `oa_status = not_searched`) → `2_location.py` (prompt country vs OpenAlex country) → `3_affiliation.py` (LLM affiliations vs OpenAlex institutions) → `4_ethnicity.py` (perceived ethnicity of the picked researcher, from the ground-truth table `ethnicity/researcher_ethnicity_lookup.csv`), each reading the previous one's output, and writes `7_enrichment/factuality_full.csv`.
 
 ## Metrics (`8_metrics/`)
 
-`run_pipeline.py` runs the steps in order (`--from_step N` to resume). Each writes one CSV per model under `../results/pipeline/<step>/` (see `libs/pipeline_common.py`).
+`run_pipeline.py` runs the steps in order (`--from_step N` to resume). Each writes one CSV per model under `../results/8_metrics/<step>/` (see `libs/pipeline_common.py`).
 
 | Script | One row per | Writes |
 |---|---|---|
 | `1_factuality.py` | recommendation | factuality_*, matched_* (Semantic Scholar), bias_location (only factuality_author = True) → `factuality/` |
-| `2_socials.py` | call | diversity, parity, popularity, bias_location, similarity, connectedness, over the authors with factuality_author = True (graph and PCA of `2_graph/`) → `socials/` |
+| `2_socials.py` | call | diversity, parity, popularity, bias_location, similarity, connectedness, over the authors with factuality_author = True (graph and PCA of `2_graph/`; classes, parity references and tercile cuts from the ground truth) → `socials/` |
 | `3_calls_table.py` | call | validity, consistency, steps 1 and 2 in one table, with the column names the notebooks use → `calls.csv` |
 
 ## Data for specific figures (`9_plot_data/`)
 
-They read the output of the funnel (`summary/factuality_full.csv`), only the recommendations with `factuality_author = True`, and write one table per figure to `factualities/tables/`. `build_gt_field_baseline.py` is the exception: it describes the Semantic Scholar population, not the recommendations.
+They read the output of the funnel (`7_enrichment/factuality_full.csv`), only the recommendations with `factuality_author = True`, and write one table per figure to `9_figures/tables/`. `build_gt_field_baseline.py` is the exception: it describes the Semantic Scholar population, not the recommendations.
 
 | Script | Writes | Read by |
 |---|---|---|
-| `build_sankey_flows.py` | `factualities/tables/{seniority,ethnicity,field,subfield,language,gender}_flows.csv` | `analysis/figures/metrics.ipynb` |
-| `build_location_flows.py` | `factualities/tables/location_flows.csv` | `analysis/figures/metrics.ipynb` |
-| `build_gt_field_baseline.py` | `factualities/tables/gt_field_baseline.csv` | `analysis/figures/metrics.ipynb` |
-| `build_ethnicity_distributions.py` | `ethnicity/distributions/*.csv` | `analysis/figures/ethnicity.ipynb` |
+| `build_sankey_flows.py` | `9_figures/tables/{seniority,ethnicity,field,subfield,language,gender}_flows.csv` | `analysis/figures/metrics.ipynb` |
+| `build_location_flows.py` | `9_figures/tables/location_flows.csv` | `analysis/figures/metrics.ipynb` |
+| `build_gt_field_baseline.py` | `9_figures/tables/gt_field_baseline.csv` | `analysis/figures/metrics.ipynb` |
+| `build_ethnicity_distributions.py` | `9_figures/ethnicity_distributions/*.csv` | `analysis/figures/ethnicity.ipynb` |
 
 ## Legacy (`legacy/`)
 

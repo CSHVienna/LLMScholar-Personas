@@ -18,9 +18,9 @@ only the rows whose seniority was asked for that name.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/6_factuality/3_seniority.py \\
-      --recommendations ../results/summary/recommendations_valid.csv \\
-      --input           ../results/summary/cascade/candidates_name.parquet \\
-      --output          ../results/summary/cascade/candidates_seniority.parquet
+      --recommendations ../results/5_validity/recommendations_valid.csv \\
+      --input           ../results/6_factuality/candidates_name.parquet \\
+      --output          ../results/6_factuality/candidates_seniority.parquet
 """
 
 import argparse

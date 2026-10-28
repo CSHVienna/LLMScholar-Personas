@@ -20,9 +20,9 @@ scripts/7_enrichment/1_openalex.py --picks uses it instead of choosing by itself
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/1_ground_truth/6_pick.py \\
-      --candidates    ../results/summary/openalex_cascade/candidates.parquet \\
-      --author_fields ../results/summary/openalex_cascade/author_fields.parquet \\
-      --output        ../results/summary/openalex_cascade/picks.csv
+      --candidates    ../results/1_ground_truth/candidates.parquet \\
+      --author_fields ../results/1_ground_truth/author_fields.parquet \\
+      --output        ../results/1_ground_truth/picks.csv
 """
 
 import argparse
@@ -105,7 +105,7 @@ def run(recommendations: str, candidates: str, author_fields: str, output: str) 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--recommendations", default="../results/summary/cascade/factual_authors.csv")
+    parser.add_argument("--recommendations", default="../results/6_factuality/factual_authors.csv")
     parser.add_argument("--candidates", required=True)
     parser.add_argument("--author_fields", required=True)
     parser.add_argument("--output", required=True)

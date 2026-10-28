@@ -30,8 +30,8 @@ Output columns added:
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/7_enrichment/3_affiliation.py \\
-      --input  ../results/summary/factuality_location.csv \\
-      --output ../results/summary/factuality_affiliation.csv
+      --input  ../results/7_enrichment/factuality_location.csv \\
+      --output ../results/7_enrichment/factuality_affiliation.csv
 """
 
 import argparse

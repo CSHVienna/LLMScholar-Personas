@@ -20,16 +20,19 @@ factuality_author is False then.
 
 It also reports one researcher per row (researcher_id, matched_name), picked
 at random among the n_author candidates, the only ones that pass the three
-checks. Empty when factuality_author is False. The pick uses a fixed seed, so
-re-running gives the same researchers.
+checks. Empty when factuality_author is False. The pick is uniform among those
+candidates and reproducible: each candidate gets a pseudo-random number from
+its own (name, field, seniority, Researcher_id) and the lowest one is taken, so
+the pick of a name does not depend on any other row (adding or removing other
+recommendations never changes it).
 
 Output = recommendations_valid.csv plus the columns above.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/6_factuality/4_author.py \\
-      --recommendations ../results/summary/recommendations_valid.csv \\
-      --cascade_dir     ../results/summary/cascade \\
-      --output          ../results/summary/cascade/factuality_cascade.csv
+      --recommendations ../results/5_validity/recommendations_valid.csv \\
+      --cascade_dir     ../results/6_factuality \\
+      --output          ../results/6_factuality/factuality_cascade.csv
 """
 
 import argparse
@@ -45,7 +48,7 @@ from libs.utils.logging import setup_logging  # noqa: E402
 
 logger = setup_logging()
 
-SEED = 42
+HASH_KEY = "llmscholar-pick1"   # 16 characters: the key of pandas' hash (fixed, so re-runs give the same picks)
 
 def count(cand: pd.DataFrame, keys: list[str], step: str) -> pd.DataFrame:
     """Per key: how many candidates."""
@@ -54,7 +57,10 @@ def count(cand: pd.DataFrame, keys: list[str], step: str) -> pd.DataFrame:
 
 def count_and_pick(cand: pd.DataFrame, keys: list[str], step: str) -> pd.DataFrame:
     """Per key: how many candidates, and one of them picked at random."""
-    cand = cand.sample(frac=1, random_state=SEED)  # shuffle, then take the first
+    # A pseudo-random number per candidate that depends only on its own key and id:
+    # sorting by it and taking the first is a uniform draw within each key.
+    draw = pd.util.hash_pandas_object(cand[keys + ["Researcher_id"]], index=False, hash_key=HASH_KEY)
+    cand = cand.assign(_draw=draw.to_numpy()).sort_values("_draw", kind="stable")
     grouped = cand.groupby(keys, sort=False)
     out = grouped[["Researcher_id", "Name"]].first()
     out[f"n_{step}"] = grouped.size()

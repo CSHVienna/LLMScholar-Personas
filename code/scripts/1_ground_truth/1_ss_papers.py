@@ -26,10 +26,10 @@ Usage (from code/, with PYTHONPATH=.):
   python scripts/1_ground_truth/1_ss_papers.py
   # every researcher of the Semantic Scholar parquet (step a only):
   python scripts/1_ground_truth/1_ss_papers.py --ids <ss_parquet> --id_column Researcher_id \\
-      --batch_only --output ../results/summary/ground_truth/ss_papers.parquet
+      --batch_only --output ../results/1_ground_truth/ss_papers.parquet
   # how many of those without DOIs were merged (step b only, 1000 per call):
   python scripts/1_ground_truth/1_ss_papers.py --ids <ss_parquet> --id_column Researcher_id \\
-      --exists_only --output ../results/summary/ground_truth/ss_papers.parquet
+      --exists_only --output ../results/1_ground_truth/ss_papers.parquet
 """
 
 import argparse
@@ -250,7 +250,7 @@ def main() -> None:
     global RPS, WORKERS, REVERSE, KEY, FIRST, LAST
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--ids", "--factual", dest="ids", default="../results/summary/cascade/factual_authors.csv",
+    parser.add_argument("--ids", "--factual", dest="ids", default="../results/6_factuality/factual_authors.csv",
                         help="CSV or parquet with the researcher ids (default: the factual authors)")
     parser.add_argument("--id_column", default="researcher_id")
     parser.add_argument("--exclude", default=None, help="CSV or parquet with researcher_id to skip")
@@ -258,7 +258,7 @@ def main() -> None:
                         help="Only step a (no merged-profile recovery, which is one call per researcher)")
     parser.add_argument("--exists_only", action="store_true",
                         help="Only step b for the researchers without DOIs (1000 per call) → ss_exists.parquet")
-    parser.add_argument("--output", default="../results/summary/openalex_cascade/ss_papers.parquet")
+    parser.add_argument("--output", default="../results/1_ground_truth/factual_authors_api/ss_papers.parquet")
     parser.add_argument("--workers", type=int, default=WORKERS,
                         help="calls in parallel (with a key they are still spaced to --rps)")
     parser.add_argument("--no_key", action="store_true",

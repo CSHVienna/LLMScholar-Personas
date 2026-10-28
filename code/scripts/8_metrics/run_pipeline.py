@@ -8,7 +8,7 @@ run_pipeline.py — Step 8: the metrics (after 5_validity/, 6_factuality/ and
   3. 3_calls_table.py   validity, consistency, steps 1 and 2 → calls.csv (one table
                         for the notebooks)
 
-Outputs go to ../results/pipeline/ (see libs/pipeline_common.py).
+Outputs go to ../results/8_metrics/ (see libs/pipeline_common.py).
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/8_metrics/run_pipeline.py

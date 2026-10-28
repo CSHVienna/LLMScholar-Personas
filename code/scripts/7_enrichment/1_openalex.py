@@ -18,8 +18,8 @@ history of institutions.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/7_enrichment/1_openalex.py \\
-      --input  ../results/summary/cascade/factuality_ss.csv \\
-      --output ../results/summary/factuality_oa.csv
+      --input  ../results/6_factuality/factuality_ss.csv \\
+      --output ../results/7_enrichment/factuality_oa.csv
 """
 
 import argparse

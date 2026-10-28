@@ -7,7 +7,7 @@ because the reference table the matcher searches is not balanced across fields â
 Biology alone is ~31% of it. A subfield sending 40% of its recommendations to
 Biology is therefore *below* what picking a name at random would give, not above.
 
-Writes one tiny CSV, <results_dir>/factualities/tables/gt_field_baseline.csv,
+Writes one tiny CSV, <results_dir>/9_figures/tables/gt_field_baseline.csv,
 with the share of each field among the deduplicated Semantic Scholar researchers
 (the table the factuality cascade matches names against).
 
@@ -47,7 +47,7 @@ def main() -> None:
         .sort_values("n_researchers", ascending=False)
     )
 
-    fn = results / "factualities" / "tables" / "gt_field_baseline.csv"
+    fn = results / "9_figures" / "tables" / "gt_field_baseline.csv"
     fn.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(fn, index=False)
     logger.info("Wrote %s\n%s", fn, out.to_string(index=False))

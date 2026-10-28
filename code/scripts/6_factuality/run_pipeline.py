@@ -2,8 +2,8 @@
 run_pipeline.py — Runs the factuality cascade on Semantic Scholar, step 3 of the
 funnel (after validity and consistency; before OpenAlex).
 
-  Input: ../results/summary/recommendations_valid.csv, the recommendations of the
-  valid calls, written by scripts/5_validity/1_validity.py (run it first).
+  Input: ../results/5_validity/recommendations_valid.csv, the recommendations of the
+  valid calls, each author once per call and only complete names, written by scripts/5_validity/1_validity.py (run it first).
 
   1. 1_name.py         every researcher whose name matches → candidates_name.parquet
   2. 2_field.py        ... in the asked field               → candidates_field.parquet
@@ -22,12 +22,8 @@ funnel (after validity and consistency; before OpenAlex).
        candidate passes the three checks) | cascade (several, one at random) |
        "" (factuality_author = False)
                                                              → factuality_ss.csv
-     and keeps the rows with factuality_author = True and a complete name
-     ("name lastname" with 2 words or more)                 → factual_authors.csv
+     and keeps the rows with factuality_author = True       → factual_authors.csv
      Only those go on to OpenAlex (scripts/1_ground_truth/, scripts/7_enrichment/).
-  6. 5_ss_metadata.py  papers, citations and h-index of the picked researcher, from
-                       the Semantic Scholar API (ss_paper_count, ss_citation_count,
-                       ss_h_index, ss_status), added to both files
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/6_factuality/run_pipeline.py
@@ -111,9 +107,7 @@ def add_ground_truth(cascade_path: Path, ground_truth: str, output_path: Path,
     df.to_csv(output_path, index=False)
     logger.info("Wrote %s (%d rows)", output_path, len(df))
 
-    full_name = (df["name"].fillna("").astype(str) + " "
-                 + df["lastname"].fillna("").astype(str)).str.split().str.len() >= 2
-    factual = df[df["factuality_author"] & full_name]
+    factual = df[df["factuality_author"]]
     factual.to_csv(factual_path, index=False)
     logger.info("Wrote %s: %d recommendations with factuality_author = True (%.1f%%)",
                 factual_path, len(factual), 100 * len(factual) / len(df))
@@ -128,9 +122,9 @@ def main() -> None:
                         help="Recommendations of the valid calls (scripts/5_validity/1_validity.py)")
     parser.add_argument("--parquet", default=config_default("ss_parquet"),
                         help="Semantic Scholar researchers, to match names against")
-    parser.add_argument("--ground_truth", default="../results/summary/ground_truth/ground_truth.parquet",
+    parser.add_argument("--ground_truth", default="../results/1_ground_truth/ground_truth.parquet",
                         help="the same researchers with their OpenAlex metadata (1_ground_truth/)")
-    parser.add_argument("--out_dir", default="../results/summary/cascade")
+    parser.add_argument("--out_dir", default="../results/6_factuality")
     parser.add_argument("--skip_name", action="store_true",
                         help="Reuse an existing candidates_name.parquet (the slow step)")
     args = parser.parse_args()
@@ -157,7 +151,6 @@ def main() -> None:
     logger.info("── step 5: ground truth of the picked researcher")
     add_ground_truth(out / "factuality_cascade.csv", args.ground_truth,
                      out / "factuality_ss.csv", out / "factual_authors.csv")
-    run_step("5_ss_metadata.py", "--cascade_dir", str(out))
 
 
 if __name__ == "__main__":

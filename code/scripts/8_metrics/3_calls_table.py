@@ -16,7 +16,7 @@ call of a setup gets the same value. It adds:
 The columns keep the names the notebooks use (location, target, refusals,
 div_*, *_works, ...).
 
-Output: ../results/pipeline/calls.csv (one file, all models).
+Output: ../results/8_metrics/calls.csv (one file, all models).
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/8_metrics/3_calls_table.py

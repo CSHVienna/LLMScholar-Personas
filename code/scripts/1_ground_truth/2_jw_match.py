@@ -25,8 +25,8 @@ cited_by_count, first_year, last_year.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/1_ground_truth/2_jw_match.py \\
-      --ss_papers ../results/summary/openalex_cascade/ss_papers.parquet \\
-      --output    ../results/summary/openalex_cascade/jw_match.parquet
+      --ss_papers ../results/1_ground_truth/factual_authors_api/ss_papers.parquet \\
+      --output    ../results/1_ground_truth/jw_match.parquet
 """
 
 import argparse
@@ -173,10 +173,10 @@ def run(ss_papers: str, parquet: str, duckdb_path: str, output: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--ss_papers", default="../results/summary/openalex_cascade/ss_papers.parquet")
+    parser.add_argument("--ss_papers", default="../results/1_ground_truth/factual_authors_api/ss_papers.parquet")
     parser.add_argument("--parquet", default=config_default("ss_parquet"))
     parser.add_argument("--duckdb", default=config_default("oa_duckdb"))
-    parser.add_argument("--output", default="../results/summary/openalex_cascade/jw_match.parquet")
+    parser.add_argument("--output", default="../results/1_ground_truth/jw_match.parquet")
     args = parser.parse_args()
     run(args.ss_papers, args.parquet, args.duckdb, args.output)
 

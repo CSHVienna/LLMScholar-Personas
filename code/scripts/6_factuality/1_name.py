@@ -2,6 +2,9 @@
 1_name.py — Step 1: does the recommended name exist?
 
 Finds, for every recommended name, ALL the researchers whose name matches it.
+The recommended name is the query of common.add_request_columns: the same
+normalized "name lastname" as duplicates and consistency (author_key), so name
+variants that only differ in case or punctuation are searched once.
 "Matches" is defined in names.py:
   • JW(display name, display name) >= 0.85
   • every token of the query (initials excluded) has a token in the
@@ -14,8 +17,8 @@ Output: candidates_name.parquet, one row per (query, researcher):
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/6_factuality/1_name.py \\
-      --recommendations ../results/summary/recommendations_valid.csv \\
-      --output          ../results/summary/cascade/candidates_name.parquet
+      --recommendations ../results/5_validity/recommendations_valid.csv \\
+      --output          ../results/6_factuality/candidates_name.parquet
 """
 
 import argparse

@@ -23,10 +23,10 @@ or from env var NAMSOR_API_KEY (overrides the config).
 Examples
 --------
 # Smoke test on 20 unique names, no API call:
-python namsor_verify.py --input ../../../results/summary_v2/recommendations_with_ethnicity.csv --limit 20 --dry-run
+python namsor_verify.py --input ../../../results/legacy/reorg_2026-10-26/data_side/recommendations_with_ethnicity.csv --limit 20 --dry-run
 
 # Real run, all unique (firstName, lastName, country) triples, append to JSONL:
-python namsor_verify.py --input ../../../results/summary_v2/recommendations_with_ethnicity.csv --output-jsonl ../../../data/ethnicity_inference/namsor_responses.jsonl --output-csv ../../../data/ethnicity_inference/namsor_results.csv
+python namsor_verify.py --input ../../../results/legacy/reorg_2026-10-26/data_side/recommendations_with_ethnicity.csv --output-jsonl ../../../data/ethnicity_inference/namsor_responses.jsonl --output-csv ../../../data/ethnicity_inference/namsor_results.csv
 """
 
 import argparse

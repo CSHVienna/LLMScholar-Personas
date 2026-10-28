@@ -12,7 +12,7 @@ Labels:
 
 Usage:
   python scripts/annotation/annotate_ethnicity.py \
-    --lookup results/ethnicity/researcher_ethnicity_lookup.csv \
+    --lookup results/1_ground_truth/ethnicity/researcher_ethnicity_lookup.csv \
     --output data/ethnicity_inference/manual_labels_annotator1.csv \
     --sample_csv data/ethnicity_inference/sample_100.csv
 

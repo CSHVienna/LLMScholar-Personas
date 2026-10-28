@@ -10,7 +10,7 @@ created_at), compares the authors recommended in consecutive runs:
 where A_r is the set of authors of run r, compared by "name lastname".
 NaN when the setup has fewer than 2 valid runs.
 
-Output: ../results/pipeline/consistency/<model>.csv — setup columns + n_runs, consistency.
+Output: ../results/5_validity/consistency/<model>.csv — setup columns + n_runs, consistency.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/5_validity/2_consistency.py

@@ -25,7 +25,7 @@ Usage (from code/, with PYTHONPATH=.):
   python scripts/1_ground_truth/run_pipeline.py --from_step 2
   # a subset, to test (its own folder, with its ss_papers.parquet already there):
   python scripts/1_ground_truth/run_pipeline.py --ids <csv with researcher_id> \\
-      --out_dir ../results/summary/ground_truth_test --from_step 2
+      --out_dir ../results/1_ground_truth_test --from_step 2
 """
 
 import argparse
@@ -73,7 +73,7 @@ def main() -> None:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--parquet", default=config_default("ss_parquet"))
     parser.add_argument("--ids", default=None, help="CSV with researcher_id (default: every researcher)")
-    parser.add_argument("--out_dir", default="../results/summary/ground_truth")
+    parser.add_argument("--out_dir", default="../results/1_ground_truth")
     parser.add_argument("--from_step", type=int, default=1, choices=range(1, 7))
     args = parser.parse_args()
     out = Path(args.out_dir)

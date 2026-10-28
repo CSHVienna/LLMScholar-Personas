@@ -57,8 +57,8 @@ def main() -> None:
     args = parser.parse_args()
 
     results = Path(args.results) if args.results else get_results_path()
-    eth_dir = results / "ethnicity"
-    out_dir = eth_dir / "distributions"
+    eth_dir = results / "1_ground_truth" / "ethnicity"
+    out_dir = results / "9_figures" / "ethnicity_distributions"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. GT — overall
@@ -87,7 +87,7 @@ def main() -> None:
     pd.DataFrame(rows).to_csv(out_dir / "gt_per_field.csv", index=False)
 
     # 3. Recommendations with factuality_author = True — overall, per field, per model
-    rec_path = results / "summary" / "factuality_full.csv"
+    rec_path = results / "7_enrichment" / "factuality_full.csv"
     logger.info("Loading %s", rec_path)
     cols = ["valid_flag", "factuality_author", "field", "model", "perceived_ethnicity"]
     chunks = pd.read_csv(rec_path, usecols=cols, chunksize=2_000_000, low_memory=False)

@@ -6,14 +6,14 @@ The pipeline works on three units:
   call            setup + created_at + run_id          (one LLM response)
   recommendation  call + one author of that response   (name, lastname, ...)
 
-Each step writes one CSV per model into its folder under OUT_DIR:
-  validity/      per call            validity, refusal, duplicates      (5_validity/1)
-  consistency/   per setup           consistency                        (5_validity/2)
-  factuality/    per recommendation  factuality_*, matched_*, bias_location  (8_metrics/1)
-  socials/       per call            diversity, parity, popularity,     (8_metrics/3)
-                                     similarity, connectedness
-8_metrics/2 writes author stats to [data].oa_author_stats; 8_metrics/4 writes
-OUT_DIR/calls.csv, every metric of every call in one table.
+Each step writes one CSV per model into its folder (STEP_DIRS), named like the
+script folder that writes it:
+  results/5_validity/validity/     per call            validity, refusal, duplicates  (5_validity/1)
+  results/5_validity/consistency/  per setup           consistency                    (5_validity/2)
+  results/8_metrics/factuality/    per recommendation  factuality_*, matched_*, bias_location  (8_metrics/1)
+  results/8_metrics/socials/       per call            diversity, parity, popularity, (8_metrics/2)
+                                                       similarity, connectedness
+8_metrics/3 writes OUT_DIR/calls.csv, every metric of every call in one table.
 """
 
 import re
@@ -25,10 +25,14 @@ from libs.utils.logging import setup_logging
 
 logger = setup_logging()
 
-RECOMMENDATIONS = "../results/summary/recommendations.csv"
+RECOMMENDATIONS = "../results/3_recommendations/recommendations.csv"
 # The rows of the valid calls, written by 5_validity/1_validity.py; input of 6_factuality/.
-RECOMMENDATIONS_VALID = "../results/summary/recommendations_valid.csv"
-OUT_DIR = Path("../results/pipeline")
+RECOMMENDATIONS_VALID = "../results/5_validity/recommendations_valid.csv"
+OUT_DIR = Path("../results/8_metrics")
+STEP_DIRS = {"validity": Path("../results/5_validity/validity"),
+             "consistency": Path("../results/5_validity/consistency"),
+             "factuality": OUT_DIR / "factuality",
+             "socials": OUT_DIR / "socials"}
 
 # Prompt params: name in recommendations.csv → name in the outputs.
 PARAMS = {
@@ -77,8 +81,8 @@ def has_full_name(df: pd.DataFrame) -> pd.Series:
 
 
 def write_step(df: pd.DataFrame, step: str) -> None:
-    """One CSV per model into OUT_DIR/<step>/."""
-    folder = OUT_DIR / step
+    """One CSV per model into the step's folder (STEP_DIRS)."""
+    folder = STEP_DIRS[step]
     folder.mkdir(parents=True, exist_ok=True)
     for model, part in df.groupby("model"):
         part.to_csv(folder / f"{re.sub(r'[^\w.-]', '_', model)}.csv", index=False)
@@ -86,8 +90,8 @@ def write_step(df: pd.DataFrame, step: str) -> None:
 
 
 def read_step(step: str, columns: list[str] | None = None) -> pd.DataFrame:
-    """All the per-model CSVs of OUT_DIR/<step>/, as one table."""
-    folder = OUT_DIR / step
+    """All the per-model CSVs of the step's folder (STEP_DIRS), as one table."""
+    folder = STEP_DIRS[step]
     files = sorted(folder.glob("*.csv"))
     if not files:
         raise SystemExit(f"No files in {folder}: run step {step} first")

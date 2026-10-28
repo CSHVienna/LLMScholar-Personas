@@ -3,7 +3,9 @@ common.py — Small helpers shared by the factuality cascade scripts.
 
 Every recommendation asks for three things, which the scripts compare against
 the researchers' data:
-  query    the recommended name ("name lastname")
+  query    the recommended name, normalized exactly as for duplicates and
+           consistency (libs/pipeline_common.author_key: "name lastname",
+           lowercase, no punctuation): "J. Smith" and "J Smith" are one query
   Field    the field the prompt asked for, in English (same values as the
            parquet's Field column)
   bucket   the seniority the prompt asked for: "Junior" or "Senior"
@@ -12,13 +14,12 @@ the researchers' data:
 import pandas as pd
 
 from libs.metrics.constants import FIELD_NORM_MAP, JUNIOR_MAX, LLM_TARGET_TO_BUCKET, SENIOR_MIN
+from libs.pipeline_common import author_key
 
 #se cargan los datos de los investigadores recomedados por el LLM
 def add_request_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Add query, Field and bucket to a recommendations table."""
-    df["query"] = (
-        df["name"].fillna("").astype(str) + " " + df["lastname"].fillna("").astype(str)
-    ).str.strip()
+    df["query"] = author_key(df).fillna("")   # the same key as duplicates and consistency
     df["Field"] = df["field"].replace(FIELD_NORM_MAP)
     df["bucket"] = df["target"].map(LLM_TARGET_TO_BUCKET)
     return df

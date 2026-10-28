@@ -13,7 +13,7 @@ Labels:
 Usage:
   python scripts/annotation/annotate_responses.py \
     --results_dir ../results \
-    --summary_csv ../results/summary/summary.csv \
+    --summary_csv ../results/3_recommendations/summary.csv \
     --output ../data/annotator_agreement/manual_labels_annotator2.csv \
     --n 100 \
     [--stratified] [--seed 42] [--model gpt-4.1-2025-04-14] [--language english]

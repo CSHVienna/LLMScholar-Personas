@@ -15,9 +15,12 @@ Per call:
               Only for valid calls.
   n_total_recommendations, n_unique_authors   the two counts behind duplicates
 
-Output: ../results/pipeline/validity/<model>.csv — call columns + validity, refusal, duplicates
-(+ the two counts), and ../results/summary/recommendations_valid.csv — the rows of
-recommendations.csv whose call is valid, the input of scripts/6_factuality/.
+Output: ../results/5_validity/validity/<model>.csv — call columns + validity, refusal, duplicates
+(+ the two counts), and ../results/5_validity/recommendations_valid.csv — the rows of
+recommendations.csv whose call is valid, each author once per call (repeated names
+left out after duplicates is measured) and only complete names (has_full_name: a
+single first or last name is left out), the input of scripts/6_factuality/. This
+is the only place both filters are applied; every later step reads this file.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/5_validity/1_validity.py
@@ -28,23 +31,29 @@ import argparse
 import pandas as pd
 
 from libs.pipeline_common import (
-    CALL, RECOMMENDATIONS, RECOMMENDATIONS_VALID, author_key, load, logger, write_step,
+    CALL, PARAMS, RECOMMENDATIONS, RECOMMENDATIONS_VALID, author_key, has_full_name, load, logger,
+    write_step,
 )
 
 from libs.metrics.constants import REFUSED_FLAG, VALID_FLAGS  # noqa: E402
 
 
 def write_valid_recommendations(recommendations_path: str, output_path: str) -> None:
-    """Every column of the recommendations of valid calls. valid_flag is the same
-    for every row of a call, so filtering rows is filtering calls. Read as text
-    and in chunks: the values are copied as they are, without loading 5 GB."""
-    n_all = n_valid = 0
-    chunks = pd.read_csv(recommendations_path, dtype=str, chunksize=500_000)
-    for i, chunk in enumerate(chunks):
-        valid = chunk[chunk["valid_flag"].isin(VALID_FLAGS)]
-        valid.to_csv(output_path, index=False, mode="w" if i == 0 else "a", header=i == 0)
-        n_all, n_valid = n_all + len(chunk), n_valid + len(valid)
-    logger.info("Valid calls: %d of %d recommendations → %s", n_valid, n_all, output_path)
+    """What passes to 6_factuality/: every column of the recommendations of valid
+    calls, each author once per call (a name the LLM repeated in the same answer
+    keeps its first row; duplicates was measured before, on all of them), and only
+    complete names (has_full_name).
+    valid_flag is the same for every row of a call, so filtering rows is
+    filtering calls. Read as text: the values are copied as they are."""
+    df = pd.read_csv(recommendations_path, dtype=str)
+    valid = df[df["valid_flag"].isin(VALID_FLAGS)].copy()
+    valid["_author"] = author_key(valid)
+    unique = valid.drop_duplicates(["model", "created_at", "run_id", *PARAMS, "_author"])
+    complete = unique[has_full_name(unique)]
+    complete.drop(columns="_author").to_csv(output_path, index=False)
+    logger.info("Valid calls: %d of %d recommendations, %d repeated names and %d incomplete "
+                "names left out → %d → %s", len(valid), len(df), len(valid) - len(unique),
+                len(unique) - len(complete), len(complete), output_path)
 
 
 def run(recommendations_path: str, valid_output: str) -> None:

@@ -1,7 +1,7 @@
 """
 2_model.py — Step 2.2: the coauthorship graph and the similarity PCA over every
 author of the ground truth (1_ground_truth/), with the stats of 1_author_stats.py.
-Cached in ../results/.cache/ (coauthorship_graph_gt.joblib,
+Cached in ../results/2_graph/cache/ (coauthorship_graph_gt.joblib,
 similarity_embeddings_gt.joblib); 8_metrics/2_socials.py takes a subgraph and
 the embeddings of each call's authors from them.
 

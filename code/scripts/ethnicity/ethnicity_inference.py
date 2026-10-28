@@ -410,8 +410,8 @@ if __name__ == "__main__":
 
     try:
         _results = get_results_path()
-        _default_input = str(_results / "summary" / "recommendations.csv")
-        _default_output = str(_results / "summary" / "recommendations_with_ethnicity.csv")
+        _default_input = str(_results / "3_recommendations" / "recommendations.csv")
+        _default_output = str(_results / "3_recommendations" / "recommendations_with_ethnicity.csv")
     except (FileNotFoundError, KeyError, ValueError):
         _default_input = None
         _default_output = None

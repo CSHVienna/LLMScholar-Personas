@@ -2,7 +2,7 @@
 
 Step 1 of everything, done once before the LLM answers are looked at: every
 researcher of the Semantic Scholar parquet (the ground truth) with their
-OpenAlex author and its metadata → `results/summary/ground_truth/ground_truth.parquet`.
+OpenAlex author and its metadata → `results/1_ground_truth/ground_truth.parquet`.
 `6_factuality/` takes the data of the picked researcher from it, and `2_graph/`
 builds the coauthorship graph and the similarity PCA over it.
 

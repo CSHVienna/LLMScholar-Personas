@@ -18,8 +18,8 @@ Output columns added:
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/7_enrichment/2_location.py \\
-      --input  ../results/summary/factuality_oa.csv \\
-      --output ../results/summary/factuality_location.csv
+      --input  ../results/7_enrichment/factuality_oa.csv \\
+      --output ../results/7_enrichment/factuality_location.csv
 """
 
 import argparse

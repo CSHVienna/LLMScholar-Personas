@@ -218,9 +218,9 @@ def stage_eindex(con, pairs: Path, out: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ground_truth", default="../results/summary/ground_truth/ground_truth.parquet")
+    parser.add_argument("--ground_truth", default="../results/1_ground_truth/ground_truth.parquet")
     parser.add_argument("--duckdb", default=config_default("oa_duckdb"))
-    parser.add_argument("--out_dir", default="../results/summary/ground_truth/author_stats")
+    parser.add_argument("--out_dir", default="../results/2_graph/author_stats")
     parser.add_argument("--temp_dir", default=config_default("oa_works_tmp_dir"))
     parser.add_argument("--memory_limit", default="32GB")
     parser.add_argument(

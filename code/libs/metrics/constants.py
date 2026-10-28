@@ -264,7 +264,7 @@ TECHNICAL_METRICS_NORM = ['validity','refusals_c','duplicates_c'] + FACTUALITY_M
 
 # ── Backward compatibility ────────────────────────────────────────────────────
 # Artefacts produced before issue #36 (the 425 MB valid_requests_metadata.csv and
-# every effect_sizes.parquet under results/sensitivity_analysis/) still carry the
+# every effect_sizes.parquet under results/9_figures/sensitivity_analysis/) still carry the
 # old metric name. Apply this on load — as a column rename for wide frames, or on
 # the `metric` column for long-format ANOVA output — instead of regenerating them.
 # Idempotent: names already canonical are left untouched.

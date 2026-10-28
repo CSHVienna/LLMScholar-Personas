@@ -76,7 +76,7 @@ scripts/run_all.py
 6_factuality/     the factuality cascade on Semantic Scholar          (valid calls)
                   the picked researcher brings their ground-truth data
 7_enrichment/     LLM answer vs that data: country, affiliation; ethnicity
-8_metrics/        factuality, socials (factuality_author = True) → pipeline/calls.csv
+8_metrics/        factuality, socials (factuality_author = True) → 8_metrics/calls.csv
 9_plot_data/      data for specific figures
                                                                   →  notebooks/analysis/
 ```

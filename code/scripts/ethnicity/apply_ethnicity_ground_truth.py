@@ -31,7 +31,7 @@ except (FileNotFoundError, KeyError, ValueError):
 
 # Writable fallback paths (used when DATA_DIR has no write permissions)
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-_ETHNICITY_DIR = os.path.join(_PROJECT_ROOT, "results", "ethnicity")
+_ETHNICITY_DIR = os.path.join(_PROJECT_ROOT, "..", "results", "1_ground_truth", "ethnicity")
 CHECKPOINT_PATH = os.path.join(_ETHNICITY_DIR, "ethnicity_inference_checkpoint.pkl")
 LOOKUP_FALLBACK = os.path.join(_ETHNICITY_DIR, "researcher_ethnicity_lookup.csv")
 

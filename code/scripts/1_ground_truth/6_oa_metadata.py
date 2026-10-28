@@ -19,7 +19,7 @@ researcher.
 Output: ground_truth.parquet.
 
 Usage (from code/, with PYTHONPATH=.):
-  python scripts/1_ground_truth/6_oa_metadata.py --out_dir ../results/summary/ground_truth
+  python scripts/1_ground_truth/6_oa_metadata.py --out_dir ../results/1_ground_truth
 """
 
 import argparse
@@ -153,7 +153,7 @@ def main() -> None:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--parquet", default=config_default("ss_parquet"))
     parser.add_argument("--ids", default=None, help="CSV with researcher_id to keep (a subset, to test)")
-    parser.add_argument("--out_dir", default="../results/summary/ground_truth")
+    parser.add_argument("--out_dir", default="../results/1_ground_truth")
     parser.add_argument("--duckdb", default=config_default("oa_duckdb"))
     args = parser.parse_args()
     run(args.parquet, args.ids, args.out_dir, args.duckdb)

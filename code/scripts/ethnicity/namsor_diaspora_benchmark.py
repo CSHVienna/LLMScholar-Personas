@@ -27,7 +27,7 @@ diaspora cases, so a single pooled accuracy number hides the real effect.
 Examples
 --------
 python namsor_diaspora_benchmark.py --input ../../../data/ethnicity_inference/diaspora_benchmark_authors.csv --dry-run
-python namsor_diaspora_benchmark.py --input ../../../data/ethnicity_inference/diaspora_benchmark_authors.csv --outdir ../../../results/ethnicity/diaspora_benchmark
+python namsor_diaspora_benchmark.py --input ../../../data/ethnicity_inference/diaspora_benchmark_authors.csv --outdir ../../../results/1_ground_truth/ethnicity/diaspora_benchmark
 """
 
 import argparse
@@ -178,7 +178,7 @@ def check_nocountry_defaults_to_us(merged: pd.DataFrame) -> None:
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--input", required=True, type=Path, help="Ground-truth authors CSV.")
-    p.add_argument("--outdir", type=Path, default=Path("../../../results/ethnicity/diaspora_benchmark"))
+    p.add_argument("--outdir", type=Path, default=Path("../../../results/1_ground_truth/ethnicity/diaspora_benchmark"))
     p.add_argument("--arms", nargs="+", default=list(ARMS), choices=ARMS)
     p.add_argument("--sleep", type=float, default=0.0)
     p.add_argument("--dry-run", action="store_true", help="Print payloads and credit cost, call nothing.")

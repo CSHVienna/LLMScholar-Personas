@@ -8,7 +8,7 @@ OpenAlex assigns to that author (`location_oa_iso`). The output is a long table
 that the plotting notebook aggregates however it needs — globally, per field,
 per language or per model.
 
-Output: <results_dir>/factualities/tables/location_flows.csv
+Output: <results_dir>/9_figures/tables/location_flows.csv
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/9_plot_data/build_location_flows.py
@@ -126,8 +126,8 @@ def main() -> None:
     args = parser.parse_args()
 
     results = Path(args.results) if args.results else get_results_path()
-    fact_path = results / "summary" / "factuality_full.csv"
-    out_path = results / "factualities" / "tables" / "location_flows.csv"
+    fact_path = results / "7_enrichment" / "factuality_full.csv"
+    out_path = results / "9_figures" / "tables" / "location_flows.csv"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     logger.info("Reading %s", fact_path)

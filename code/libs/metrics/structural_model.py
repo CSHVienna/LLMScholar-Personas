@@ -14,9 +14,9 @@ from libs.metrics.similarity import (
     build_author_features, build_similarity_embeddings, load_author_scholarly_stats,
 )
 
-GROUND_TRUTH = "../results/summary/ground_truth/ground_truth.parquet"
-AUTHOR_STATS = "../results/summary/ground_truth/author_stats"
-CACHE = Path("../results/.cache")
+GROUND_TRUTH = "../results/1_ground_truth/ground_truth.parquet"
+AUTHOR_STATS = "../results/2_graph/author_stats"
+CACHE = Path("../results/2_graph/cache")
 GRAPH_CACHE = CACHE / "coauthorship_graph_gt.joblib"
 EMBEDDINGS_CACHE = CACHE / "similarity_embeddings_gt.joblib"
 

@@ -6,8 +6,7 @@ factuality cascade of scripts/6_factuality/, which compares each recommended
 author with Semantic Scholar using the field and seniority of the prompt, not the
 LLM's answer, plus the OpenAlex data of the confirmed authors from
 scripts/7_enrichment/), and keeps the recommendations of the valid calls of
-scripts/5_validity/ whose name is complete: at least 2 words in "name lastname"
-(a single first name or a single last name is left out).
+scripts/5_validity/ (incomplete names were already left out there).
 
 Per recommendation, in Semantic Scholar:
   factuality_name       a researcher with that name exists
@@ -28,7 +27,7 @@ and, only for factuality_author = True (the authors looked up in OpenAlex):
 (Semantic Scholar), oa_id (OpenAlex) and their attributes (gender, ethnicity,
 country, works, citations, first/last publication year).
 
-Output: ../results/pipeline/factuality/<model>.csv — call columns + the LLM's
+Output: ../results/8_metrics/factuality/<model>.csv — call columns + the LLM's
 answer + the columns above.
 
 Usage (from code/, with PYTHONPATH=.):
@@ -36,17 +35,17 @@ Usage (from code/, with PYTHONPATH=.):
 """
 
 from libs.pipeline_common import (
-    ANSWER, CALL, has_full_name, load, logger, read_step, write_step,
+    ANSWER, CALL, load, logger, read_step, write_step,
 )
 
-FUNNEL_OUT = "../results/summary/factuality_full.csv"
+FUNNEL_OUT = "../results/7_enrichment/factuality_full.csv"
 STEPS = ["name", "field", "seniority", "author"]
 MATCHED = {"n_name": "matched_names", "n_field": "matched_field",
            "n_seniority": "matched_seniority", "n_author": "matched_author"}
 AUTHOR = ["researcher_id", "matched_name", "gt_gender", "perceived_ethnicity",
           "oa_id", "location_oa_iso", "oa_works_count", "oa_cited_by_count",
           "oa_first_pub_year", "oa_last_pub_year", "oa_career_age",
-          "oa_match", "oa_country_source", "ss_paper_count", "ss_citation_count", "ss_h_index"]
+          "oa_match", "oa_country_source"]
 
 
 def run() -> None:
@@ -56,10 +55,6 @@ def run() -> None:
     factuality = [f"factuality_{s}" for s in STEPS]
     df = load(FUNNEL_OUT, ANSWER + list(MATCHED) + factuality + AUTHOR + ["location_status"])
     df = df.merge(valid, on=CALL).rename(columns=MATCHED)
-
-    complete = has_full_name(df)
-    logger.info("Left out %d recommendations with an incomplete name", (~complete).sum())
-    df = df[complete]
 
     df["bias_location"] = df["location_status"].map(
         {"location_match": True, "location_mismatch": False})

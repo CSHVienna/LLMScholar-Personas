@@ -7,7 +7,7 @@ keeping the slicing dimensions, and let the notebook stay plotting-only. The
 source CSV is 6.8 GB, so no figure should ever touch it directly.
 
 Six flows, each written to its own CSV under
-<results_dir>/factualities/tables/:
+<results_dir>/9_figures/tables/:
 
   seniority_flows.csv  asked seniority   -> actual seniority (Semantic Scholar)
                        plus the OpenAlex verdict as a separate `source_gt`,
@@ -176,10 +176,10 @@ def main() -> None:
     args = parser.parse_args()
 
     results = get_results_path(path=args.results)
-    fact_path = results / "summary" / "factuality_full.csv"
+    fact_path = results / "7_enrichment" / "factuality_full.csv"
     if not fact_path.exists():
         parser.error(f"Not found: {fact_path}")
-    out_dir = results / "factualities" / "tables"
+    out_dir = results / "9_figures" / "tables"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("Reading %s", fact_path)

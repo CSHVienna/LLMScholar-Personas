@@ -15,7 +15,7 @@ are saved in ss_metadata_parts/ as they arrive, so a run that stops resumes; if
 [secrets].s2_api_key is set in config.ini (or S2_API_KEY), it is sent.
 
 Usage (from code/, with PYTHONPATH=.):
-  python scripts/6_factuality/5_ss_metadata.py --cascade_dir ../results/summary/cascade
+  python scripts/6_factuality/5_ss_metadata.py --cascade_dir ../results/6_factuality
 """
 
 import argparse
@@ -72,13 +72,22 @@ def fetch(ids: list[int], key: str | None) -> pd.DataFrame | None:
 
 
 def download(ids: list[int], parts: Path) -> pd.DataFrame:
+    """The metadata of `ids`. What earlier runs already downloaded is reused by
+    researcher_id (not by batch position: the picked researchers change when the
+    recommendations do); only the missing ids are asked, in new parts."""
     parts.mkdir(parents=True, exist_ok=True)
+    files = sorted(parts.glob("part_*.parquet"))
+    have = (set(pd.concat(pd.read_parquet(f, columns=["researcher_id"]) for f in files)["researcher_id"].astype("int64"))
+            if files else set())
+    todo = [i for i in ids if i not in have]
+    first = max((int(f.stem.split("_")[1]) for f in files), default=-1) + 1   # new parts after the old ones
+    logger.info("%d of %d researchers already downloaded; asking the API for %d", len(ids) - len(todo), len(ids), len(todo))
     key = api_key()
-    batches = [ids[i:i + BATCH] for i in range(0, len(ids), BATCH)]
+    batches = [todo[i:i + BATCH] for i in range(0, len(todo), BATCH)]
 
     def one(arg):
         i, b = arg
-        out = parts / f"part_{i:05d}.parquet"
+        out = parts / f"part_{first + i:05d}.parquet"
         if out.exists():
             return True
         df = fetch(b, key)
@@ -93,7 +102,9 @@ def download(ids: list[int], parts: Path) -> pd.DataFrame:
         logger.info("round %d: %d/%d batches", round_ + 1, sum(ok), len(batches))
         if all(ok):
             break
-    return pd.concat(pd.read_parquet(f) for f in sorted(parts.glob("part_*.parquet")))
+    meta = pd.concat(pd.read_parquet(f) for f in sorted(parts.glob("part_*.parquet")))
+    meta["researcher_id"] = meta["researcher_id"].astype("int64")
+    return meta[meta["researcher_id"].isin(ids)].drop_duplicates("researcher_id")
 
 
 def add_columns(path: Path, meta: pd.DataFrame) -> None:
@@ -114,7 +125,6 @@ def run(cascade_dir: str) -> None:
     ids = factual["researcher_id"].dropna().astype("int64").drop_duplicates().sort_values().tolist()
     logger.info("%d researchers with factuality_author = True", len(ids))
     meta = download(ids, d / "ss_metadata_parts")
-    meta["researcher_id"] = meta["researcher_id"].astype("int64")
     logger.info("found in the API: %d of %d (%.1f%%)", (meta["ss_status"] == "found").sum(),
                 len(ids), 100 * (meta["ss_status"] == "found").mean())
     for name in ["factuality_ss.csv", "factual_authors.csv"]:
@@ -124,7 +134,7 @@ def run(cascade_dir: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--cascade_dir", default="../results/summary/cascade")
+    parser.add_argument("--cascade_dir", default="../results/6_factuality")
     args = parser.parse_args()
     run(args.cascade_dir)
 

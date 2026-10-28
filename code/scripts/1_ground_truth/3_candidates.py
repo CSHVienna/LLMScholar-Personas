@@ -11,7 +11,7 @@ Output: candidates.parquet, one row per (name, OpenAlex author):
   works_count, cited_by_count, first_year, last_year
 
 Usage (from code/, with PYTHONPATH=.):
-  python scripts/1_ground_truth/4_candidates.py --output ../results/summary/openalex_cascade/candidates.parquet
+  python scripts/1_ground_truth/4_candidates.py --output ../results/1_ground_truth/candidates.parquet
 """
 
 import argparse
@@ -62,7 +62,7 @@ def run(recommendations: str, duckdb_path: str, output: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--recommendations", default="../results/summary/cascade/factual_authors.csv")
+    parser.add_argument("--recommendations", default="../results/6_factuality/factual_authors.csv")
     parser.add_argument("--duckdb", default=config_default("oa_duckdb"))
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
