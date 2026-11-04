@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Dict
 
 
 @dataclass
@@ -11,7 +11,8 @@ class ModelSpec:
     llm_id: str = 'model'
     llm_attrs: List[str] = field(default_factory=list)  # used by Model 2 only
     structural_vars: List[str] = field(default_factory=list)  # used for nested missingness handling
-    
+    nested_vars: Dict[str, str] = field(default_factory=lambda: {'subfield': 'field'})  # child -> parent
+
     def __post_init__(self):
         # Auto-exclude metric from its own predictors
         if self.persona_vars is not None:
@@ -22,6 +23,9 @@ class ModelSpec:
         
         if self.structural_vars is not None:
             self.structural_vars = [v for v in self.structural_vars if v != self.metric]
+
+        if self.nested_vars is not None:
+            self.nested_vars = {c: p for c, p in self.nested_vars.items() if c != self.metric}
 
     @property
     def prompt_vars(self) -> list[str]:
@@ -37,6 +41,8 @@ class ModelSpec:
         """Tag a coefficient term as social / technical / llm_attr / interaction."""
         if term == 'Intercept':
             return 'intercept'
+        if any(f"{child}_within" in term for child in self.nested_vars):
+            return 'context' # nested term, not an interaction
         if ':' in term:
             return 'interaction'
         if any(v in term for v in self.persona_vars):

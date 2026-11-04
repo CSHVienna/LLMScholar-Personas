@@ -140,6 +140,7 @@ class SensitivityAnalysis:
                   f'{len(self.available_metrics)} metrics, '
                   f'{len(spec.prompt_vars)} prompt vars '
                   f'{len(spec.structural_vars)} structural vars.'
+                  f'{len(spec.nested_vars)} nested vars.'
                   )
             
         return self.df

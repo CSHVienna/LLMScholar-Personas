@@ -6,6 +6,7 @@ from statsmodels.stats.anova import anova_lm
 from pathlib import Path
 
 from libs.utils import ios
+from libs.utils.nesting import WITHIN_SUFFIX, within_index
 from .base import SensitivityModel
 
 FN_R2 = "r2.json"
@@ -14,6 +15,7 @@ FN_PARAMS_TABLE_SE = "pt_se.parquet"
 FN_PARAMS_TABLE_PVALUES = "pt_pvalues.parquet"
 FN_PARAMS_TABLE_CONF_INT = "pt_conf_int.parquet"
 FN_MODEL_INFO = "model_info.json"
+WITHIN_SUFFIX = "_within"
 
 class FixedEffectsModel(SensitivityModel):
     """
@@ -37,7 +39,8 @@ class FixedEffectsModel(SensitivityModel):
 
     def _build_formula(self, include_llm_dummies: bool = True) -> str:
         # @TODO: handle numeric vars that shouldn't be categorically encoded
-        terms = [f"C({v})" for v in self.spec.prompt_vars]
+        # terms = [f"C({v})" for v in self.spec.prompt_vars]
+        terms = [self._term(v) for v in self.spec.prompt_vars]
         structural_terms = ' + '.join(self.spec.structural_vars) if len(self.spec.structural_vars) > 0 else None
         prompt = " + ".join(terms)
         
@@ -51,7 +54,28 @@ class FixedEffectsModel(SensitivityModel):
 
         print(f"Built formula: {formula}")
         return formula
-    
+
+    def _term(self, pv: str) -> str:
+        """Formula/ANOVA term name for a prompt variable."""
+        parent = self.spec.nested_vars.get(pv)
+        if parent is None:
+            return f"C({pv})"
+        return f"C({parent}):{pv}{WITHIN_SUFFIX}"
+
+    def _add_nested_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Add a within-parent index for each nested variable (e.g., subfield within field)."""
+        df = df.copy()
+        for child, parent in self.spec.nested_vars.items():
+            df[f"{child}{WITHIN_SUFFIX}"] = within_index(df, parent, child) - 0.5   # -0.5 / +0.5
+        return df
+        # df = df.copy()
+        # for child, parent in self.spec.nested_vars.items():
+        #     df[f"{child}{WITHIN_SUFFIX}"] = (
+        #         df.groupby(parent)[child]
+        #         .transform(lambda s: pd.factorize(s, sort=True)[0])
+        #     )
+        # return df
+
     def icc_compute(self, df) -> float:
         # Intraclass correlation: variance shared within repeated configurations
         # grand_mean = df[self.spec.metric].mean()
@@ -63,7 +87,8 @@ class FixedEffectsModel(SensitivityModel):
     def fit(self, df: pd.DataFrame, cluster_se: bool = False, verbose: bool = True):
         needed = [self.spec.metric, self.spec.llm_id] + self.spec.prompt_vars
         df_clean = df.dropna(subset=needed).reset_index(drop=True)
-        
+        df_clean = self._add_nested_columns(df_clean)
+
         print("Before dropping NaNs: ", df.shape)
         print("After dropping NaNs: ", df_clean.shape)
 
@@ -166,7 +191,8 @@ class FixedEffectsModel(SensitivityModel):
 
         rows = []
         for pv in self.spec.prompt_vars + [self.spec.llm_id]:
-            term = f"C({pv})"
+            # term = f"C({pv})"
+            term = self._term(pv) if pv != self.spec.llm_id else f"C({pv})"
 
             ss = anova.loc[term, "sum_sq"]
             df = anova.loc[term, "df"]

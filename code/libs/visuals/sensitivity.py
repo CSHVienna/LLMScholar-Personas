@@ -9,6 +9,7 @@ from matplotlib.lines import Line2D
 from libs.sensitivity.spec import ModelSpec
 from libs.visuals.constants import PROMPT_VAR_COLORS as PALETTE
 from libs.visuals.vis import FIG_DPI
+from libs.utils.nesting import within_lookup, nested_term_pattern
 
 def create_grid(fe_models, metrics=None, figsize_per_panel=(5, 6), nrows=1, sharey=True):
     if metrics is None:
@@ -223,6 +224,26 @@ def _add_row_banding(ax, pdf, alpha: float = 0.07,
             )
         band_idx += 1
 
+def _nested_rows(child, parent, params, ci, df, kind, relabel) -> list[dict]:
+    """Rows for a nested variable: one contrast per parent level (child vs. its sibling)."""
+    pat = nested_term_pattern(parent, child)
+    hits = [(t, m) for t in params.index if (m := pat.fullmatch(t))]
+    if not hits:
+        return []
+    lookup = within_lookup(df, parent, child) if df is not None else {}
+
+    rows = [{'is_header': True, 'kind': kind,
+             'label': f"{relabel(child)} [ref: first within {relabel(parent)}]",
+             'estimate': None, 'ci_low': None, 'ci_high': None}]
+    # Metric-independent order: by parent level, then within index
+    for t, m in sorted(hits, key=lambda x: x[1]['plevel']):
+        p = m['plevel']
+        label = (f"{relabel(lookup[(p, 1)])} (vs. {relabel(lookup[(p, 0)])})"
+                if lookup else relabel(p))
+        rows.append({'is_header': False, 'kind': kind, 'label': '    ' + label,
+                    'estimate': params[t], 'ci_low': ci.loc[t, 0], 'ci_high': ci.loc[t, 1]})
+    return rows
+
 # ---------- plot 1: Model 1 ----------
 
 def plot_main_effects(model, spec, df=None, ax=None,
@@ -264,8 +285,13 @@ def plot_main_effects(model, spec, df=None, ax=None,
         return name_map.get(s, _pretty(s))
 
     # ---- Build plot rows ----
+    nested = getattr(spec, 'nested_vars', {}) or {}
     plot_rows = []
     for pv in group_order:
+        if pv in nested:
+            plot_rows += _nested_rows(pv, nested[pv], params, ci, df,
+                                    kind=_kind(pv, spec), relabel=relabel)
+            continue
         terms = _coef_terms_for(pv, idx)
         if not terms:
             continue
@@ -329,8 +355,11 @@ def plot_main_effects(model, spec, df=None, ax=None,
         s1 = "R$^2$ = {:.2f}".format(r2['r2']) 
         s2 = "R$^2 adj.$ = {:.2f}".format(r2['r2_adj'])
         s = s1 + '\n' + s2
+    # if llm_share is not None:
+    #     s3 = "LLM id.: {:.0%} of R$^2$".format(llm_share)
+    #     s = s + ('\n' + s3 if s3 else '')
     if llm_share is not None:
-        s3 = "LLM id.: {:.0%} of R$^2$".format(llm_share)
+        s3 = r"$\Delta R^2$ (LLM) = {:.2f}".format(llm_share)
         s = s + ('\n' + s3 if s3 else '')
     if s and s!='':
         ax.text(s=s, 
