@@ -4,7 +4,7 @@ seniority?
 
 Takes the candidates of step 1 (right name, any field) and keeps, for every
 (name, asked seniority) the prompts produced, the candidates whose seniority
-is the asked one. Seniority comes from career age (2025 − First_year):
+is the asked one. Seniority comes from career age (REFERENCE_YEAR = 2025 − First_year):
 <= 10 → Junior, >= 20 → Senior, 11–19 → neither.
 
 It does not look at the field: field and seniority are checked separately,

@@ -2,8 +2,9 @@
 coauthorship.py — The coauthorship graph and the connectedness metric (paper Eqs. 6-7).
 
   build_author_index        OpenAlex id → row number, shared by the graph and the PCA
-  build_coauthorship_graph  who has written with whom among the recommended
-                            authors (built once from OpenAlex, then cached)
+  build_coauthorship_graph  who has written with whom among a population of
+                            authors (the ground truth's; built once from
+                            OpenAlex, then cached)
   compute_connectedness     how connected the authors of one response are
 """
 

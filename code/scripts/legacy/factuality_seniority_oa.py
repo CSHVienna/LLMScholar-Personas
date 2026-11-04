@@ -15,8 +15,8 @@ average (median 14, later in 78.6% of cases) than OpenAlex's, because SS sees
 ~2 papers over ~10 years of a ~38-year career. That truncation pushes authors
 toward Junior:
 
-    le pides Junior -> acierta 21.0% segun SS, 3.8% segun OpenAlex
-    le pides Senior -> acierta 86.2% segun SS, 97.9% segun OpenAlex
+    asked for Junior -> correct 21.0% per SS, 3.8% per OpenAlex
+    asked for Senior -> correct 86.2% per SS, 97.9% per OpenAlex
 
 The conclusion survives either source — asked for juniors, the models return
 seniors — which is the point of publishing both. The magnitudes differ 5x, and
@@ -59,9 +59,9 @@ from scripts.legacy.factuality_seniority import (  # noqa: E402
 
 SOURCE_OA = "openalex"
 
-# Fixed for reproducibility, matching factuality_author_jw.REFERENCE_YEAR: a
-# moving current year would shuffle authors across the Junior/Senior boundary
-# every time the pipeline runs.
+# REFERENCE_YEAR (libs.metrics.constants, also used by factuality_author_jw.py)
+# is fixed for reproducibility: a moving current year would shuffle authors
+# across the Junior/Senior boundary every time the pipeline runs.
 
 NEEDED = CALL_KEYS + [
     "valid_flag",
@@ -89,6 +89,7 @@ def _bucket(career_age: float) -> str | None:
 
 
 def classify(df: pd.DataFrame) -> pd.DataFrame:
+    """The seniority_oa_* columns (OUT_COLS) from oa_first_pub_year and target."""
     first = pd.to_numeric(df["oa_first_pub_year"], errors="coerce")
     # OpenAlex publication years carry disambiguation errors: this column runs
     # from 1476 to 2026 in the snapshot. Outside a plausible window the age is

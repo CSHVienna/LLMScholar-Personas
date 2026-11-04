@@ -38,6 +38,8 @@ debug_string = ""
 
 
 def debug_msg(msg, level=DebugLevel.LOG):
+    """Write a timestamped, colour-coded line to log/<script>.log next to this
+    module (and to debug_string when debug_saving is set)."""
     color1 = Bcolor.ENDC
     color2 = Bcolor.OKBLUE
     level_label = ""

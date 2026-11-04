@@ -2,13 +2,29 @@
 
 Turns the raw LLM responses (one JSON per persona × language × field × subfield × k × run) into metric tables and the paper's figures.
 
-Everything runs from `code/` with `PYTHONPATH=.`. External paths (Semantic Scholar parquet, OpenAlex DuckDB, results folder) come from `[data]` in `config.ini` (copy `config.ini.example`).
+Everything runs from `code/` with `PYTHONPATH=.` (except `scripts/4_llmcaller/`, run from the repository root with `PYTHONPATH=code`). External paths (Semantic Scholar parquet, OpenAlex DuckDB, results folder) come from `[data]` in `config.ini` (copy `config.ini.example`).
 
 ```bash
 cd code
 export PYTHONPATH=.
-PYTHONPATH=. python -m pytest tests/        # 159 tests
+PYTHONPATH=. python -m pytest tests/        # 158 tests
 ```
+
+### `config.ini`
+
+| key | what it is | read by |
+|---|---|---|
+| `[secrets].keys_dir` | folder with the API key files (or the `LLM_KEYS_DIR` environment variable) | `libs/utils/config.load_config` |
+| `[openai].data_dir`, `[namsor].data_dir` | the files with the OpenAI and NamSor keys | `3_prompting/batch_params.py`, `ethnicity/namsor*.py` |
+| `[data].ss_parquet` | Semantic Scholar deduplicated researchers (parquet) | `1_ground_truth/`, `6_factuality/`, `9_plot_data/build_gt_field_baseline.py` |
+| `[data].ss_data_dir` | root of the Semantic Scholar dataset (per-field files) | `ethnicity/apply_ethnicity_ground_truth.py` |
+| `[data].oa_duckdb` | OpenAlex snapshot (DuckDB file) | `1_ground_truth/`, `2_graph/`, `7_enrichment/`, `8_metrics/2_socials.py` |
+| `[data].oa_authors_parquet` | glob over the OpenAlex snapshot's author parquet files (e.g. `<snapshot>/authors/updated_date=*/part_*.parquet`); the DuckDB file has no concepts | `1_ground_truth/4_author_fields.py` (`--snapshot_authors`) |
+| `[data].oa_author_stats` | folder with `summary_stats.parquet` and `eindex.parquet`, the per-author h / i10 / e-index written by `2_graph/1_author_stats.py` (default `../results/2_graph/author_stats/`) | `notebooks/analysis/checks/scholarly_stats.ipynb`, `scripts/legacy/run_similarity.py` |
+| `[data].oa_works_tmp_dir` | DuckDB temp / spill folder for the passes over OpenAlex works (needs disk, not a RAM-backed `/tmp`) | `libs/openalex_common.py`, `2_graph/1_author_stats.py` |
+| `[data].results_dir` | root of the results (default `../results`) | `9_plot_data/`, `ethnicity/ethnicity_inference.py`, the figure notebooks; the pipeline steps 1–8 write to `../results/` |
+
+`1_ground_truth/1_ss_papers.py` also reads an optional `[semantic_scholar].s2_api_key` (the path of a file with a Semantic Scholar API key; or the `S2_API_KEY` environment variable). It is not in `config.ini.example`.
 
 ---
 
@@ -47,13 +63,15 @@ Each folder of results has the number of the script folder that writes it:
 
 ```
 results/
-├── 0_responses/        raw LLM answers (JSON), from 4_llmcaller/
+├── 0_responses/        raw LLM answers (JSON, results_<source>_<language>/), from 4_llmcaller/;
+│                       batch_parse_results.py reads them as <results_dir>/responses/results_<source>_<language>/
 ├── 1_ground_truth/     ground_truth.parquet + its intermediate files (ss_papers, jw_match, candidates, picks, ...)
 │   ├── ss_papers_all/        Semantic Scholar API: papers of every researcher, which ids no longer exist
 │   ├── factual_authors_api/  the same for factuality_author = True, plus the merged profiles followed one by one
 │   ├── merged_recovered/     those recovered researchers, run through steps 2–6
 │   └── ethnicity/            perceived ethnicity of every researcher (researcher_ethnicity_lookup.csv)
-├── 2_graph/            author_stats/ (h, i10, e-index) and cache/ (coauthorship graph, PCA)
+├── 2_graph/            author_stats/ (authors, summary_stats: h / i10 / 2-year citedness, author_work_citations, eindex)
+│                       and cache/ (coauthorship graph, PCA: *_gt.joblib)
 ├── 3_recommendations/  recommendations.csv, summary.csv (parsed LLM answers)
 ├── 5_validity/         validity/, consistency/, recommendations_valid.csv (valid calls, each author once)
 ├── 6_factuality/       candidates_*, factuality_cascade.csv, factuality_ss.csv, factual_authors.csv
@@ -78,18 +96,18 @@ python scripts/2_graph/run_pipeline.py           # author stats, graph and PCA o
 | folder | what it does → output |
 |---|---|
 | `1_ground_truth/` | for every Semantic Scholar researcher: their papers (API), their OpenAlex author through those papers (Jaro-Winkler on the names, threshold 1.35) or else by name, field and seniority (the cascade), and that author's metadata (works, citations, h/i10, years, field, country and institution) → `1_ground_truth/ground_truth.parquet` (see its README) |
-| `2_graph/` | h / i10 / e-index of every OpenAlex author of the ground truth → `2_graph/author_stats/`; coauthorship graph and similarity PCA over all of them → `.cache/*_gt.joblib` |
+| `2_graph/` | `1_author_stats.py`: h / i10 / 2-year mean citedness (OpenAlex `summary_stats`) and the e-index (computed from per-paper citations) of every OpenAlex author of the ground truth → `2_graph/author_stats/`; `2_model.py`: coauthorship graph and similarity PCA over all of them → `2_graph/cache/coauthorship_graph_gt.joblib`, `similarity_embeddings_gt.joblib` |
 
 ### 3–4. Prompts and LLM answers
 
 ```bash
 python scripts/3_prompting/batch_params.py -l english -o ../data/context/   # also spanish, german
 python scripts/3_prompting/batch_prompt.py -l english -o ../data/context/
-# send the prompts: scripts/4_llmcaller/ (see scripts/README.md)
+# send the prompts: scripts/4_llmcaller/ (from the repository root; see scripts/README.md)
 python scripts/3_prompting/batch_parse_results.py --results_dir ../results --output_dir ../results/3_recommendations
 ```
 
-Output: `../results/3_recommendations/recommendations.csv`, one row per recommended author with the response's `valid_flag` and `run_id`.
+`batch_parse_results.py` reads `<results_dir>/responses/results_<source>_<language>/`. Output: `../results/3_recommendations/recommendations.csv`, one row per recommended author with the response's `valid_flag` and `run_id`, and `summary.csv`, one row per response (with `--model` and `--language` both given, the files get a `_<source>_<model>_<language>` suffix; `5_validity/` reads `recommendations.csv`).
 
 ### 5–9. Everything else: one command
 
@@ -148,14 +166,14 @@ Names are compared normalized (lowercase, no punctuation or extra spaces: `libs/
 | `duplicates` | 1 − unique names / names (Eq. 3) | valid calls |
 | `consistency` | mean Jaccard of the authors of consecutive runs of the same setup (Eq. 4) | valid calls |
 | `factuality_name / field / seniority / author` | share of the call's names that pass each check in Semantic Scholar | valid calls |
-| `diversity_<x>` | normalised entropy of gender, ethnicity, country, publications, citations, divided by log of the number of classes (Eq. 9) | factuality_author = True |
-| `parity_<x>` | 1 − total variation distance to the ground truth's distribution over the same classes (Eq. 11) | factuality_author = True |
-| `popularity_<x>` | share of authors in the top third of publications or citations of their field in the ground truth | factuality_author = True |
+| `diversity_<x>` | entropy of gender, ethnicity, location (OpenAlex country), publications, citations, divided by log of the number of classes (Eq. 9); NaN with fewer than 2 authors | factuality_author = True |
+| `parity_<x>` | 1 − total variation distance between the call's shares and the whole ground truth's, over the same classes (Eq. 11): gender and ethnicity against the ground truth's shares; publications and citations against 1/3 per tier (the tiers are the ground truth's terciles); no parity for location | factuality_author = True |
+| `popularity_<x>` | share of authors in the high tier (top third) of publications or citations of their field in the ground truth; also `pct_<x>_low / _med / _high` | factuality_author = True |
+| `bias_location` | share of authors whose OpenAlex country is the prompt's country | factuality_author = True |
+| `similarity` | mean pairwise cosine of the authors' scholarly embeddings (Eq. 8): 8 OpenAlex features (works_count, cited_by_count, career_age, citations_per_paper_age, h_index, i10_index, e_index, two_year_mean_citedness) → median imputation → log1p → standardise → PCA keeping 90% of the variance → L2 normalisation, fitted once over the whole ground truth | factuality_author = True, in OpenAlex |
+| `connectedness` | 1 − normalised entropy of the coauthorship components among the authors (Eqs. 6–7) | factuality_author = True, in OpenAlex |
 
 The classes are every category that exists in the ground truth, not only those the recommendations show: gender Female / Male / Unknown, ethnicity Asian / Black / White / Hispanic / Unknown, country every OpenAlex country of the ground truth (226), publications and citations low / med / high (the per-field terciles of the ground truth). Diversity leaves the Unknown authors out (paper Eq. 9); parity keeps Unknown as a class. See the docstring of `scripts/8_metrics/2_socials.py`.
-| `bias_location` | share of authors whose OpenAlex country is the prompt's country | factuality_author = True |
-| `similarity` | mean pairwise cosine of the authors' scholarly profiles (PCA of 8 features) (Eq. 8) | factuality_author = True, in OpenAlex |
-| `connectedness` | 1 − normalised entropy of the coauthorship components among the authors (Eqs. 6–7) | factuality_author = True, in OpenAlex |
 
 ### Figures and checks
 
@@ -191,7 +209,7 @@ The notebooks only read tables written by `run_all.py`; they compute nothing hea
 
 ### Optional branches
 
-- **Ethnicity** — `scripts/ethnicity/apply_ethnicity_ground_truth.py` builds the ground-truth table (`results/1_ground_truth/ethnicity/researcher_ethnicity_lookup.csv`) that `7_enrichment/4_ethnicity.py` and `8_metrics/2_socials.py` read; `ethnicity_inference.py` infers it from the names the LLM wrote (no longer used by the pipeline).
+- **Ethnicity** — `scripts/ethnicity/apply_ethnicity_ground_truth.py` builds the ground-truth table (`results/1_ground_truth/ethnicity/researcher_ethnicity_lookup.csv`) that `7_enrichment/4_ethnicity.py` and `8_metrics/2_socials.py` read; `ethnicity_inference.py` infers it from the names the LLM wrote (no longer used by the pipeline). `namsor.py`, `namsor_diaspora_benchmark.py` and `validate_benchmark.py` check perceived ethnicity against the NamSor API and the hand-built benchmark in `data/ethnicity_inference/` (not part of `run_all.py`).
 - **Annotation** — `scripts/annotation/` (manual labels under `data/`).
 
 ---
@@ -206,16 +224,19 @@ Scripts that are not part of the pipeline any more, kept for reference: `build_v
 
 | Module | Contents |
 |---|---|
-| `openalex_common.py` | `normalize_name` (how names are compared with OpenAlex) and the folder of the per-year country/institution chunks |
+| `openalex_common.py` | `normalize_name` (how names are compared with OpenAlex), the DuckDB temp folder (`[data].oa_works_tmp_dir`) and the folder of the per-year country/institution chunks |
 | `metrics/structural_model.py` | The coauthorship graph and the similarity PCA over the ground truth (built by `2_graph/`, read by `8_metrics/`) |
 | `pipeline_common.py` | What `5_validity/` and `8_metrics/` share: call / setup columns, `author_key`, `has_full_name`, reading and writing the per-model files |
 | `metrics/constants.py` | Column names, valid flags, category orders and maps (`GENDER_MAP`, `ETHNICITY_MAP`), seniority rule (`REFERENCE_YEAR`, `JUNIOR_MAX`, `SENIOR_MIN`), translations to English |
 | `metrics/coauthorship.py` | Coauthorship graph and `compute_connectedness` (Eqs. 6-7) |
-| `metrics/similarity.py` | Author features, PCA embeddings and `compute_similarity` (Eq. 8) |
+| `metrics/similarity.py` | Author features (`load_author_scholarly_stats` reads `2_graph/author_stats/`), PCA embeddings and `compute_similarity` (Eq. 8) |
 | `metrics/productivity.py` | Low / med / high tiers of publications and citations |
 | `metrics/aggregators.py` | Averages and confidence intervals for the plots |
 | `metrics/io.py` | `validate_path` (create the folder of an output file) |
 | `metrics/agreement.py` | Kappa / alpha for annotator agreement |
+| `metrics/ethnicity_io.py` | Loaders for the CSVs of `9_plot_data/build_ethnicity_distributions.py` (used by `ethnicity.ipynb`) |
+| `sensitivity/` | Sensitivity analysis: model specs, fixed / mixed effects, variance-ceiling diagnostics (used by `sensitivity.ipynb`) |
+| `factuality/` | Helpers of the manual factuality-validation notebook (`agreement/manual_factuality_validation.ipynb`) |
 | `visuals/` | Plots and plot styling |
 | `utils/` | Config (`config.py`), files (`ios.py`), logging (`logging.py`) |
 | `prompt/`, `llm/` | Prompt building and the OpenAI client |
@@ -236,4 +257,5 @@ Scripts that are not part of the pipeline any more, kept for reference: `build_v
 - `ModuleNotFoundError: No module named 'libs'` → run from `code/` with `PYTHONPATH=.`.
 - `KeyError: Missing [data].ss_parquet` → fill in `config.ini`.
 - A notebook fails on its first data cell → run `scripts/run_all.py` (or the stage that writes the table it reads).
-- DuckDB runs out of temp space → set `[data].oa_works_tmp_dir` to a disk with room (not `/tmp`).
+- DuckDB runs out of temp space → set `[data].oa_works_tmp_dir` to a disk with room (not `/tmp`); `2_graph/1_author_stats.py` also takes `--temp_dir` and `--memory_limit`.
+- `1_ground_truth/4_author_fields.py` fails without concepts → set `[data].oa_authors_parquet` (or pass `--snapshot_authors`).

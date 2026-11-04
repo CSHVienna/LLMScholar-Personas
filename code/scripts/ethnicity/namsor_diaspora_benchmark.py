@@ -12,8 +12,8 @@ Three arms are run over the SAME names:
   us         countryIso2 = "US" for everyone
 
 The third arm exists because NamSor appears to echo `countryIso2: "US"` on
-responses where no country was sent (see data/ethnicity_inference/
-lifted_nocountry.jsonl). If `nocountry` and `us` come back identical, then
+responses where no country was sent (check_nocountry_defaults_to_us reports
+both the label agreement and the echoed country). If `nocountry` and `us` come back identical, then
 "no country" is not a neutral condition — it is a US prior — and the two-arm
 comparison people usually run is measuring the wrong contrast.
 
@@ -23,6 +23,10 @@ Ground truth CSV must carry at least:
 `stratum` is `native` (works in country of origin) or `diaspora` (works abroad).
 The split matters: passing the country should help the natives and hurt the
 diaspora cases, so a single pooled accuracy number hides the real effect.
+
+Outputs in --outdir: namsor_diaspora_<arm>.jsonl (raw responses, one per arm),
+per_name_results.csv and accuracy_summary.csv (top-1/top-3 accuracy per arm and
+stratum, with and without collapsing EQUIVALENT_LABELS).
 
 Examples
 --------
@@ -72,6 +76,10 @@ def build_records(df: pd.DataFrame, arm: str) -> list[dict]:
 
 
 def run_arm(api_key: str, df: pd.DataFrame, arm: str, outdir: Path, sleep: float) -> pd.DataFrame:
+    """Query the diaspora endpoint for one arm, write its JSONL, return the flat responses.
+
+    `sleep` is accepted but not used (no pause between batches).
+    """
     cfg = ENDPOINTS["diaspora"]
     records = build_records(df, arm)
     log(f"[{arm}] {len(records)} names → ~{len(records)*cfg['credits']:,} credits")
@@ -114,6 +122,7 @@ def canonical(label: str) -> str:
 
 
 def top_k_hit(row, k: int, collapse: bool = False) -> bool:
+    """True if expected_diaspora is among the first k ethnicitiesTop labels."""
     top = row.get("ethnicitiesTop")
     if not isinstance(top, list):
         return False

@@ -1,4 +1,21 @@
-# export PYTHONPATH="$PYTHONPATH:../../libs"
+"""
+batch_parse_results.py — Parses the raw LLM responses (Ollama, GPT, Gemini) of
+<results_dir>/responses/results_<source>_<language>/ into tables: each response
+gets a valid_flag (cleaned | unchanged | fixed_dict | empty | invalid | refused)
+and its list of recommended authors.
+
+Output, in --output_dir (with a _<source>_<model>_<language> suffix when both
+--model and --language are given):
+  summary.csv          one row per response (response_content_length instead of
+                       the content)
+  recommendations.csv  one row per recommended author (name, lastname,
+                       current_affiliations, areas_of_research_or_work, reason,
+                       source), the input of scripts/5_validity/
+
+Usage (from code/, with PYTHONPATH=.):
+  python scripts/3_prompting/batch_parse_results.py --results_dir ../results \
+      --output_dir ../results/3_recommendations --model <model> --language <language>
+"""
 
 import argparse
 import re
@@ -965,6 +982,9 @@ def _parse_gemini(response, model=None, fn=None, run_id=None):
 
 
 def _parse_gpt(response, model=None, fn=None, run_id=None):
+    """
+    Parse GPT (OpenAI batch) responses
+    """
 
     if "error" in response and response.get("error", None) is not None:
         done_reason = None

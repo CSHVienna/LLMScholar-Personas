@@ -1,4 +1,4 @@
-"""CLI helpers shared by every script under code/scripts/."""
+"""CLI helpers shared by scripts under code/scripts/."""
 
 import argparse
 import os

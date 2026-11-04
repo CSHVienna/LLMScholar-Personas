@@ -1,14 +1,16 @@
 """
 Grouped sensitivity heatmap.
 
-A single conceptual matrix split into 2x2 blocks (row-group x col-group).
-Rows are partitioned into 'persona' (orange) and 'context' (blue); each
-row group is rendered with its own sequential colormap built from the
-group's identity color. Both colormaps share `vmin`/`vmax` so values
-remain numerically comparable.
+A single conceptual matrix split into (row-group x col-group) blocks.
+Rows are prompt variables partitioned into groups (e.g. 'persona',
+'context', 'llm'); each row group is rendered with its own sequential
+colormap built from the group's identity color. All colormaps share
+`vmin`/`vmax` so values remain numerically comparable.
 
-Columns are partitioned into 'technical' / 'social' and labelled in
-neutral grey above each block.
+Columns are metrics partitioned into groups (e.g. 'technical' / 'social'),
+labelled in light-grey boxes below the bottom block row. An optional
+uncoloured residual row (1 - R^2 of each metric's Model 1) sits under the
+last row group, and `tick_prefix_groups` can bracket runs of related metrics.
 """
 
 from __future__ import annotations
@@ -43,6 +45,7 @@ def _hls_adjust(hex_color: str, lightness: float,
 
 
 def sequential_cmap_from_color(base: str, name: str) -> LinearSegmentedColormap:
+    """Light → ``base`` → dark sequential colormap built from one hex color."""
     light = _hls_adjust(base, lightness=0.96, sat_scale=0.45)
     dark  = _hls_adjust(base, lightness=0.28, sat_scale=1.15)
     return LinearSegmentedColormap.from_list(name, [light, base, dark], N=256)
@@ -69,10 +72,21 @@ class GroupedSensitivityHeatmap:
 
     Required
     --------
+    ols_results : dict[str, dict]
+        Per-metric results (``SensitivityAnalysis.results``); only
+        ``ols_results[metric]['m1'].r2_values['r2']`` is read, for the
+        residual row. Pass ``{}`` to skip that row.
     df : pd.DataFrame
+        Wide values, index = row names, columns = metrics.
     row_groups, col_groups : dict[str, list[str]]
+        Entries missing from ``df`` are dropped with a warning.
     row_group_colors : dict[str, str]
-    name_map : dict[str, str]   (optional)
+
+    Optional data
+    -------------
+    name_map : dict[str, str]
+    tick_prefix_groups : dict[str, str]
+    pvalue_df : pd.DataFrame aligned to ``df`` (for ``significance_style``)
 
     Display kwargs
     --------------
@@ -249,13 +263,15 @@ class GroupedSensitivityHeatmap:
         """
         Build the heatmap from a long-format ANOVA results DataFrame.
 
-        The input is the kind of frame statsmodels (or pingouin) returns —
-        one row per (prompt_var, metric) combination, with effect-size and
-        p-value columns.
+        The input is typically ``SensitivityAnalysis.effects`` — one row per
+        (prompt variable, metric) combination, with effect-size and p-value
+        columns.
 
         Parameters
         ----------
-        ols_results : dict[str, SensitivityModel]
+        ols_results : dict[str, dict]
+            Per-metric results (``SensitivityAnalysis.results``), used for
+            the residual row; see the class docstring.
         anova_df : pd.DataFrame
             Long-format results. Must contain `row_col`, `col_col`,
             `value_col`, and (optionally) `pvalue_col`.
@@ -263,6 +279,8 @@ class GroupedSensitivityHeatmap:
             Column names that become the heatmap's index and columns.
         value_col : str
             Column whose values fill the cells. Default 'partial_eta2'.
+            Also sets the default ``colorbar_label`` ('omega2', 'eta2' and
+            'partial_eta2' get LaTeX labels).
         pvalue_col : str or None
             Column with p-values for significance encoding. Pass None to
             skip p-value handling.
@@ -957,10 +975,8 @@ TICK_PREFIX_GROUPS = {
 def _make_demo_anova_df(seed: int = 7) -> pd.DataFrame:
     """Long-format ANOVA-style placeholder: one row per (prompt_var, metric).
 
-    Columns match the user's actual schema:
-        metric, prompt_var, sum_sq, df, F, p_value, partial_eta2, prompt_type
-
-    Replace the call to this in main() with your real ANOVA DataFrame.
+    Columns: metric, prompt_var, omega2, eta2, partial_eta2, p_value,
+    prompt_type (random values; omega2 = eta2 = partial_eta2).
     """
     rng = np.random.default_rng(seed)
     rows = []
@@ -983,6 +999,7 @@ def _make_demo_anova_df(seed: int = 7) -> pd.DataFrame:
 
 
 def main():
+    """Demo: draw the heatmap on placeholder data to heatmap_preview.png."""
     anova_df = _make_demo_anova_df()
     plot = GroupedSensitivityHeatmap.from_long(
         ols_results,

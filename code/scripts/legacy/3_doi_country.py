@@ -1,17 +1,21 @@
 """
-3_doi_country.py — Step 3: the country and institution of each Semantic Scholar
-researcher, from their own papers in OpenAlex.
+3_doi_country.py — Legacy (formerly step 3 of the OpenAlex cascade): the country
+and institution of each Semantic Scholar researcher, from their own papers in
+OpenAlex.
 
-Among the researcher's papers found in OpenAlex by DOI (1_ss_papers.py), the
-authorships of the OpenAlex author chosen for them (2_jw_match.py) are theirs;
+Among the researcher's papers found in OpenAlex by DOI (1_ground_truth/1_ss_papers.py),
+the authorships of the OpenAlex author chosen for them (1_ground_truth/2_jw_match.py) are theirs;
 the country and institution are those of the most recent of them with an
 institution.
 
 Output: doi_country.parquet — researcher_id, country_code, institution, year
 (of the paper they come from), n_papers (their papers with an institution).
 
+It imports oa_common from scripts/6_enrichment/, which no longer exists (the same
+helpers now live in libs/openalex_common.py), so it does not run as is.
+
 Usage (from code/, with PYTHONPATH=.):
-  python scripts/5_openalex_cascade/3_doi_country.py
+  python scripts/legacy/3_doi_country.py
 """
 
 import argparse
@@ -49,6 +53,7 @@ QUALIFY row_number() OVER (PARTITION BY researcher_id
 
 
 def run(ss_papers: str, match: str, duckdb_path: str, output: str) -> None:
+    """Country and institution of the latest authorship of each matched researcher."""
     chosen = pd.read_parquet(match, columns=["researcher_id", "oa_id"])
     chosen["author_id"] = chosen["oa_id"].str.replace("https://openalex.org/A", "").astype("int64")
     papers = pd.read_parquet(ss_papers, columns=["researcher_id", "doi"]).drop_duplicates()

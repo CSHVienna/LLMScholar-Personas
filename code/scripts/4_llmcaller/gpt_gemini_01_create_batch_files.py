@@ -1,6 +1,13 @@
-# cd scripts
-# export PYTHONPATH="${PYTHONPATH}:../" 
-# python gpt_gemini_01_create_batch_files.py ...
+"""
+gpt_gemini_01_create_batch_files.py — Step 1 of the GPT / Gemini calls: writes the
+JSONL batch request files (one per model and repetition) for the prompts not
+answered yet. Only one model family at a time: uncomment the models in
+MODEL_LIST.
+
+Run from the repository root (prompts are read from
+data/context/<language>/all_params_and_prompts.json) with code/ on PYTHONPATH:
+  PYTHONPATH=code python code/scripts/4_llmcaller/gpt_gemini_01_create_batch_files.py ...
+"""
 
 import argparse
 import datetime

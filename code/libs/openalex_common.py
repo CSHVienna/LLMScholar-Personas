@@ -1,5 +1,5 @@
 """
-oa_common.py — What the OpenAlex steps share, kept apart so other folders can
+openalex_common.py — What the OpenAlex steps share, kept apart so other folders can
 import it (a file whose name starts with a number cannot be imported).
 
   normalize_name   how names are compared with OpenAlex (also used by

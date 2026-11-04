@@ -12,11 +12,14 @@ Labels:
 
 Usage:
   python scripts/annotation/annotate_ethnicity.py \
-    --lookup results/1_ground_truth/ethnicity/researcher_ethnicity_lookup.csv \
-    --output data/ethnicity_inference/manual_labels_annotator1.csv \
-    --sample_csv data/ethnicity_inference/sample_100.csv
+    --lookup ../results/1_ground_truth/ethnicity/researcher_ethnicity_lookup.csv \
+    --output ../data/ethnicity_inference/manual_labels_annotator1.csv \
+    [--sample_csv ../data/ethnicity_inference/sample_100.csv] [--n 100] [--seed 42]
 
-After labeling, computes accuracy/precision/recall/F1 vs algorithmic label.
+Without --sample_csv, draws --n rows from the lookup stratified by perceived_ethnicity.
+Labels are saved after every answer, so re-running with the same --output resumes.
+After labeling, computes accuracy/precision/recall/F1 vs the algorithmic
+perceived_ethnicity.
 """
 
 import argparse
@@ -122,6 +125,7 @@ def display_sample(i: int, total: int, row: pd.Series):
 
 
 def compute_metrics(df_labeled: pd.DataFrame):
+    """Print accuracy, per-class report and confusion matrix (manual vs perceived_ethnicity)."""
     stats = compute_classification_metrics(df_labeled, pred_col="perceived_ethnicity")
     if stats is None:
         print(colorize("No labeled samples (excluding skips). Cannot compute metrics.", RED))
@@ -152,6 +156,7 @@ def compute_metrics(df_labeled: pd.DataFrame):
 def sample_rows(
     df: pd.DataFrame, n: int, seed: int, already_done_idx: set
 ) -> pd.DataFrame:
+    """Sample n rows stratified by perceived_ethnicity, excluding already labeled ones."""
     df_remaining = df[~df.index.isin(already_done_idx)]
     categories = df_remaining["perceived_ethnicity"].unique()
     per_class = max(1, n // len(categories))

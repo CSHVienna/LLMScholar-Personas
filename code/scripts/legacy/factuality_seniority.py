@@ -1,10 +1,12 @@
 """
-factuality_seniority.py — Step 3 of the factuality pipeline.
+factuality_seniority.py — Legacy (formerly step 3 of the factuality pipeline;
+replaced by 6_factuality/3_seniority.py).
 
 Reads the output of factuality_field_check.py and decides whether the seniority
 the LLM assigned to each author matches reality.
 
-Career age = current_year − First_year (precomputed upstream as gt_career_age).
+Career age = REFERENCE_YEAR (2025) − First_year (precomputed upstream by
+factuality_author_jw.py as gt_career_age).
 
 Buckets:
   career_age <= 10 → Junior  (early-career)
@@ -16,7 +18,7 @@ LLM target mapping (EN / ES / DE):
   Senior Professor  → Senior
 
 Output columns added:
-  seniority_career_age   career age used for bucketing (current_year − First_year)
+  seniority_career_age   career age used for bucketing (gt_career_age)
   seniority_age_source   {gt | none}
   seniority_bucket       {Junior | Senior | None}  (None = 11–19 years)
   seniority_llm_bucket   {Junior | Senior | None}
@@ -74,7 +76,7 @@ def _is_not_found(row: pd.Series) -> bool:
 
 
 def _resolve_career_age(row: pd.Series) -> tuple[float | None, str]:
-    """Return (career_age, source). Uses gt_career_age (current_year − First_year)."""
+    """Return (career_age, source). Uses gt_career_age (REFERENCE_YEAR − First_year)."""
     val = row.get("gt_career_age")
     if pd.notna(val):
         return float(val), SOURCE_GT
@@ -90,6 +92,7 @@ def _bucket(career_age: float) -> str | None:
 
 
 def classify_row(row: pd.Series) -> dict:
+    """Return the seniority_* output columns for one recommendation."""
     if _is_not_found(row):
         return {
             "seniority_career_age": None,

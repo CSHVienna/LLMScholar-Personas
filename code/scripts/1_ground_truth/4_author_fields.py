@@ -1,7 +1,9 @@
 """
-5_author_fields.py — Step 5: the field and subfields of each candidate author.
+4_author_fields.py — Step 4: the field and subfields of each OpenAlex author.
 
-For every OpenAlex author found in step 4 (4_candidates.py):
+For every OpenAlex author of --candidates (run_pipeline.py passes
+author_ids.parquet: the candidates of step 3, 3_candidates.py, and the authors
+matched in step 2, 2_jw_match.py):
   field_topics    our field for the author's main OpenAlex field: the field
                   (of all 26) with most of their papers, read from
                   `authors.topics`. None when that field is not one of ours.
@@ -20,7 +22,7 @@ and reused.
 Output: author_fields.parquet — oa_id, field_topics, field_concepts, subfields.
 
 Usage (from code/, with PYTHONPATH=.):
-  python scripts/1_ground_truth/5_author_fields.py \\
+  python scripts/1_ground_truth/4_author_fields.py \\
       --candidates ../results/1_ground_truth/candidates.parquet \\
       --output     ../results/1_ground_truth/author_fields.parquet
 """
@@ -40,7 +42,8 @@ from libs.utils.logging import setup_logging  # noqa: E402
 
 logger = setup_logging()
 
-SNAPSHOT_AUTHORS = "/code/openalex/oa_data/data/parquet/authors/updated_date=*/part_*.parquet"
+# Glob over the OpenAlex snapshot authors parquet, set as [data].oa_authors_parquet.
+SNAPSHOT_AUTHORS = config_default("oa_authors_parquet")
 
 TOPICS = """
 SELECT u.oa_id, t.field.display_name AS oa_field, t.subfield.display_name AS oa_subfield,

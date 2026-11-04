@@ -230,11 +230,10 @@ def aggregate_diversity(df_factuality_author, attribute=None):
 
         Parameters
         ----------
-        counts : array-like
-            Counts per label for *known* labels only (zeros allowed).
-        K : int
-            Total number of possible labels in the taxonomy
-            (including labels not observed in this response).
+        counts : pd.Series
+            One label per author (despite the name, not counts). Unknown
+            and NaN labels are dropped; the normalizer K is the taxonomy
+            size from ``get_number_of_categories(attribute)``.
 
         Returns
         -------
@@ -410,19 +409,19 @@ def _aggregate_parity_by_subpop(
        - filter gt to the matching subgroup using gt_col_map (which maps
          df-side column names to gt-side column names, e.g. {'field': 'Field'}),
        - call aggregate_parity on the slice with the filtered gt.
-    Subgroups with empty filtered gt are skipped (recorded in the log)."""
-    # Sin columnas de subpop → parity global con el GT entero.
+    Subgroups with empty filtered gt are skipped silently."""
+    # No subpop columns → global parity against the whole GT.
     if not subpop_cols:
         return aggregate_parity(df_factuality_author, attribute=attribute, gt=gt)
-    # Por defecto las columnas df-side y gt-side se llaman igual.
-    # Si no, el caller pasa un mapping (e.g. {'field': 'Field'}).
+    # By default the df-side and gt-side columns share names;
+    # otherwise the caller passes a mapping (e.g. {'field': 'Field'}).
     gt_col_map = gt_col_map or {c: c for c in subpop_cols}
     pieces = []
     for vals, sub in df_factuality_author.groupby(subpop_cols, dropna=False):
         if not isinstance(vals, tuple):
             vals = (vals,)
-        # Filtramos el GT al mismo subgrupo. Acumulativo: para
-        # field×location se aplican ambos filtros uno tras otro.
+        # Filter the GT to the same subgroup. Cumulative: for
+        # field×location both filters are applied one after the other.
         gt_filtered = gt
         for c, v in zip(subpop_cols, vals):
             gt_col = gt_col_map.get(c, c)

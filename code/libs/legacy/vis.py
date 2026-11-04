@@ -134,19 +134,21 @@ def plot_barplot(
     Plots a barplot using matplotlib.
 
     Parameters:
-    - df (pd.DataFrame): Input dataframe.
+    - data (pd.DataFrame): Input dataframe (copied).
     - x_col (str): Column name for x-axis.
     - y_col (str): Column name for y-axis.
     - group_col (str, optional): Column name for grouping (to stack bars). Default is None.
     - x_order (list, optional): Order of categories for the x-axis. Default is None (no specific order).
     - group_order (list, optional): Order of group categories. Default is None (no specific order).
+    - fn (str, optional): If given, save the figure to this path.
     - **kwargs: Additional keyword arguments:
         - xlabel_rotation (int, optional): Rotation angle for x-axis labels. Default is None (no rotation).
         - xlabel (str, optional): Custom label for the x-axis. Default is the x_col name.
         - ylabel (str, optional): Custom label for the y-axis. Default is the y_col name.
         - legend_title (str, optional): Custom title for the legend. Default is the group_col name.
         - colors (dict, optional): Dictionary mapping group names to colors. Default is None.
-        - std_col (str, optional): Column name for the standard deviation values. Default is None.
+        - err_col (str, optional): Column name for the error-bar values. Default is None.
+        - figsize, bar_width, ax, fig: figure/bar overrides.
 
     Returns:
     - None
@@ -254,11 +256,13 @@ def _plot_spiderweb(
     Parameters:
     - categories (list): List of category names.
     - values (list): List of values corresponding to the categories.
-    - title (str, optional): Title of the plot. Default is "".
+    - label (str, optional): Legend label for this series.
     - color (str, optional): Color for the plot. Default is 'blue'.
+    - fig, ax (optional): Draw onto an existing polar figure/axes.
+    - **kwargs: figsize, title (default ""), ylim.
 
     Returns:
-    - None
+    - (fig, ax)
     """
 
     figsize = kwargs.get("figsize", (10, 5))
@@ -533,8 +537,8 @@ def plot_components_by_model_and_param_value_including_population(
                         flag = sum([int(c in task_param) for c in ["famous", "random"]])
                         if flag > 0:
                             if "famous" in task_param:
-                                # Réka Albert: 43067
-                                # Albert‐László Barabási: 44475
+                                # famous female reference: 43067
+                                # famous male reference: 44475
                                 id = 43067 if "female" in task_param else 44475
                                 _tmp = data.loc[[id]]
                             elif "random" in task_param:
@@ -2533,9 +2537,9 @@ def plot_metric_bars_by_groups(
 ):
     """
     Plot grouped bar chart:
-    - x-axis: metric
-    - y-axis: mean
-    - hue: model (two bars per metric)
+    - x-axis: ``x_col`` (default task_name), in ``x_order``
+    - y-axis: ``metric_col`` (default mean)
+    - hue: ``hue_col`` (default model; colors cover two hue groups)
     """
 
     figsize = kwargs.pop("figsize", (10, 2.5))

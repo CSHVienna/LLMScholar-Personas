@@ -1,8 +1,9 @@
 """
-2_doi_match.py — Step 2: the OpenAlex author of each Semantic Scholar researcher,
-through their papers.
+2_doi_match.py — Legacy (formerly step 2 of the OpenAlex cascade; replaced by
+1_ground_truth/2_jw_match.py): the OpenAlex author of each Semantic Scholar
+researcher, through their papers.
 
-The papers of the researcher (1_ss_papers.py, by DOI) are looked up in OpenAlex
+The papers of the researcher (1_ground_truth/1_ss_papers.py, by DOI) are looked up in OpenAlex
 works; among the OpenAlex authors of those papers, the researcher is the one
 whose last name is the researcher's last name and who signs the most of them.
 It is the same person in both sources because they wrote the same papers, not
@@ -13,10 +14,13 @@ Output: doi_match.parquet, one row per researcher found —
   researcher found in OpenAlex), display_name, works_count, cited_by_count,
   first_year, last_year
 Researchers with no DOI in OpenAlex, or no author with their last name on those
-papers, are left out; 6_enrichment/1_openalex.py uses the cascade (6_pick.py) for them.
+papers, are left out (the name cascade handled those).
+
+It imports oa_common from scripts/6_enrichment/, which no longer exists (the same
+helpers now live in libs/openalex_common.py), so it does not run as is.
 
 Usage (from code/, with PYTHONPATH=.):
-  python scripts/5_openalex_cascade/2_doi_match.py \\
+  python scripts/legacy/2_doi_match.py \\
       --ss_papers ../results/summary/openalex_cascade/ss_papers.parquet \\
       --factual   ../results/summary/cascade/factual_authors.csv \\
       --output    ../results/summary/openalex_cascade/doi_match.parquet
@@ -74,6 +78,7 @@ QUALIFY row_number() OVER (PARTITION BY n.researcher_id
 
 
 def run(ss_papers: str, factual: str, duckdb_path: str, output: str) -> None:
+    """Match each researcher in `factual` to an OpenAlex author through the DOIs in `ss_papers`."""
     papers = pd.read_parquet(ss_papers, columns=["researcher_id", "doi"]).drop_duplicates()
     names = (pd.read_csv(factual, usecols=["researcher_id", "matched_name"])
              .dropna().drop_duplicates("researcher_id"))

@@ -2,7 +2,7 @@
 build_sankey_flows.py — Pre-compute the flow tables behind the Sankey figures.
 
 Same shape and rationale as build_location_flows.py: read
-summary/factuality_full.csv once in chunks, reduce to long (source, target, count) rows
+7_enrichment/factuality_full.csv once in chunks, reduce to long (source, target, count) rows
 keeping the slicing dimensions, and let the notebook stay plotting-only. The
 source CSV is 6.8 GB, so no figure should ever touch it directly.
 
@@ -10,16 +10,13 @@ Six flows, each written to its own CSV under
 <results_dir>/9_figures/tables/:
 
   seniority_flows.csv  asked seniority   -> actual seniority (Semantic Scholar)
-                       plus the OpenAlex verdict as a separate `source_gt`,
-                       because the two disagree by 5x and neither substitutes
-                       for the other
   ethnicity_flows.csv  prompt country    -> perceived ethnicity
   field_flows.csv      prompt field      -> ground-truth field (same level both
                        sides, which is what makes the diagonal readable)
   subfield_flows.csv   prompt subfield   -> ground-truth field; the ground truth
                        has no subfield (Semantic Scholar only carries `Field`),
                        so this one is deliberately cross-level
-  language_flows.csv   prompt language   -> author country
+  language_flows.csv   prompt language   -> author country (OpenAlex)
   gender_flows.csv     prompt country    -> ground-truth gender of the author
 
 Every flow counts the recommendations with factuality_author = True: the

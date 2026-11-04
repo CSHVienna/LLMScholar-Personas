@@ -1,5 +1,6 @@
 """
-5_ss_metadata.py — Step 6 of run_pipeline.py: the Semantic Scholar metadata of
+ss_metadata.py — Legacy (formerly 6_factuality/5_ss_metadata.py; no metric used
+its columns and the pipeline keeps only OpenAlex): the Semantic Scholar metadata of
 the researcher picked for each recommendation with factuality_author = True,
 from the Semantic Scholar API (POST /author/batch, 1000 researchers per call):
 
@@ -15,7 +16,7 @@ are saved in ss_metadata_parts/ as they arrive, so a run that stops resumes; if
 [secrets].s2_api_key is set in config.ini (or S2_API_KEY), it is sent.
 
 Usage (from code/, with PYTHONPATH=.):
-  python scripts/6_factuality/5_ss_metadata.py --cascade_dir ../results/6_factuality
+  python scripts/legacy/ss_metadata.py --cascade_dir ../results/6_factuality
 """
 
 import argparse
@@ -41,6 +42,7 @@ COLUMNS = {"paperCount": "ss_paper_count", "citationCount": "ss_citation_count",
 
 
 def api_key() -> str | None:
+    """S2 API key from S2_API_KEY, else [secrets].s2_api_key in the nearest config.ini."""
     if os.environ.get("S2_API_KEY"):
         return os.environ["S2_API_KEY"]
     cfg = configparser.ConfigParser()
@@ -52,6 +54,7 @@ def api_key() -> str | None:
 
 
 def fetch(ids: list[int], key: str | None) -> pd.DataFrame | None:
+    """One /author/batch call with backoff on 429/5xx; None if it never succeeds."""
     headers = {"Content-Type": "application/json", **({"x-api-key": key} if key else {})}
     body = json.dumps({"ids": [str(i) for i in ids]}).encode()
     for attempt in range(40):
@@ -108,6 +111,7 @@ def download(ids: list[int], parts: Path) -> pd.DataFrame:
 
 
 def add_columns(path: Path, meta: pd.DataFrame) -> None:
+    """Replace the ss_* columns of the CSV at `path` with `meta`, joined on researcher_id."""
     df = pd.read_csv(path, low_memory=False)
     df = df.drop(columns=[c for c in meta.columns if c != "researcher_id" and c in df.columns])
     rid = pd.to_numeric(df["researcher_id"], errors="coerce").astype("Int64")

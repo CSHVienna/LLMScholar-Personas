@@ -45,7 +45,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-# ── Default style constants (mirror gridcons.py) ─────────────────────────────
+# ── Default style constants (same values as libs/visuals/constants.py) ───────
 FIG_DPI = 600
 TICK_FONT_SIZE = 8
 TICK_FONT_COLOR = "#828282"
@@ -87,7 +87,7 @@ DEFAULT_DIRECTIONS = {
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# Statistical helpers
+# Color helpers
 # ═════════════════════════════════════════════════════════════════════════════
 
 
@@ -113,10 +113,11 @@ def _build_sections(
     """
     Build the per-(section, row) data structure from a *pre-aggregated*
     DataFrame (the output of ``aggregate_scores`` — columns are
-    ``{metric}_mean``, ``{metric}_ci``, ``{metric}_n``, plus a global ``n``).
+    ``{metric}_mean``, ``{metric}_ci``, plus a global ``n``).
 
-    Each returned section is a dict ``{'label', 'color', 'rows'}`` where each
-    row carries its display label and the per-metric mean/ci/n values.
+    Each returned section is a dict ``{'label', 'color', 'rows', 'shade'}``
+    where each row carries its display label and, per metric, ``{metric}_mean``,
+    ``{metric}_ci`` and ``{metric}_n`` (the latter copied from the global ``n``).
     """
     sections: list[dict] = []
     for gc in group_configs:
@@ -493,6 +494,9 @@ def _draw_metric_panel(
     — set False on non-bottom rows of a stacked figure for a clean shared-axis
     look. ``show_mid_gridline`` toggles the vertical 0.5 gridline; the x-tick
     *positions* drive the grid, so dropping the 0.5 tick drops its gridline.
+
+    Rows with ``n < 3`` get no error bar and a ``*`` after the value; the best
+    value per section is bolded for directional (↑/↓) metrics.
     """
     direction = dirs.get(metric)
     arrow = f" {direction}" if direction else ""
@@ -563,7 +567,7 @@ def _draw_metric_panel(
                 continue
             is_best = best is not None and abs(val - best) < 1e-9
             low_n = n < 3
-            # A value > 0 gets at least a thin bar, so it does not look like 0.
+            # Bar length is the raw value (the minimum-width tweak is disabled).
             bar = val # max(val, 0.004) if val > 0 else val
             ax.barh(yv, bar, height=0.55, color=color, alpha=0.92, zorder=2)
             ci_val = ci if (np.isfinite(ci) and not low_n) else 0.0
@@ -765,8 +769,9 @@ def plot_grouped_metrics(
     Parameters
     ----------
     all_calls_df : DataFrame
-        Per-cell pre-aggregated values. Each metric ``m`` must have columns
-        ``{m}_mean``, ``{m}_ci``, ``{m}_n``.
+        Per-cell pre-aggregated values (output of ``aggregate_scores``). Each
+        metric ``m`` must have columns ``{m}_mean`` and ``{m}_ci``; the row
+        count is read from the global ``n`` column.
     group_configs : list of dict
         Each dict defines one section (block of rows). Keys:
           - 'label' (str): section label shown in the left column.
@@ -782,7 +787,11 @@ def plot_grouped_metrics(
         present in DEFAULT_DIRECTIONS.
     metric_directions : dict, optional
         Per-metric direction: '↑' (higher better), '↓' (lower better), or None.
-        Best-in-group cells are bolded for directional metrics.
+        Best-in-group cells are bolded for directional metrics. Merged over
+        ``DEFAULT_DIRECTIONS``.
+    metric_labels : dict, optional
+        ``{metric: display title}`` for the panel titles; defaults to the
+        metric name.
     figsize : tuple, optional
         (width, height) in inches; auto-sized if omitted.
     save_path : str, optional
@@ -952,8 +961,8 @@ def plot_grouped_metrics_labeled(
     **plot_kwargs,
 ):
     """
-    Same as ``plot_grouped_metrics`` plus optional label remapping for the
-    section header and the row labels.
+    Same as ``plot_grouped_metrics`` plus optional remapping of the row
+    labels.
 
     Parameters
     ----------
@@ -965,9 +974,10 @@ def plot_grouped_metrics_labeled(
         Global mapping ``{df_value: display}`` for unique values of every
         ``gc['column']``, which appear as the row labels.
 
-    Per-config overrides (optional keys inside each ``group_config`` dict):
-        - ``label_labels``   — overrides ``section_labels`` for that section
+    Per-config override (optional key inside each ``group_config`` dict):
         - ``column_labels``  — overrides ``row_labels`` for that section
+    A ``label_labels`` key is accepted but only stripped (section labels are
+    not remapped; set ``gc['label']`` directly).
 
     Resolution order: per-config > top-level > original value.
     Unknown values fall through unchanged.
@@ -976,20 +986,15 @@ def plot_grouped_metrics_labeled(
     -------------------
     Row-label remapping is done by writing a derived column to a local
     copy of the DataFrame and pointing ``gc['column']`` at it; this keeps
-    the downstream function (incl. aggregation, ordering, best-in-group
-    highlighting) entirely unchanged.
+    the downstream function (ordering, best-in-group highlighting)
+    entirely unchanged.
     """
     df, new_configs = _apply_label_remap(all_calls_df, group_configs, row_labels)
     return plot_grouped_metrics(df, new_configs, **plot_kwargs)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# Public API: NEW — stacked variant (N blocks sharing x-axis)
-# ═════════════════════════════════════════════════════════════════════════════
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# Internal helpers — label remapping (shared by labeled + stacked variants)
+# Internal helpers — label remapping (used by the labeled variant)
 # ═════════════════════════════════════════════════════════════════════════════
 
 

@@ -4,7 +4,9 @@ import pandas as pd
 
 
 def summarize_model_metadata(models_metadata, model_sizes):
-    # 2. create a df
+    """LaTeX-ready table with one column per size in ``model_sizes`` listing
+    the models of that size (``-q4_K_M`` suffix dropped, underscores escaped)."""
+    # Create a df
     tmp = pd.DataFrame.from_dict(models_metadata, orient="index")
     tmp = tmp.reset_index().rename(columns={"index": "model"})[["model", "size"]]
     tmp.loc[:, "model"] = tmp.model.apply(lambda x: x.replace("-q4_K_M", ""))

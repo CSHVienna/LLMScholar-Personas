@@ -1,6 +1,6 @@
 """
-run_pipeline.py — Runs the factuality cascade on Semantic Scholar, step 3 of the
-funnel (after validity and consistency; before OpenAlex).
+run_pipeline.py — Step 6: the factuality cascade on Semantic Scholar (after
+5_validity/; before 7_enrichment/).
 
   Input: ../results/5_validity/recommendations_valid.csv, the recommendations of the
   valid calls, each author once per call and only complete names, written by scripts/5_validity/1_validity.py (run it first).
@@ -23,7 +23,7 @@ funnel (after validity and consistency; before OpenAlex).
        "" (factuality_author = False)
                                                              → factuality_ss.csv
      and keeps the rows with factuality_author = True       → factual_authors.csv
-     Only those go on to OpenAlex (scripts/1_ground_truth/, scripts/7_enrichment/).
+     Only those carry an OpenAlex author into scripts/7_enrichment/.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/6_factuality/run_pipeline.py

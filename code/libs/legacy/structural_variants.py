@@ -2,7 +2,7 @@
 structural_variants.py — Structural metrics (connectedness, similarity) per
 population variant, written by scripts/legacy/run_similarity.py. Used by the
 pipeline before the factuality cascade; the current pipeline computes them in
-scripts/pipeline/5_socials.py.
+scripts/8_metrics/2_socials.py.
 """
 
 import logging
@@ -35,7 +35,7 @@ def load_structural_variant(
     per-call table. Parquets written before the runner stored those keys carry
     only ``_cid`` — a surrogate from ``groupby().ngroup()`` that means nothing
     outside the run that made it — and are repaired here from
-    ``factuality_path``, including the model rename build_valid_calls applies
+    ``factuality_path``, including the model rename scripts/legacy/build_valid_calls.py applies
     (``:`` -> ``-``, ``.`` -> ``_``); without that rename the join silently
     matches nothing.
     """

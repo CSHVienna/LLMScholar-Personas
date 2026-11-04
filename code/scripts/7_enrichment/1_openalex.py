@@ -10,7 +10,8 @@ steps read them and leaves the rows without factuality_author empty:
   oa_status (found | not_found | not_searched), oa_match (jw | cascade),
   oa_id, oa_display_name, oa_works_count, oa_cited_by_count, oa_h_index,
   oa_i10_index, oa_first_pub_year, oa_last_pub_year, oa_career_age,
-  oa_country_code, oa_last_institution, oa_country_source (own_papers | profile)
+  oa_country_code, oa_last_institution, oa_country_source (own_papers | profile),
+  oa_match_score (1.0 when found)
 
 It also makes sure the per-year chunks of country and institution per OpenAlex
 author exist (built once, reused), which 3_affiliation.py reads for the
@@ -46,8 +47,8 @@ def _open_duckdb(db_path: str):
         # Cap DuckDB at 64GB so the system keeps comfortable headroom (Python +
         # OS + buff/cache need their share of the 125GB box). With 96GB cap the
         # works-agg run drove RSS past the cap to 100GB and ate system available
-        # memory down to ~12GB, risking OOM. Spill goes to /data (1.8TB free)
-        # which can absorb the extra GB of intermediate happily.
+        # memory down to ~12GB, risking OOM. Spill goes to WORKS_TMP_DIR
+        # ([data].oa_works_tmp_dir, on disk), which absorbs the intermediates.
         con.execute("SET memory_limit = '64GB'")
         con.execute("SET preserve_insertion_order = false")
         con.execute("SET enable_progress_bar = false")

@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# export PYTHONPATH="$PYTHONPATH:../../libs" # <-- run from code/scripts/ethnicity/
+# Run from code/scripts/ethnicity/ (default paths are relative to it).
 """
 NamSor verification of perceived ethnicity.
 
 Pipeline:
   1. Read an input CSV with columns: name, lastname, location.
-  2. Build a deduplicated batch of (firstName, lastName, countryIso2) entries.
-  3. Send batches of 100 to NamSor /api2/json/usRaceEthnicityBatch.
+  2. Build a deduplicated batch of (firstName, lastName, countryIso2) entries
+     (countryIso2 mapped from `location`; dropped with --no-country).
+  3. Send batches of 100 to the NamSor endpoint chosen with --endpoint.
+     Ids already in the JSONL are skipped, so re-runs resume.
   4. Append every personalNames item NamSor returns to a JSONL file
      (one JSON object per line) — this is the raw archive.
-  5. Optionally write a flat CSV with the canonical category mapped
-     to our 4-class scheme.
+  5. Append the returned scalar fields to a flat CSV (skip with --output-csv "");
+     for us_race, namsor_canonical maps raceEthnicity to our categories.
 
-Endpoint: POST https://v2.namsor.com/NamSorAPIv2/api2/json/usRaceEthnicityBatch
-Body: {"personalNames":[{"id","firstName","lastName","countryIso2"}]}
-Response field raceEthnicity ∈ {W_NL, HL, A, B_NL, AI_AN, PI}.
+Endpoints (--endpoint, POST https://v2.namsor.com/NamSorAPIv2/api2/json/...):
+  us_race       usRaceEthnicityBatch  {"id","firstName","lastName","countryIso2"}
+                → raceEthnicity ∈ {W_NL, HL, A, B_NL, AI_AN, PI}  (default)
+  diaspora      diasporaBatch         {"id","firstName","lastName","countryIso2"}
+  diaspora_full diasporaFullBatch     {"id","name","countryIso2"} (unsplit name)
 
 Auth: API key from config.ini ([namsor].data_dir → text file with the key)
 or from env var NAMSOR_API_KEY (overrides the config).
@@ -23,10 +27,10 @@ or from env var NAMSOR_API_KEY (overrides the config).
 Examples
 --------
 # Smoke test on 20 unique names, no API call:
-python namsor_verify.py --input ../../../results/legacy/reorg_2026-10-26/data_side/recommendations_with_ethnicity.csv --limit 20 --dry-run
+python namsor.py --input ../../../results/legacy/reorg_2026-10-26/data_side/recommendations_with_ethnicity.csv --limit 20 --dry-run
 
 # Real run, all unique (firstName, lastName, country) triples, append to JSONL:
-python namsor_verify.py --input ../../../results/legacy/reorg_2026-10-26/data_side/recommendations_with_ethnicity.csv --output-jsonl ../../../data/ethnicity_inference/namsor_responses.jsonl --output-csv ../../../data/ethnicity_inference/namsor_results.csv
+python namsor.py --input ../../../results/legacy/reorg_2026-10-26/data_side/recommendations_with_ethnicity.csv --output-jsonl ../../../data/ethnicity_inference/namsor_responses.jsonl --output-csv ../../../data/ethnicity_inference/namsor_results.csv
 """
 
 import argparse
@@ -146,6 +150,7 @@ COUNTRY_TO_ISO2 = {
 
 
 def country_to_iso2(country: str | None) -> str | None:
+    """ISO-2 code for a country name in COUNTRY_TO_ISO2, else None."""
     if not country or not isinstance(country, str):
         return None
     return COUNTRY_TO_ISO2.get(country.strip())
@@ -277,6 +282,7 @@ def run(
     sep: str = ",",
     use_country: bool = True,
 ) -> None:
+    """Query NamSor for every unique name in input_path; see the module docstring."""
     cfg = ENDPOINTS[endpoint]
     log(f"Endpoint: {endpoint} — {cfg['label']}")
     log(f"  URL: {cfg['url']}  ({cfg['credits']} credits/name)")

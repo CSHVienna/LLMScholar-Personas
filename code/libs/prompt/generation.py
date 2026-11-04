@@ -168,12 +168,13 @@ def create_prompt(persona_context, user_request, language=cons.LANG_EN):
     Create a parameterizable prompt for auditing LLMs.
 
     Parameters:
-        persona_context (str): The context describing the persona (e.g., role, task, location).
-        user_request (str): The specific user request to be included in the prompt (e.g., k, target, field, subfield).
+        persona_context (dict): role, task and location of the persona.
+        user_request (dict): k, target, field and subfield of the request.
         language (str): The language for the prompt. Defaults to English.
 
     Returns:
-        str: A formatted prompt string.
+        tuple[str, str]: (instructions, input) — the system instructions and
+        the user input, with every placeholder filled.
     """
     instructions = (
         INSTRUCTION[language]
@@ -203,8 +204,11 @@ def create_prompt(persona_context, user_request, language=cons.LANG_EN):
 
 def create_translate_param_prompt(obj: dict, lang: str) -> dict:
     """
-    Translate all string values in `obj` to the target `lang` while preserving
-    the exact JSON structure and keys. Non-strings are left unchanged.
+    Build the LLM prompt that translates every string value in `obj` to `lang`
+    while preserving the exact JSON structure and keys.
+
+    Returns (instructions, llm_input); llm_input is the JSON
+    {"language": lang, "data": obj}.
     """
     instructions = (
         "You are a precise translation engine.\n"

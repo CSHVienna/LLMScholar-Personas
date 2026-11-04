@@ -17,7 +17,7 @@ For every researcher (ss_papers.parquet, from 1_ss_papers.py):
      first 10 papers are looked at; if no author got 2 votes there and several
      have 1 (a tie), papers 11 to 50 are looked at too. With a single vote in
      all (e.g. the researcher has one paper), that author is the one.
-Researchers with no vote, or still tied, are left out; the cascade (4–6) is used for them.
+Researchers with no vote, or still tied, are left out; the cascade (3–5) is used for them.
 
 Output: jw_match.parquet — researcher_id, oa_id, n_votes, n_papers (papers
 looked at until the decision), score_mean (mean score of its votes), display_name, works_count,

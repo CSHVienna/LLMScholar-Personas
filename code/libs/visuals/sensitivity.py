@@ -12,6 +12,12 @@ from libs.visuals.vis import FIG_DPI
 from libs.utils.nesting import within_lookup, nested_term_pattern
 
 def create_grid(fe_models, metrics=None, figsize_per_panel=(5, 6), nrows=1, sharey=True):
+    """Create an ``nrows`` x ceil(n/nrows) subplot grid, one panel per metric.
+
+    ``metrics`` defaults to the keys of ``fe_models``. Returns ``(fig, grid)``
+    where ``grid[metric]`` is a dict with the panel's ``ax``, ``irow``,
+    ``icol``, ``index``, ``ncols`` and ``nrows``.
+    """
     if metrics is None:
         metrics = list(fe_models.keys())
 
@@ -83,6 +89,15 @@ def _contrast_sum(model, terms: list[str]) -> tuple[float, float, float]:
 
 
 def marginal_effects(model, spec, prompt_var: str, moderator: str) -> pd.DataFrame:
+    """Effect of each level of ``prompt_var`` at every level of ``moderator``.
+
+    For the moderator's reference level the effect is the main-effect
+    coefficient; for each other level it is main + interaction (a linear
+    contrast with its own SE and p-value, 95% CI = est ± 1.96·SE). Returns one
+    row per (prompt_level, mod_level) with columns ``prompt_var``,
+    ``prompt_level``, ``mod_level``, ``estimate``, ``se``, ``ci_low``,
+    ``ci_high``, ``pval``; empty if ``prompt_var`` has no terms in the model.
+    """
     pt = model.params_table()
     params, ses, ci = pt['params'], pt['se'], pt['conf_int']
     pvals = pt['pvalues']
@@ -258,7 +273,8 @@ def plot_main_effects(model, spec, df=None, ax=None,
     """Forest plot of main effects with grouped y-axis labels.
 
     Args:
-        model: a fitted SensitivityModel (FixedEffectsModel or MixedEffectsModel).
+        model: a fitted (or loaded) FixedEffectsModel — reads ``model.params``,
+               and ``r2()`` / ``llm_share`` when present for the R² annotation.
         spec:  the ModelSpec.
         df:    original dataframe — needed to look up reference levels.
         ax:    matplotlib Axes. If None, a new figure is created.
@@ -270,6 +286,13 @@ def plot_main_effects(model, spec, df=None, ax=None,
                   Example: {'role_en': 'Role', 'phd student': 'PhD student',
                             'language_en': 'Language', 'k': 'Number of items'}
         figsize: (width, height) in inches. Defaults to auto-scaled by row count.
+        banding: draw alternating persona/context-tinted row bands.
+        band_alpha: opacity of those bands.
+        r2_kwargs: overrides for the R² text position/style
+                   (``x``, ``y``, ``ha``, ``va``, ``fontsize``).
+
+    Returns:
+        The Axes drawn on.
     """
     name_map = name_map or {}
 
@@ -395,10 +418,7 @@ def plot_main_effects(model, spec, df=None, ax=None,
     return ax
 
 
-# ---------- plot 2: Model 2 heterogeneity grid ----------
-
-
-# ---------- plot 3: robustness — m2 vs m2_by_attr ----------
+# ---------- residual diagnostics ----------
 
 
 def get_star_suffix(p: float) -> str:
@@ -413,6 +433,14 @@ def get_star_suffix(p: float) -> str:
         return ''
 
 def plot_residuals_diagnostic(analysis, metrics_name_map, fn_summary_table, fn_plot):
+    """Q-Q plot of the Model 1 residuals for every metric in ``analysis.results``.
+
+    Each panel is annotated with the Shapiro-Wilk and Breusch-Pagan statistics
+    (stars from ``get_star_suffix``). Writes the per-metric test table to
+    ``fn_summary_table`` (CSV) and the figure to ``fn_plot``; returns the table
+    (columns ``metric``, ``shapiro_stat``, ``shapiro_p``, ``bp_stat``,
+    ``bp_p``, ``outside_0_1_pct``).
+    """
     import statsmodels.stats.api as sms
     import statsmodels.api as sm
     import scipy.stats as stats

@@ -15,7 +15,10 @@ except ImportError:  # PYTHONPATH=code/libs/
 
 # ─── utils ─────────────────────────────────────────────────────────────────
 def assign_quadrants(df, x_col="x_technical", y_col="y_social", x_split=None, y_split=None):
-    """Split each axis (at the median, unless a split value is given) and tag every row as Q1..Q4."""
+    """Split each axis (at the median, unless a split value is given) and tag every row as Q1..Q4.
+
+    Returns ``(labels, x_split, y_split)``; rows with NaN in either axis get "".
+    """
     x_med = df[x_col].median() if x_split is None else x_split
     y_med = df[y_col].median() if y_split is None else y_split
     conds = [
@@ -129,6 +132,13 @@ def plot_quadrant_scatter(
     x_range=None,  # (min, max) attainable x, e.g. (0, 7); axes then span the full range
     y_range=None,  # (min, max) attainable y, e.g. (0, 4)
 ):
+    """Scatter one dot per row, colored by quadrant, with non-overlapping labels.
+
+    The crosshair sits at the data median or at the midpoint of
+    ``x_range``/``y_range`` (``split``). Labels are placed greedily in pixel
+    space (``_place_labels``), avoiding dots and the legend; distant labels
+    get a curved leader line. Returns ``(fig, ax)``.
+    """
     if split not in ("median", "midpoint"):
         raise ValueError(f"split must be 'median' or 'midpoint', got {split!r}")
     if split == "midpoint" and (x_range is None or y_range is None):
@@ -227,7 +237,7 @@ def plot_quadrant_scatter(
     obstacles = [tuple(legend.get_window_extent(renderer).extents)] if legend is not None else []
     regions = None
     if labels_in_quadrant:
-        # quadrant boxes in pixels, split at the median crosshair
+        # quadrant boxes in pixels, split at the crosshair (median or midpoint)
         # (a dot on the median belongs to the >= side, as in assign_quadrants)
         mx, my = ax.transData.transform((x_med, y_med))
         regions = [

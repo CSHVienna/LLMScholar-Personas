@@ -85,12 +85,6 @@ A funnel: each stage only passes on what survived the previous one. See `code/RE
 
 ---
 
-## Related work
-
-This codebase extends the auditor framework introduced in *Whose Name Comes Up? II: Benchmarking and Intervention-Based Auditing of LLM-Based Scholar Recommendation* — [arXiv:2602.08873](https://arxiv.org/abs/2602.08873) — with the persona-prompting axis (language × country × role).
-
----
-
 ## Status
 
 Research code. APIs and intermediate CSV schemas may change between paper revisions.

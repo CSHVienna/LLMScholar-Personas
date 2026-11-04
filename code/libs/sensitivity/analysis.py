@@ -1,11 +1,14 @@
 """SensitivityAnalysis: orchestrates the full sensitivity pipeline.
 
 Workflow:
-    1. __init__:        declare metrics + a base spec.
-    2. prepare_data:    clean, impute, standardize, categoricalize once.
-    3. fixed_effects:   fit Model 1 (FixedEffectsModel) per metric.
-    4. mixed_effects:   fit Model 2 single-moderator models per metric.
-    5. save / load:     portable on-disk persistence (JSON + parquet).
+    1. __init__:             declare metrics + a base spec.
+    2. prepare_data:         clean, impute, categoricalize, standardize once.
+    3. fixed_effects_model:  fit Model 1 (FixedEffectsModel) per metric.
+    4. effect_sizes / variance_ceilings / coefs: cross-metric tables.
+    5. save / load:          portable on-disk persistence (JSON + parquet).
+
+The Model 2 (MixedEffectsModel) fitting loop is commented out; saved m2
+directories are still loaded if present.
 """
 
 from dataclasses import replace
@@ -44,9 +47,9 @@ class SensitivityAnalysis:
     def __init__(self, all_metrics: Iterable[str], base_spec: ModelSpec, metrics_to_exclude: Iterable[str] = None):
         """
         Args:
-            all_metrics: every metric column you intend to model. Drives
-                         the default loop in fixed_effects() / mixed_effects(),
-                         but specific calls can override via `metrics_to_exclude`.
+            all_metrics: every metric column you intend to model. Minus
+                         `metrics_to_exclude`, drives the loop in
+                         fixed_effects_model().
             metrics_to_exclude: metrics to exclude from modeling.
             base_spec:   a ModelSpec with everything set except `metric`
                          (the metric will be overridden per iteration).
@@ -78,10 +81,11 @@ class SensitivityAnalysis:
         """Clean and prepare the dataframe once. Stores the result on self.df.
 
         Steps:
-            1. Resolve structurally-nested NaN (e.g. factuality_field ← factuality_author).
-            2. Drop remaining NaN on all variables used in any model.
-            3. (Optional) Z-score numeric prompt variables.
-            4. Set categorical references for prompt and LLM-attribute variables.
+            1. Resolve structurally-nested NaN (e.g. factuality_field ← factuality_author);
+               any `<metric>_measurable` indicators are added to spec.structural_vars.
+            2. (Optional) Drop remaining NaN on all variables used in any model.
+            3. Set categorical references for prompt and LLM-attribute variables.
+            4. (Optional) Z-score numeric prompt variables.
 
         Args:
             data:                  the raw dataframe.
@@ -99,7 +103,7 @@ class SensitivityAnalysis:
         spec = self.base_spec
         df = data.copy()
 
-        # 1. Structurally-nested NaN → zero-impute
+        # 1. Structurally-nested NaN, handled per `nested_strategy`
         if nested_pairs:
             df, new_vars = handle_nested_missingness(df, 
                                                     nested_pairs, 
@@ -154,10 +158,11 @@ class SensitivityAnalysis:
                             verbose: bool = True) -> dict:
         """Fit Model 1 (OLS with LLM fixed effects) for each metric.
 
-        Stores each fit under self.results[metric]['m1'].
-        Also caches the per-metric ModelSpec under self.results[metric]['spec'].
+        Stores each fit under self.results[metric]['m1'], its ModelSpec under
+        ['spec'] and its N under ['N'].
 
         Args:
+            cluster_se:         cluster-robust SEs by prompt configuration.
             verbose:            print progress per metric.
 
         Returns:
@@ -203,8 +208,11 @@ class SensitivityAnalysis:
         return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
     def effect_sizes(self, method: str = 'fdr_bh', alpha: float = 0.05) -> pd.DataFrame:
-        """Long-format partial η² per (metric, variable) — for the heatmap.
-        Requires FixedEffectsModel.effect_sizes() to be available."""
+        """Long-format ANOVA effect sizes (eta², partial eta², omega²) per
+        (metric, variable) from each m1 fit — the input of the heatmap.
+
+        p-values are corrected for multiple testing with `method` over the
+        whole table; adds `p_value_adj`, `significant` and `correction_method`."""
         
         if self.effects is None or self.effects.empty:
             rows = []
@@ -254,10 +262,12 @@ class SensitivityAnalysis:
         """Save the analysis state to disk.
 
         Layout:
-            dirpath/
+            dirpath/metrics/alpha<alpha>/
                 analysis.json                 # top-level metadata
+                effect_sizes.parquet          # effect_sizes(alpha=alpha)
+                <metric>/                     # m1 extras (r2, params tables, model info)
                 <metric>/m1/                  # per-model directories
-                <metric>/m2_<attr>/
+                <metric>/m2_<attr>/           (if fitted)
                 <metric>/m2/                  (if fitted)
         """
         dirpath = Path(dirpath, 'metrics', f"alpha{alpha}")
@@ -310,12 +320,14 @@ class SensitivityAnalysis:
         """Restore an analysis from disk.
 
         Args:
-            dirpath:    directory created by .save()
+            dirpath:    the `dirpath` given to .save(); reads
+                        dirpath/metrics/alpha<alpha>/.
             base_spec:  reconstruct from this if provided; otherwise from JSON.
             df:         original dataframe. If provided, models are refit so
                         all live methods work (.coefs(), .t_test(), etc.).
                         If None, models load 'thin' — only saved tables
                         are accessible via .saved_coefs() / .saved_params().
+            alpha:      which saved alpha to load.
 
         Returns:
             A SensitivityAnalysis instance with self.results populated.

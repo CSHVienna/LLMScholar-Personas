@@ -16,7 +16,7 @@ import pandas as pd
 from libs.metrics.constants import FIELD_NORM_MAP, JUNIOR_MAX, LLM_TARGET_TO_BUCKET, SENIOR_MIN
 from libs.pipeline_common import author_key
 
-#se cargan los datos de los investigadores recomedados por el LLM
+
 def add_request_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Add query, Field and bucket to a recommendations table."""
     df["query"] = author_key(df).fillna("")   # the same key as duplicates and consistency
@@ -24,7 +24,7 @@ def add_request_columns(df: pd.DataFrame) -> pd.DataFrame:
     df["bucket"] = df["target"].map(LLM_TARGET_TO_BUCKET)
     return df
 
-#devuelve las combinaciones únicas que se recomendaron 
+
 def load_requests(recommendations_path: str) -> pd.DataFrame:
     """The distinct (query, Field, bucket) the prompts asked for."""
     df = pd.read_csv(
@@ -33,8 +33,9 @@ def load_requests(recommendations_path: str) -> pd.DataFrame:
     df = add_request_columns(df)
     return df[["query", "Field", "bucket"]].drop_duplicates()
 
-#se calcula el seniority
+
 def seniority_bucket(career_age: pd.Series) -> pd.Series:
+    """Seniority from career age: Junior (<= JUNIOR_MAX years), Senior (>= SENIOR_MIN), else None."""
     bucket = pd.Series(None, index=career_age.index, dtype="object")
     bucket[career_age <= JUNIOR_MAX] = "Junior"
     bucket[career_age >= SENIOR_MIN] = "Senior"

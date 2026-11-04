@@ -1,6 +1,13 @@
-# cd scripts
-# export PYTHONPATH="${PYTHONPATH}:../" 
-# python gpt_gemini_03_retrieve_results.py ...
+"""
+ollama_requests_multiprocessing.py — Sends every prompt to the local Ollama models
+(--model, or the list of --model_size), --repetitions times, spread over
+--nr_servers Ollama servers in parallel; responses are saved to
+ollama_<language>_<model>.json, and prompts already answered are skipped.
+
+Run from the repository root (prompts are read from
+data/context/<language>/all_params_and_prompts.json) with code/ on PYTHONPATH:
+  PYTHONPATH=code python code/scripts/4_llmcaller/ollama_requests_multiprocessing.py ...
+"""
 
 import os
 import sys

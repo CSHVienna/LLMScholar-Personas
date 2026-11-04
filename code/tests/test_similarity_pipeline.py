@@ -182,7 +182,7 @@ def test_index_alignment_puts_each_author_on_its_own_row(tmp_path):
 
 
 def test_ss_block_actually_reaches_the_pca(tmp_path):
-    """A feature column the canonical order does not list is silently dropped.
+    """The Semantic Scholar columns must reach the PCA fit.
 
     This pins the regression that made the SS variant identical to the OA one:
     build_similarity_embeddings ordered columns against a list that predated

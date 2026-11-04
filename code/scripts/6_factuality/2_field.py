@@ -29,7 +29,7 @@ from libs.utils.logging import setup_logging  # noqa: E402
 
 logger = setup_logging()
 
-# Un candidato sobrevive solo si su Field real coincide con algún field que se pidió para ese nombre.
+
 def run(recommendations_path: str, input_path: str, output_path: str) -> None:
     asked = load_requests(recommendations_path)[["query", "Field"]].drop_duplicates()
     cand = pd.read_parquet(input_path)

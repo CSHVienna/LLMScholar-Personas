@@ -30,7 +30,7 @@ def log_value_counts(
 ) -> None:
     """Log the value-count distribution of a column with percentages.
 
-    Replaces the boilerplate at the end of every factuality script:
+    Replaces the status-distribution boilerplate of the enrichment scripts:
 
         logger.info("Status distribution:")
         for status, count in df["xxx_status"].value_counts().items():

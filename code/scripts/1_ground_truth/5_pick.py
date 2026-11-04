@@ -1,12 +1,14 @@
 """
-6_pick.py — Step 6: the same cascade as scripts/6_factuality/, on OpenAlex, and
-one author picked per recommendation.
+5_pick.py — Step 5: the same cascade as scripts/6_factuality/, on OpenAlex, and
+one author picked per request.
 
-For every (recommended name, asked field, asked seniority, asked subfield) the
-prompts produced, among the OpenAlex authors with that name (step 4):
+For every distinct (name, field, seniority, subfield) of --recommendations
+(run_pipeline.py passes cascade_requests.csv: the Semantic Scholar name, Field
+and seniority of each researcher without a Jaro-Winkler match, no subfield),
+among the OpenAlex authors with that name (step 3):
   n_name       how many there are
   n_field      ... in the asked field: their main topics field OR their main
-               concept is the asked field (step 5, fields.py)
+               concept is the asked field (step 4, fields.py)
   n_seniority  ... with the asked seniority (career age from their first paper:
                <= 10 years Junior, >= 20 Senior)
   n_author     ... with both
@@ -15,11 +17,11 @@ prompts produced, among the OpenAlex authors with that name (step 4):
                top subfields include the asked one go first, then one at
                random (seed 42)
 
-Output: picks.csv — norm, Field, bucket, Subfield, n_* and oa_id.
-scripts/7_enrichment/1_openalex.py --picks uses it instead of choosing by itself.
+Output: picks.csv — norm, Field, bucket, Subfield, n_*, oa_id and pick_subfield
+(whether the pick is in the asked subfield). 6_oa_metadata.py reads it.
 
 Usage (from code/, with PYTHONPATH=.):
-  python scripts/1_ground_truth/6_pick.py \\
+  python scripts/1_ground_truth/5_pick.py \\
       --candidates    ../results/1_ground_truth/candidates.parquet \\
       --author_fields ../results/1_ground_truth/author_fields.parquet \\
       --output        ../results/1_ground_truth/picks.csv
@@ -48,7 +50,7 @@ KEYS = ["norm", "Field", "bucket", "Subfield"]
 
 
 def asked_requests(recommendations: str) -> pd.DataFrame:
-    """The distinct (name, field, seniority, subfield) the prompts asked for."""
+    """The distinct (name, field, seniority, subfield) of the requests."""
     rec = pd.read_csv(recommendations, usecols=["name", "lastname", "field", "target", "subfield"])
     rec = add_request_columns(rec)
     rec["Subfield"] = rec["subfield"].map(SUBFIELD_NORM_MAP).fillna(rec["subfield"])

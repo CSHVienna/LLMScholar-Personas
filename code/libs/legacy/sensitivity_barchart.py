@@ -33,10 +33,14 @@ class SensitivityBarChart:
         Index = metric names, columns = group names (e.g. 'context', 'persona').
     group_colors : dict[str, str]
         Maps group name -> hex color.
+    name_map : dict[str, str]   (optional)
+        Display labels for the metric names.
 
     Display kwargs
     --------------
     figsize, title, xlabel, ylabel : tuple, str|None
+    left, right, top, bottom : float or None
+        Figure margins; None picks defaults.
     sort_by : 'max' | 'sum' | 'mean' | <column-name>
         How to rank metrics top-to-bottom.
     bar_height : float in (0, 1)
@@ -177,11 +181,11 @@ class SensitivityBarChart:
 
 
 # ---------------------------------------------------------------------------
-# Demo — values taken from your image 2 so the preview shows the real figure
+# Demo — hard-coded partial η² values so the preview looks like real output
 # ---------------------------------------------------------------------------
 
 def _make_demo_df() -> pd.DataFrame:
-    """Values transcribed from the partial η² heatmap in image 2."""
+    """Placeholder partial η² values per metric for the 'context' and 'persona' groups."""
     rows = {
         'consistency':         (0.017,   0.0095),
         'div_ethnicity':       (0.0058,  0.084),
@@ -208,6 +212,7 @@ def _make_demo_df() -> pd.DataFrame:
 
 
 def main():
+    """Demo: draw the chart on placeholder data to barchart_preview.png."""
     df = _make_demo_df()
     chart = SensitivityBarChart(
         df=df,
@@ -217,7 +222,7 @@ def main():
         sort_by='max',
     )
     fig = chart.draw()
-    fig.savefig('/home/claude/barchart_preview.png', dpi=160,
+    fig.savefig('barchart_preview.png', dpi=160,
                 facecolor='white')
 
 

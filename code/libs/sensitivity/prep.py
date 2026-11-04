@@ -35,21 +35,21 @@ def handle_nested_missingness(df: pd.DataFrame,
                               strategy: str = 'indicator',
                               available_metrics: set[str] | None = None,
                               verbose: bool = True) -> pd.DataFrame:
-    """Handle structurally-nested missingness with flexible imputation.
+    """Handle structurally-nested missingness with one strategy for all pairs.
 
-    nested_pairs format:
-        {child_var: {
-            'parent': parent_var,
-            'strategy': 'zero' | 'mean' | 'indicator',
-        }}
+    nested_pairs format: {child_var: parent_var}. Only children in
+    `available_metrics` are handled. A NaN in the child is "structural" when
+    its parent is 0.
 
     Strategies:
-        'zero':      Replace NaN with 0. Use when 0 = "no event occurred"
-                     on the variable's scale.
-        'mean':      Replace NaN with the variable's mean (among defined rows).
-                     Neutral: contributes no slope information.
-        'indicator': Mean-impute AND add a binary measurable/not-measurable
-                     column. Most defensible for ambiguous cases.
+        'zero':      Replace structural NaN with 0. Use when 0 = "no event
+                     occurred" on the variable's scale.
+        'mean':      Replace structural NaN with the variable's mean (among
+                     defined rows). Neutral: contributes no slope information.
+        'indicator': Add a binary `<child>_measurable` column (1 where the
+                     child is defined) and fill EVERY NaN of the child with 1.
+
+    Returns (df, new_vars), where new_vars lists the indicator columns added.
     """
     out = df.copy()
     new_vars = []

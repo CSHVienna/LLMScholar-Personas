@@ -38,6 +38,7 @@ def get_clean_model_name(model):
 
 
 def check_prompt_already_processed(prompt_id, repetition, all_responses):
+    """True if `prompt_id` already has at least `repetition` responses."""
     try:
         return len(all_responses[str(prompt_id)]["responses"]) >= repetition
     except:
@@ -77,6 +78,8 @@ def save_response_to_temp_file(prompt_id, response, language, model, results_dir
 
 
 def read_and_delete_temp_files(language, model, results_directory):
+    """Load and delete the _temp_ response files of (language, model) written
+    by save_response_to_temp_file."""
     all_temp_data = []
     for filename in os.listdir(results_directory):
         if filename.startswith(f"_temp_{language}_{get_clean_model_name(model)}_"):
@@ -89,6 +92,7 @@ def read_and_delete_temp_files(language, model, results_directory):
 
 
 def add_temp_data(all_responses, all_temp_data, language, model):
+    """Append each temp response to the `responses` list of its prompt."""
     for temp_data in all_temp_data:
         assert str(temp_data["prompt_id"]) in all_responses
         assert temp_data["language"] == language

@@ -19,12 +19,12 @@ WITHIN_SUFFIX = "_within"
 
 class FixedEffectsModel(SensitivityModel):
     """
-    Model 1: metric ~ persona_vars + context_vars + C(llm)
+    Model 1: metric ~ C(persona_vars) + C(context_vars) + structural_vars + C(llm)
 
     LLM enters as fixed-effect dummies. Coefficients on prompt variables
-    represent within-LLM effects pooled across the 43 LLMs in your sample.
-    Use cluster-robust SEs (default) since observations within an LLM
-    are not independent.
+    represent within-LLM effects pooled across the LLMs in the sample.
+    fit(cluster_se=True) clusters SEs by prompt configuration (off by default);
+    effect sizes and R² always come from the plain OLS fit.
     """
 
     def __init__(self, spec):
@@ -132,10 +132,11 @@ class FixedEffectsModel(SensitivityModel):
         return self
 
     def __anova(self, typ: int = 2) -> pd.DataFrame:
-        """Type-II ANOVA decomposition with partial η² per term.
+        """ANOVA table (Type II by default) of the plain OLS fit.
 
-        Returns one row per model term (prompt variable + LLM dummies),
-        with sum of squares, df, F, p-value, and partial η².
+        Returns statsmodels' anova_lm table: one row per model term plus
+        Residual, with sum_sq, df, F and PR(>F). Effect sizes are derived
+        from it in __effect_sizes.
         """
         if self.result is None:
             raise RuntimeError("Call .fit() before .anova()")

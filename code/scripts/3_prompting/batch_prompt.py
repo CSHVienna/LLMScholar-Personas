@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# export PYTHONPATH="$PYTHONPATH:../../libs" # <-- run this in terminal before executing the script (adjust path as needed)
+"""
+batch_prompt.py — Builds every prompt combination (persona context × user
+request) from the parameter files of batch_params.py in <output-dir>/<language>/,
+writes them all to all_prompts.txt there (only if it does not exist yet) and
+prints the one with index --combination_id.
+
+Usage (from code/, with PYTHONPATH=.):
+  python scripts/3_prompting/batch_prompt.py -c 0 -l german -o ../data/context/
+"""
 
 import argparse
 

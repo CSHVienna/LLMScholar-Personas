@@ -36,6 +36,7 @@ REFERENCE_YEAR = 2025
 JUNIOR_MAX = 10  # career_age <= 10 → Junior
 SENIOR_MIN = 20  # career_age >= 20 → Senior  (11–19 → neither)
 
+# Columns read by scripts/legacy/build_valid_calls.py.
 NEEDED_COLS = [
     "model",
     "role",
@@ -205,13 +206,13 @@ STRUCTURAL_USED_COLS = {
 }
 
 # Feature vector for scholarly similarity, base half: everything derivable from
-# the columns 1_openalex.py writes into factuality_full.csv.
+# the oa_* columns of the ground truth (works, citations, first/last year; see
+# structural_model.ground_truth_population).
 #
-# These four mirror the reference PCA's OpenAlex block
-# (GTBuilder/APS/code/batch_authors_pca.py), minus min_year / max_year which are
+# These four mirror the reference PCA's OpenAlex block, minus min_year / max_year which are
 # dropped by decision — see build_author_features. `citations_per_work` and
 # `works_per_year` used to sit here and were removed: neither appears in the
-# reference PCA nor in section B6 of paper 1, and since the PCA is fitted on the
+# reference PCA nor in the reference benchmark paper, and since the PCA is fitted on the
 # whole vector, two invented columns tilt every axis and so shift every Sim_i.
 SIMILARITY_FEATURE_COLS = [
     "works_count",              # productivity: raw publication volume
@@ -462,11 +463,7 @@ BENCHMARK_PER_REQUEST_COLS = BENCHMARK_MODEL_GROUPS + [
     "task_param",
 ]
 
-# ── Sub-population dimensions ──────────────────────────────────────────────────
-# Consumed by aggregators.aggregate_*_by_subpop to compute social metrics per
-# subgroup; for each subpop value the GT is filtered to that subgroup (e.g.
-# parity_gender in Japan is compared against the female/male distribution of
-# authors in Japan, not the global GT).
+# ── Canonical orders ───────────────────────────────────────────────────────────
 
 # Canonical order of the 6 fields in the experiment — used to sort plot axes
 # and table columns.
