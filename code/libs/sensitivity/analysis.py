@@ -15,6 +15,7 @@ import json
 from statsmodels.stats.multitest import multipletests
 
 import pandas as pd
+import numpy as np
 
 from .spec import ModelSpec
 from .prep import (
@@ -23,6 +24,7 @@ from .prep import (
 )
 from .fixed_effects import FixedEffectsModel
 from .mixed_effects import MixedEffectsModel
+from .diagnostics import variance_ceiling
 
 FN_ANALYSIS = "analysis.json"
 FN_EFFECTS = "effect_sizes.parquet"
@@ -174,55 +176,6 @@ class SensitivityAnalysis:
             fits[metric] = m1
         return fits
 
-    # def mixed_effects_model(self,
-    #                         moderators: list[str] | None = None,
-    #                         single_moderator: bool = True,
-    #                         verbose: bool = True) -> dict:
-    #     """Fit Model 2 (mixed model with random LLM intercept + moderators).
-
-    #     By default fits one model PER moderator (single_moderator=True) under
-    #     self.results[metric]['m2_by_attr'][attr]. Set single_moderator=False
-    #     to additionally fit a fully-interacted model at self.results[metric]['m2'].
-    #     (Note: full m2 often fails to identify if some attribute combinations
-    #     are missing in the data, e.g. XL × proprietary.)
-
-    #     Args:
-    #         moderators:         which LLM attributes to use. Defaults to
-    #                             base_spec.llm_attrs.
-    #         single_moderator:   if True, fit one model per moderator (safer).
-    #                             If False, also fit one model with all moderators.
-    #         verbose:            print progress per metric.
-
-    #     Returns:
-    #         {metric: {'m2_by_attr': {...}, 'm2': ...}}
-    #     """
-    #     self._require_data()
-    #     moderators = moderators or self.base_spec.llm_attrs
-
-    #     fits = {}
-    #     for metric in self.available_metrics:
-    #         spec = self.results[metric].get('spec') or replace(self.base_spec, metric=metric)
-    #         self.results[metric]['spec'] = spec
-    #         entry = {}
-
-    #         if single_moderator:
-    #             entry['m2_by_attr'] = {}
-    #             for attr in moderators:
-    #                 if verbose:
-    #                     print(f'  [m2/{attr}] fitting for: {metric}')
-    #                 entry['m2_by_attr'][attr] = (
-    #                     MixedEffectsModel(spec, moderators=[attr]).fit(self.df, verbose=verbose)
-    #                 )
-    #             self.results[metric]['m2_by_attr'] = entry['m2_by_attr']
-    #         else:
-    #             if verbose:
-    #                 print(f'  [m2/full] fitting for: {metric}')
-    #             full = MixedEffectsModel(spec, moderators=moderators).fit(self.df)
-    #             self.results[metric]['m2'] = full
-    #             entry['m2'] = full
-
-    #         fits[metric] = entry
-    #     return fits
 
     # ------------------------------------------------------------------
     # Aggregated outputs
@@ -264,19 +217,39 @@ class SensitivityAnalysis:
             self.effects = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
         # correct p-values for multiple testing (across variables, per metric)
-        if 'p_value_adj' not in self.effects.columns:
-            corrected = multipletests(self.effects['p_value'], method=method, alpha=alpha)
-            self.effects['p_value_adj'] = corrected[1]
-            self.effects['significant'] = corrected[0]
-            self.effects['correction_method'] = method
+        # if 'p_value_adj' not in self.effects.columns:
+        corrected = multipletests(self.effects['p_value'], method=method, alpha=alpha)
+        self.effects['p_value_adj'] = corrected[1]
+        self.effects['significant'] = corrected[0]
+        self.effects['correction_method'] = method
 
         return self.effects
 
+    def variance_ceilings(self, k_col: str | None = None) -> pd.DataFrame:
+        """Compare main-effects R^2 (m1) to the saturated-design ceiling."""
+        self._require_data()
+        cell_vars = list(self.base_spec.prompt_vars) + [self.base_spec.llm_id]
+
+        rows = []
+        for metric in sorted(self.available_metrics):
+            row = variance_ceiling(self.df, metric, cell_vars, k_col=k_col).to_dict()
+            m1 = self.results[metric].get('m1')
+            
+            r2 = m1.r2() if m1 is not None else {}
+            row['r2_m1'] = float(r2.get('r2', np.nan))
+            row['r2_m1_adj'] = float(r2.get('r2_adj', np.nan))
+
+            rows.append(row)
+
+        out = pd.DataFrame(rows)
+        out['share_of_ceiling'] = out['r2_m1_adj'] / out['r2_ceiling_adj']
+        return out
+    
     # ------------------------------------------------------------------
     # Persistence (portable: JSON + parquet, no pickle)
     # ------------------------------------------------------------------
 
-    def save(self, dirpath: str | Path, verbose: bool = True) -> None:
+    def save(self, dirpath: str | Path, alpha: float = 0.05, verbose: bool = True) -> None:
         """Save the analysis state to disk.
 
         Layout:
@@ -286,11 +259,12 @@ class SensitivityAnalysis:
                 <metric>/m2_<attr>/
                 <metric>/m2/                  (if fitted)
         """
-        dirpath = Path(dirpath)
+        dirpath = Path(dirpath, 'metrics', f"alpha{alpha}")
         dirpath.mkdir(parents=True, exist_ok=True)
 
         # effcts size
-        effects = self.effect_sizes()
+        effects = self.effect_sizes(alpha=alpha)
+        effects['alpha'] = alpha
         for col in ['sum_sq', 'df', 'F', 'p_value', 'omega2', 'eta2', 'partial_eta2', 'p_value_adj']:
             effects[col] = pd.to_numeric(effects[col], errors='coerce')
         effects.to_parquet(dirpath / FN_EFFECTS, index=False)
@@ -330,6 +304,7 @@ class SensitivityAnalysis:
              dirpath: str | Path,
              base_spec: ModelSpec | None = None,
              df: pd.DataFrame | None = None,
+             alpha: float = 0.05,
              verbose: bool = True) -> 'SensitivityAnalysis':
         """Restore an analysis from disk.
 
@@ -344,7 +319,7 @@ class SensitivityAnalysis:
         Returns:
             A SensitivityAnalysis instance with self.results populated.
         """
-        dirpath = Path(dirpath)
+        dirpath = Path(dirpath, 'metrics', f"alpha{alpha}")
         with open(dirpath / FN_ANALYSIS) as f:
             meta = json.load(f)
 
@@ -413,3 +388,55 @@ class SensitivityAnalysis:
             raise RuntimeError(
                 "Call .prepare_data(df, ...) before fitting models."
             )
+
+
+
+    # def mixed_effects_model(self,
+    #                         moderators: list[str] | None = None,
+    #                         single_moderator: bool = True,
+    #                         verbose: bool = True) -> dict:
+    #     """Fit Model 2 (mixed model with random LLM intercept + moderators).
+
+    #     By default fits one model PER moderator (single_moderator=True) under
+    #     self.results[metric]['m2_by_attr'][attr]. Set single_moderator=False
+    #     to additionally fit a fully-interacted model at self.results[metric]['m2'].
+    #     (Note: full m2 often fails to identify if some attribute combinations
+    #     are missing in the data, e.g. XL × proprietary.)
+
+    #     Args:
+    #         moderators:         which LLM attributes to use. Defaults to
+    #                             base_spec.llm_attrs.
+    #         single_moderator:   if True, fit one model per moderator (safer).
+    #                             If False, also fit one model with all moderators.
+    #         verbose:            print progress per metric.
+
+    #     Returns:
+    #         {metric: {'m2_by_attr': {...}, 'm2': ...}}
+    #     """
+    #     self._require_data()
+    #     moderators = moderators or self.base_spec.llm_attrs
+
+    #     fits = {}
+    #     for metric in self.available_metrics:
+    #         spec = self.results[metric].get('spec') or replace(self.base_spec, metric=metric)
+    #         self.results[metric]['spec'] = spec
+    #         entry = {}
+
+    #         if single_moderator:
+    #             entry['m2_by_attr'] = {}
+    #             for attr in moderators:
+    #                 if verbose:
+    #                     print(f'  [m2/{attr}] fitting for: {metric}')
+    #                 entry['m2_by_attr'][attr] = (
+    #                     MixedEffectsModel(spec, moderators=[attr]).fit(self.df, verbose=verbose)
+    #                 )
+    #             self.results[metric]['m2_by_attr'] = entry['m2_by_attr']
+    #         else:
+    #             if verbose:
+    #                 print(f'  [m2/full] fitting for: {metric}')
+    #             full = MixedEffectsModel(spec, moderators=moderators).fit(self.df)
+    #             self.results[metric]['m2'] = full
+    #             entry['m2'] = full
+
+    #         fits[metric] = entry
+    #     return fits

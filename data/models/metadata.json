@@ -10,7 +10,8 @@
     "context_length": 1000000,
     "quantization": null,
     "reasoning": true,
-    "access":"proprietary"
+    "access":"proprietary",
+    "origin":"USA"
   },
   "smollm2-1_7b-instruct-q4_K_M": {
     "family": "smollm",
@@ -23,7 +24,8 @@
     "context_length": 8000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "dolphin-phi-2_7b-v2_6-q4_K_M": {
     "family": "dolphin",
@@ -36,7 +38,8 @@
     "context_length": 2000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "llama3_2-3b-instruct-q4_K_M": {
     "family": "llama",
@@ -49,7 +52,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "phi4-mini-3_8b-q4_K_M": {
     "family": "phi",
@@ -62,7 +66,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "gemma3-4b-it-q4_K_M": {
     "family": "gemma",
@@ -75,7 +80,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "gpt-4_1-nano-2025-04-14": {
     "family": "gpt-4",
@@ -88,7 +94,8 @@
     "context_length": 1000000,
     "quantization": null,
     "reasoning": false,
-    "access":"proprietary"
+    "access":"proprietary",
+    "origin":"USA"
   },
   "gemini-2_5-flash": {
     "family": "gemini",
@@ -101,7 +108,8 @@
     "context_length": 1000000,
     "quantization": null,
     "reasoning": true,
-    "access":"proprietary"
+    "access":"proprietary",
+    "origin":"USA"
   },
   "gemma3n-e4b-it-q4_K_M": {
     "family": "gemma",
@@ -114,7 +122,8 @@
     "context_length": 32000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "mistral-7b-instruct-v0_3-q4_K_M": {
     "family": "mistral",
@@ -127,7 +136,8 @@
     "context_length": 32000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"FRA"
   },
   "olmo2-7b-1124-instruct-q4_K_M": {
     "family": "olmo",
@@ -140,7 +150,8 @@
     "context_length": 4000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "falcon3-7b-instruct-q4_K_M": {
     "family": "falcon",
@@ -153,7 +164,8 @@
     "context_length": 32000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"ARE"
   },
   "dolphin3-8b-llama3_1-q4_K_M": {
     "family": "dolphin",
@@ -166,7 +178,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "deepseek-r1-8b-0528-qwen3-q4_K_M": {
     "family": "deepseek",
@@ -179,7 +192,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": true,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"CHN"
   },
   "qwen3-8b-q4_K_M": {
     "family": "qwen",
@@ -192,7 +206,8 @@
     "context_length": 40000,
     "quantization": "Q4_K_M",
     "reasoning": true,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"CHN"
   },
   "yi-9b-chat-v1_5-q4_K_M": {
     "family": "yi",
@@ -205,7 +220,8 @@
     "context_length": 4000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"CHN"
   },
   "gpt-4_1-mini-2025-04-14": {
     "family": "gpt-4",
@@ -218,7 +234,8 @@
     "context_length": 1000000,
     "quantization": null,
     "reasoning": false,
-    "access":"proprietary"
+    "access":"proprietary",
+    "origin":"USA"
   },
   "falcon3-10b-instruct-q4_K_M": {
     "family": "falcon",
@@ -231,7 +248,8 @@
     "context_length": 32000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"ARE"
   },
   "mistral-nemo-12b-instruct-2407-q4_K_M": {
     "family": "mistral",
@@ -244,7 +262,8 @@
     "context_length": 128000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"FRA"
   },
   "olmo2-13b-1124-instruct-q4_K_M": {
     "family": "olmo",
@@ -257,7 +276,8 @@
     "context_length": 4000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "phi4-14b-q4_K_M": {
     "family": "phi",
@@ -270,7 +290,8 @@
     "context_length": 16000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "phi4-reasoning-14b-q4_K_M": {
     "family": "phi",
@@ -283,7 +304,8 @@
     "context_length": 32000,
     "quantization": "Q4_K_M",
     "reasoning": true,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "gemini-2_5-pro": {
     "family": "gemini",
@@ -296,7 +318,8 @@
     "context_length": 1000000,
     "quantization": null,
     "reasoning": true,
-    "access":"proprietary"
+    "access":"proprietary",
+    "origin":"USA"
   },
   "gpt-oss-20b": {
     "family": "gpt-oss",
@@ -309,7 +332,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": true,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "mistral-small-22b-instruct-2409-q4_K_M": {
     "family": "mistral",
@@ -322,7 +346,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"FRA"
   },
   "mistral-small3_2-24b-instruct-2506-q4_K_M": {
     "family": "mistral",
@@ -335,7 +360,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"FRA"
   },
   "gemma3-27b-it-q4_K_M": {
     "family": "gemma",
@@ -348,7 +374,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "deepseek-r1-32b-qwen-distill-q4_K_M": {
     "family": "deepseek",
@@ -361,7 +388,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": true,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"CHN"
   },
   "qwen3-32b-q4_K_M": {
     "family": "qwen",
@@ -374,7 +402,8 @@
     "context_length": 40000,
     "quantization": "Q4_K_M",
     "reasoning": true,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"CHN"
   },
   "qwq-32b-q4_K_M": {
     "family": "qwq",
@@ -387,7 +416,8 @@
     "context_length": 40000,
     "quantization": "Q4_K_M",
     "reasoning":false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"CHN"
   },
   "yi-34b-chat-v1_5-q4_K_M": {
     "family": "yi",
@@ -400,7 +430,8 @@
     "context_length": 4000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"CHN"
   },
   "mixtral-8x7b-instruct-v0_1-q4_K_M": {
     "family": "mixtral",
@@ -413,7 +444,8 @@
     "context_length": 32000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"FRA"
   },
   "dolphin-mixtral-8x7b-v2_7-q4_K_M": {
     "family": "dolphin",
@@ -426,7 +458,8 @@
     "context_length": 32000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "deepseek-r1-70b-llama-distill-q4_K_M": {
     "family": "deepseek",
@@ -439,7 +472,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": true,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"CHN"
   },
   "llama3_3-70b-instruct-q4_K_M": {
     "family": "llama",
@@ -452,7 +486,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "llama4-17b-scout-16e-instruct-q4_K_M": {
     "family": "llama",
@@ -465,7 +500,8 @@
     "context_length": 10000000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "gpt-oss-120b": {
     "family": "gpt-oss",
@@ -478,7 +514,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": true,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "mistral-large-123b-instruct-2411-q4_K_M": {
     "family": "mistral",
@@ -491,7 +528,8 @@
     "context_length": 131000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"FRA"
   },
   "mixtral-8x22b-instruct-v0_1-q4_K_M": {
     "family": "mixtral",
@@ -504,7 +542,8 @@
     "context_length": 65000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"FRA"
   },
   "dolphin-mixtral-8x22b-v2_9-q4_K_M": {
     "family": "dolphin",
@@ -517,7 +556,8 @@
     "context_length": 65000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   },
   "gpt-4_1-2025-04-14": {
     "family": "gpt-4",
@@ -530,7 +570,8 @@
     "context_length": 1000000,
     "quantization": null,
     "reasoning": false,
-    "access":"proprietary"
+    "access":"proprietary",
+    "origin":"USA"
   },
   "qwen3-235b-a22b-instruct-2507-q4_K_M": {
     "family": "qwen",
@@ -543,7 +584,8 @@
     "context_length": 262000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"CHN"
   },
   "llama4-17b-maverick-128e-instruct-q4_K_M": {
     "family": "llama",
@@ -556,6 +598,7 @@
     "context_length": 1000000,
     "quantization": "Q4_K_M",
     "reasoning": false,
-    "access":"open-weight"
+    "access":"open-weight",
+    "origin":"USA"
   }
 }

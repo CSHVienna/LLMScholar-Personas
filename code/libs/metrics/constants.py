@@ -12,7 +12,7 @@ CALL_KEYS = [
 ]
 PROMPT_KEYS = [c for c in CALL_KEYS if c != "run_id"]
 
-MODEL_ARCHITECTURE_COLS = ["model_access", "model_size", "model_class"]
+MODEL_ARCHITECTURE_COLS = ["model_access", "model_size", "model_class", "model_origin"]
 MODEL_EXTRA_COLS = ["model_family", "model_short_name"]
 
 VALID_FLAGS = {"cleaned", "unchanged"}  # 'valid records' = cleaned + unchanged only
@@ -79,31 +79,27 @@ NEEDED_COLS = [
 
 ALL_METRICS = [
     # All-responses denominator
-    "validity",
     "refusals",
-    # Structural (factual-records denominator) — paper Eqs. 6-8
-    "connectedness",
-    "similarity",
+    "validity",
     # Valid-responses denominator
     "consistency",
     "duplicates",
-    "factuality_author",
-    # Factual-records denominator
+    "factuality_name",
     "factuality_field",
     "factuality_seniority",
-    # Bias (social representation, factual-records denominator)
-    "bias_location",
+    # Factual-records denominator
+    "factuality_author",
+    # Parity
+    "parity_ethnicity",
+    "parity_gender",
+    "parity_works",
+    "parity_citations",
     # Diversity
     "div_ethnicity",
     "div_gender",
     "div_location",
     "div_productivity_works",
     "div_productivity_citations",
-    # Parity
-    "parity_ethnicity",
-    "parity_gender",
-    "parity_works",
-    "parity_citations",
     # Productivity
     'pct_works_low', 
     'pct_works_med', 
@@ -111,20 +107,27 @@ ALL_METRICS = [
     'pct_citations_low', 
     'pct_citations_med', 
     'pct_citations_high',
-    
+    # Bias (social representation, factual-records denominator)
+    "bias_location",
     # popularity
     "popularity_works",
     "popularity_citations",
+    # Structural (factual-records denominator) — paper Eqs. 6-8
+    "connectedness",
+    "similarity",
+        
 ]
 
 PREFIX_GROUPS_METRICS = {
-        'factuality_': 'Factuality',
-        'bias_':       'Bias',
-        'parity_':     'Parity',
-        'div_':        'Diversity',
-        'pct_works_':        'Publications tertile',
-        'pct_citations_':        'Citations tertile',
-        'popularity_': 'Popularity'
+        'factuality_':      'Factuality',
+        'bias_':            'Bias',
+        'parity_':          'Parity',
+        'div_':             'Diversity',
+        'pct_works_':       'Publications tertile',
+        'pct_citations_':   'Citations tertile',
+        'popularity_':      'Popularity',
+        'similarity':       'Cohesion',
+        'connectedness':    'Cohesion'
     }
 
 
@@ -132,14 +135,16 @@ PREFIX_GROUPS_METRICS = {
 BINARY_METRICS = {"validity", "refusals"}
 
 PRODUCTIVITY_OA_FIELDS_MAP = {
-    "oa_works_count": "works",
+    "oa_works_count":    "works",
     "oa_cited_by_count": "citations",
 }
 PRODUCTIVITY_TIER_LABELS = ["low", "med", "high"]
 
-FACTUALITY_METRICS   = ['factuality_author',
+FACTUALITY_METRICS   = ['factuality_name',
                         'factuality_field',
-                        'factuality_seniority']
+                        'factuality_seniority',
+                        'factuality_author',
+                        ]
 
 # Location is a *choice*, not a factual error (reviewer's comment, issue #36):
 # whether the LLM places an author in the country embedded in the prompt is read
@@ -180,6 +185,7 @@ PROMINENCE_METRICS = ['pct_works_low',
 CONNECTEDNESS_METRIC = "connectedness"
 SIMILARITY_METRIC = "similarity"
 STRUCTURAL_METRICS = [CONNECTEDNESS_METRIC, SIMILARITY_METRIC]
+COHESION_METRICS = STRUCTURAL_METRICS
 
 # Per-response count of U-hat_i members dropped for lack of graph node / features.
 STRUCTURAL_EXCLUSION_COLS = {
@@ -257,10 +263,10 @@ SIMILARITY_PCA_VARIANCE = 0.90
 # Fixed for reproducibility (PCA with svd_solver='full' is deterministic anyway).
 SIMILARITY_RANDOM_STATE = 0
 
-TECHNICAL_METRICS = ['validity','refusals','consistency','duplicates'] + FACTUALITY_METRICS
-SOCIAL_METRICS = BIAS_METRICS + PARITY_METRICS + DIVERSITY_METRICS + PROMINENCE_METRICS + POPULARITY_METRICS
+TECHNICAL_METRICS = ['refusals','validity','consistency','duplicates'] + FACTUALITY_METRICS
+SOCIAL_METRICS =  PARITY_METRICS + DIVERSITY_METRICS + PROMINENCE_METRICS + BIAS_METRICS + POPULARITY_METRICS + STRUCTURAL_METRICS
 
-TECHNICAL_METRICS_NORM = ['validity','refusals_c','duplicates_c'] + FACTUALITY_METRICS
+TECHNICAL_METRICS_NORM = ['refusals_c','validity','duplicates_c'] + FACTUALITY_METRICS
 
 # ── Backward compatibility ────────────────────────────────────────────────────
 # Artefacts produced before issue #36 (the 425 MB valid_requests_metadata.csv and
@@ -289,10 +295,10 @@ PROMPT_TYPE_MAP = {
     "role_en": "persona",
     "location_en": "persona",
     
+    "k": "context",
+    "target_en": "context", # seniority
     "field_en": "context",
     "subfield_en": "context",
-    "k": "context",
-    "target_en": "context",
 }
 
 
@@ -301,8 +307,11 @@ NESTED_METRIC_PAIRS = {
     'duplicates': 'validity',
     'factuality_author': 'validity',
 
-    'factuality_field': 'factuality_author',
-    'factuality_seniority': 'factuality_author',
+    'factuality_name': 'validity',
+    'factuality_field': 'factuality_name',
+    'factuality_seniority': 'factuality_name',
+    'factuality_author': 'validity',
+
     'bias_location': 'factuality_author',
 
     'div_gender': 'factuality_author',

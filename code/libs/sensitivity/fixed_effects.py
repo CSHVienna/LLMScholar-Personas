@@ -49,7 +49,7 @@ class FixedEffectsModel(SensitivityModel):
         if include_llm_dummies:
             formula += f" + C({self.spec.llm_id})"
 
-        # print(f"Built formula: {formula}")
+        print(f"Built formula: {formula}")
         return formula
     
     def icc_compute(self, df) -> float:

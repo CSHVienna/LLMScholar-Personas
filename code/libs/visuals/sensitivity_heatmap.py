@@ -875,7 +875,7 @@ COL_GROUPS: Dict[str, List[str]] = {
     'technical': [
         # In the order of the pipeline (validity, then the factuality cascade).
         'validity', 'refusals', 'duplicates', 'consistency',
-        'factuality_field', 'factuality_seniority', 'factuality_author',
+        'factuality_name', 'factuality_field', 'factuality_seniority', 'factuality_author',
     ],
     'social': [
         'bias_location',
@@ -884,6 +884,7 @@ COL_GROUPS: Dict[str, List[str]] = {
         'pct_pub_l', 'pct_pub_m', 'pct_pub_h',
         'pct_cit_l', 'pct_cit_m', 'pct_cit_h',
         'popularity_pub', 'popularity_cit',
+        'similarity', 'connectedness'
     ],
 }
 
@@ -904,22 +905,40 @@ PROMPT_VAR_COLORS = {
 # to 'Field' without the explicit overrides for grouped columns.
 NAME_MAP = {
     # row labels
-    'language': 'Language', 'location': 'Location', 'role': 'Role',
-    'k': 'k', 'field': 'Field', 'subfield': 'Subfield',
-    'target': 'Target', 'model': 'Model',
+    'language': 'Language', 
+    'location': 'Location', 
+    'role': 'Role',
+    'k': 'k', 
+    'field': 'Field', 
+    'subfield': 'Subfield',
+    'target': 'Target', 
+    'model': 'Model',
     # ungrouped technical metrics
-    'validity': 'Validity', 'refusals': 'Refusals',
-    'consistency': 'Consistency', 'duplicates': 'Duplicates',
+    'validity': 'Validity', 
+    'refusals': 'Refusals',
+    'consistency': 'Consistency', 
+    'duplicates': 'Duplicates',
     # full-name overrides for grouped columns whose suffix collides with
     # a row name ('field', 'location'): force lowercase tick labels
     'factuality_field':    'field',
     'bias_location':       'location',
     # suffix defaults (no collision → bare key is enough)
-    'author': 'author', 'seniority': 'seniority',
-    'eth': 'eth.', 'gender': 'gender', 'pub': 'pub.', 'cit': 'cit.',
-    'gen': 'gen.', 'loc': 'loc.',
-    'l_pub': 'L pub.', 'm_pub': 'M pub.', 'h_pub': 'H pub.',
-    'l_cit': 'L cit.', 'm_cit': 'M cit.', 'h_cit': 'H cit.',
+    'author': 'author', 
+    'seniority': 'seniority',
+    'eth': 'eth.', 
+    'gender': 'gender', 
+    'pub': 'pub.', 
+    'cit': 'cit.',
+    'gen': 'gen.', 
+    'loc': 'loc.',
+    'l_pub': 'L pub.', 
+    'm_pub': 'M pub.', 
+    'h_pub': 'H pub.',
+    'l_cit': 'L cit.', 
+    'm_cit': 'M cit.', 
+    'h_cit': 'H cit.',
+    'similarity': 'Similarity',
+    'connectedness': 'Connectedness'
 }
 
 TICK_PREFIX_GROUPS = {
@@ -927,9 +946,11 @@ TICK_PREFIX_GROUPS = {
     'bias_':       'Bias',
     'parity_':     'Parity',
     'div_':        'Diversity',
-    'pct_works_':        '% Publications',
-    'pct_citations_':      '% Citations',
-    'popularity_': 'Popularity',
+    'pct_works_':       '% Publications',
+    'pct_citations_':   '% Citations',
+    'popularity_':      'Popularity',
+    'similarity':       'Cohesion',
+    'connectedness':    'Cohesion',
 }
 
 
@@ -982,7 +1003,7 @@ def main():
         colorbar_label=r'Partial $\eta^2$',
     )
     fig = plot.draw()
-    fig.savefig('/home/claude/heatmap_preview.png', dpi=160,
+    fig.savefig('heatmap_preview.png', dpi=160,
                 facecolor='white')
 
 

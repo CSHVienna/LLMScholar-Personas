@@ -449,7 +449,7 @@ def _draw_label_column(
 
 
 # Metrics whose values are tiny get more decimals in the bar labels.
-DECIMALS = {"duplicates": 4, "refusals": 4}
+DECIMALS = {"duplicates": 3} #, "refusals": 4}
 
 
 def _value_label(val: float, metric: str = "") -> str:
@@ -564,7 +564,7 @@ def _draw_metric_panel(
             is_best = best is not None and abs(val - best) < 1e-9
             low_n = n < 3
             # A value > 0 gets at least a thin bar, so it does not look like 0.
-            bar = max(val, 0.004) if val > 0 else val
+            bar = val # max(val, 0.004) if val > 0 else val
             ax.barh(yv, bar, height=0.55, color=color, alpha=0.92, zorder=2)
             ci_val = ci if (np.isfinite(ci) and not low_n) else 0.0
             if ci_val:

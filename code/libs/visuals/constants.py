@@ -98,33 +98,41 @@ MODEL_FAMILY_ORDER = [
 TICK_COLOR = "#828282"
 
 PLOT_LABELS = {
-    "validity": "Validity",
     "refusals": "Refusals",
-    "factuality_author": "Fact. $_{author}$",
-    "factuality_field": "Fact. $_{field}$",
-    "factuality_seniority": "Fact. $_{seniority}$",
-    "bias_location": "Bias $_{location}$",
+    "validity": "Validity",
     "consistency": "Consistency",
     "duplicates": "Duplicates",
+
+    "factuality_name": "Fact. $_{name}$",
+    "factuality_field": "Fact. $_{field}$",
+    "factuality_seniority": "Fact. $_{seniority}$",
+    "factuality_author": "Fact. $_{author}$",
+
+    "bias_location": "Bias $_{loc.}$",
+    
     "div_gender": "Div. $_{gen.}$",
     "div_ethnicity": "Div. $_{eth.}$",
     "div_location": "Div. $_{loc.}$",
     "div_productivity_works": "Div. $_{pub.}$",
     "div_productivity_citations": "Div. $_{cit.}$",
-    "parity_gender": "Parity $_{gender}$",
-    "parity_ethnicity": "Parity $_{eth.}$",
-    "parity_works": "Parity $_{pub.}$",
-    "parity_citations": "Parity $_{cit.}$",
-    "popularity_works": "Popularity $_{pub.}$",
-    "popularity_citations": "Popularity $_{cit.}$",
-    "connectedness": "Connectedness",
-    "similarity": "Similarity",
+    
+    "parity_gender": "Par. $_{gender}$",
+    "parity_ethnicity": "Par. $_{eth.}$",
+    "parity_works": "Par. $_{pub.}$",
+    "parity_citations": "Par. $_{cit.}$",
+    
+    "popularity_works": "Pop. $_{pub.}$",
+    "popularity_citations": "Pop. $_{cit.}$",
+    
     "pct_citations_high": "% H cit.",
     "pct_citations_med": "% M cit.",
     "pct_citations_low": "% L cit.",
     "pct_works_high": "% H pub.",
     "pct_works_med": "% M pub.",
     "pct_works_low": "% L pub.",
+
+    "connectedness": "Connect.",
+    "similarity": "Sim.",
 }
 
 PLOT_LABELS |= {
@@ -142,15 +150,14 @@ PLOT_METRICS = [
     # In the order of the pipeline: 5_validity (validity, refusals, duplicates,
     # then consistency), then the factuality cascade (name → field → seniority
     # → author; factuality_name is added by the metrics notebook).
-    "validity",
     "refusals",
-    "duplicates",
+    "validity",
     "consistency",
+    "duplicates",
+    "factuality_name",
     "factuality_field",
     "factuality_seniority",
     "factuality_author",
-    # Bias block (social representation, see BIAS_METRICS)
-    "bias_location",
     # Diversity block (order: gender, ethnicity, publications, citations)
     "div_gender",
     "div_ethnicity",
@@ -162,6 +169,8 @@ PLOT_METRICS = [
     "parity_ethnicity",  # vs Semantic Scholar GT distribution
     "parity_works",  # publications, vs uniform 1/3 tier
     "parity_citations",  # citations, vs uniform 1/3 tier
+    # Bias block (social representation, see BIAS_METRICS)
+    "bias_location",
     # Popularity (fraction in top productivity tier within field)
     "popularity_works",
     "popularity_citations",
@@ -174,7 +183,7 @@ PLOT_METRICS = [m for m in PLOT_METRICS if m in ALL_METRICS]
 PLOT_TECHNICAL_METRICS = [
     m
     for m in PLOT_METRICS
-    if m in ["validity", "refusals", "consistency", "duplicates"]
+    if m in ["refusals", "validity", "consistency", "duplicates"]
     or m.startswith("factuality")
 ]
 PLOT_SOCIAL_METRICS = [
@@ -186,31 +195,31 @@ PLOT_SOCIAL_METRICS = [
 METRIC_TYPES = {"technical": PLOT_TECHNICAL_METRICS, "social": PLOT_SOCIAL_METRICS}
 
 METRIC_DIRECTIONS = {
-    "validity": "↑",
     "refusals": "↓",
-    "factuality_author": "↑",
-    "factuality_field": "↑",
-    "factuality_seniority": "↑",
-    # No preferred direction since it became a bias rather than a factuality
-    # (issue #36): the value is still the location match rate, but whether
-    # matching the prompt's country is desirable is the reading under review.
-    "bias_location": None,
+    "validity": "↑",
     "consistency": None,
     "duplicates": "↓",
+
+    "factuality_name": "↑",
+    "factuality_field": "↑",
+    "factuality_seniority": "↑",
+    "factuality_author": "↑",
+    
     "div_gender": None,
     "div_ethnicity": None,
     "div_location": None,
     "div_productivity_works": None,
     "div_productivity_citations": None,
+    
     "parity_gender": "↑",
     "parity_ethnicity": "↑",
     "parity_works": "↑",
     "parity_citations": "↑",
+    
+    "bias_location": None,
     "popularity_works": None,
     "popularity_citations": None,
-    # No preferred direction: a high connectedness means the recommendations
-    # form one coauthorship clique and a high similarity means the authors are
-    # alike — desirable or not depending on the reading, exactly like div_*.
+    
     "connectedness": None,
     "similarity": None,
 }
@@ -260,6 +269,20 @@ FIELD_COLORS = {
     "Sociology": "#16A085",
 }
 
+SUBFIELD_ORDER = [
+    "Number theory",
+    "Topology",
+    "Artificial Intelligence",
+    "Software Engineering",
+    "Condensed Matter",
+    "Education",
+    "Anatomy",
+    "Neuroscience",
+    "Family",
+    "Criminology",
+    "Forensic Psychology",
+    "Social Psychology"]
+
 SUBFIELD_MAP = {
     "Number theory": "Numb.:MATH",
     "Topology": "Topo.:MATH",
@@ -300,8 +323,8 @@ ROLE_COLORS = {"PhD student": "#2980B9", "Director/Recruiter": "#E67E22"}
 TASK_ORDER = ["seeking an advisor", "seeking potential hires"]
 TASK_COLORS = {"seeking an advisor": "#8E44AD", "seeking potential hires": "#2980B9"}
 TASK_MAP = {
-    "seeking an advisor": "Search Adv.",
-    "seeking potential hires": "Search Cand.",
+    "seeking an advisor": "Advisor S.",
+    "seeking potential hires": "Candidate S.",
 }
 TASK_MAP_LONG = {
     "seeking an advisor": "Advisor Search",
@@ -324,15 +347,19 @@ ACCESS_MAP = {"open-weight": "Open", "proprietary": "Proprietary"}
 
 REASONING_ORDER = [True, False]
 
+ORIGIN_ORDER = ['USA','FRA','CHN','ARE']
+
 MODEL_ARCHITECTURE_MAP = {
     "model_access": "Access",
     "model_size": "Size",
     "model_class": "Reasoning",
+    "model_origin": "Origin",
 }
 MODEL_ARCHITECTURE_GROUPS = {
     "model_access": ACCESS_ORDER,
     "model_size": SIZE_ORDER,
     "model_class": REASONING_ORDER,
+    "model_origin": ORIGIN_ORDER,
 }
 
 
@@ -373,34 +400,43 @@ COUNTRY_ISO_NAMES = {
     "CN": "China",
     "AT": "Austria",
     "SE": "Sweden",
+    "AR":"Argentina"
 }
 
 METRICS_NAME_MAP = {
-    "parity_ethnicity": "Ethinicity parity",
-    "div_ethnicity": "Ethinicity diversity",
-    "parity_gender": "Gender parity",
+    "refusals": "Refusals",
+    "validity": "Validity",
+    "consistency": "Consistency",
+    "duplicates": "Duplicates",
+    
+    "factuality_name": "Name factuality",
+    "factuality_field": "Field factuality",
+    "factuality_seniority": "Seniority factuality",
+    "factuality_author": "Author factuality",
+
     "div_gender": "Gender diversity",
-    "parity_works": "Works parity",
-    "pct_works_high": "Works upper tertile",
-    "popularity_works": "Popularity-based works",
-    "parity_citations": "Citations parity",
-    "pct_citations_high": "Citations upper tertile",
-    "popularity_citations": "Popularity-based citations",
-    "pct_works_med": "Works middle tertile",
-    "pct_works_low": "Works lower tertile",
-    "pct_citations_med": "Citations middle tertile",
-    "pct_citations_low": "Citations lower tertile",
+    "div_ethnicity": "Ethinicity diversity",
     "div_location": "Location diversity",
     "div_productivity_citations": "Citations diversity",
     "div_productivity_works": "Works diversity",
-    "factuality_author": "Author factuality",
-    "factuality_field": "Field factuality",
-    "factuality_seniority": "Seniority factuality",
+
+    "parity_gender": "Gender parity",
+    "parity_ethnicity": "Ethinicity parity",
+    "parity_works": "Works parity",
+    "parity_citations": "Citations parity",
+
+    "pct_works_high": "Works upper tertile",
+    "pct_works_med": "Works middle tertile",
+    "pct_works_low": "Works lower tertile",
+    "pct_citations_high": "Citations upper tertile",
+    "pct_citations_med": "Citations middle tertile",
+    "pct_citations_low": "Citations lower tertile",
+
+    "popularity_works": "Popularity-based works",
+    "popularity_citations": "Popularity-based citations",
+    
     "bias_location": "Location bias",
-    "validity": "Validity",
-    "refusals": "Refusals",
-    "consistency": "Consistency",
-    "duplicates": "Duplicates",
+    
     "connectedness": "Connectedness",
-    "similarity": "Scholarly similarity",
+    "similarity": "Similarity",
 }
