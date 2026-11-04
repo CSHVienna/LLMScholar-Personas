@@ -6,26 +6,38 @@ summary/factuality_full.csv once in chunks, reduce to long (source, target, coun
 keeping the slicing dimensions, and let the notebook stay plotting-only. The
 source CSV is 6.8 GB, so no figure should ever touch it directly.
 
-Six flows, each written to its own CSV under
-<results_dir>/9_figures/tables/:
+Each flow is written to its own CSV under <results_dir>/9_figures/tables/.
+The left side is always a variable of the prompt, the right side one of the
+recommended authors.
 
-  seniority_flows.csv  asked seniority   -> actual seniority (Semantic Scholar)
-                       plus the OpenAlex verdict as a separate `source_gt`,
-                       because the two disagree by 5x and neither substitutes
-                       for the other
-  ethnicity_flows.csv  prompt country    -> perceived ethnicity
-  field_flows.csv      prompt field      -> ground-truth field (same level both
-                       sides, which is what makes the diagonal readable)
-  subfield_flows.csv   prompt subfield   -> ground-truth field; the ground truth
-                       has no subfield (Semantic Scholar only carries `Field`),
-                       so this one is deliberately cross-level
-  language_flows.csv   prompt language   -> author country
-  gender_flows.csv     prompt country    -> ground-truth gender of the author
+Every flow uses the recommendations with factuality_author = True (the name,
+the asked field and the asked seniority belong to the same Semantic Scholar
+researcher; only those have a researcher picked, gt_gender, and an OpenAlex
+author):
 
-Every flow counts the recommendations with factuality_author = True: the
-name, the asked field and the asked seniority belong to the same Semantic
-Scholar researcher. Only those have a researcher picked (and so gt_field,
-seniority_bucket, gt_gender) and an OpenAlex author (oa_country_code).
+  ethnicity_flows.csv         prompt country   -> perceived ethnicity
+  language_flows.csv          prompt language  -> author country
+  gender_flows.csv            prompt country   -> gender of the author
+  role_gender_flows.csv       prompt role      -> gender of the author
+  seniority_flows.csv         asked seniority  -> seniority of the author
+  field_flows.csv             prompt field     -> field of the author
+  subfield_flows.csv          prompt subfield  -> field of the author (the
+                              ground truth has no subfield: cross-level on purpose)
+  country_seniority_flows.csv prompt country   -> seniority of the author
+  role_seniority_flows.csv    prompt role      -> seniority of the author
+  seniority_country_flows.csv asked seniority  -> author country
+  language_gender_flows.csv   prompt language  -> gender of the author
+  seniority_gender_flows.csv  asked seniority  -> gender of the author
+  field_gender_flows.csv      prompt field     -> gender of the author
+  subfield_gender_flows.csv   prompt subfield  -> gender of the author
+  role_country_flows.csv      prompt role      -> author country
+  field_country_flows.csv     prompt field     -> author country
+  subfield_country_flows.csv  prompt subfield  -> author country
+
+Field and seniority are part of factuality_author, so on the right they are
+the ones the prompt asked for: field and seniority are the diagonal by
+construction, and country/role -> seniority show how often a real author is
+found for each asked seniority.
 
 Coverage differs per flow and is logged, because a Sankey silently hides what
 it cannot place: a row whose target is missing contributes to no ribbon. The
@@ -46,6 +58,7 @@ from libs.metrics.constants import (
     FIELD_NORM_MAP,
     LANGUAGE_NORM_MAP,
     LLM_COUNTRY_TO_ISO,
+    ROLE_NORM_MAP,
     SUBFIELD_NORM_MAP,
     VALID_FLAGS,
 )
@@ -55,12 +68,16 @@ from libs.utils.logging import setup_logging
 warnings.filterwarnings("ignore")
 logger = setup_logging()
 
-FLOWS = ("seniority", "ethnicity", "field", "subfield", "language", "gender")
+FLOWS = ("seniority", "ethnicity", "field", "subfield", "language", "gender",
+         "role_gender", "country_seniority", "role_seniority", "seniority_country",
+         "language_gender", "seniority_gender", "field_gender", "subfield_gender",
+         "role_country", "field_country", "subfield_country")
 
 # One read serves every flow, so the column set is the union of what they need.
 NEEDED = [
     "valid_flag",
     "factuality_author",
+    "role",
     "location",
     "language",
     "field",
@@ -70,32 +87,34 @@ NEEDED = [
     "seniority_bucket",
     "gt_field",
     "gt_gender",
-    # Written by the factuality cascade: "unique" when a single researcher passes
-    # name, field and seniority, "cascade" when one was picked at random among
-    # several. Lets a figure keep only authors that were never ambiguous.
-    "tiebreak",
     "oa_country_code",
     "perceived_ethnicity",
 ]
 
 SPECS = {
     # (source column, target column, dimensions kept for slicing)
-    "seniority": ("seniority_llm_bucket", "seniority_bucket", ["field_en", "language_en", "model", "tiebreak"]),
     "ethnicity": ("src_iso", "perceived_ethnicity", ["field_en", "language_en", "model"]),
-    # Same level on both sides — the prompt field against the field the author
-    # actually works in. The older subfield -> gt_field version mixed two levels
-    # of the taxonomy and is kept separately as `subfield`.
-    "field": ("field_en", "gt_field", ["subfield_en", "language_en", "model", "tiebreak"]),
-    "subfield": ("subfield_en", "gt_field", ["field_en", "language_en", "model", "tiebreak"]),
     "language": ("language_en", "oa_country_code", ["field_en", "model"]),
-    # gt_gender only exists for authors matched in Semantic Scholar, so this
-    # flow's coverage is lower than the others' — the log line says by how much.
     "gender": ("src_iso", "gt_gender", ["field_en", "language_en", "model"]),
+    "role_gender": ("role_en", "gt_gender", ["field_en", "language_en", "model"]),
+    "seniority": ("seniority_llm_bucket", "seniority_bucket", ["field_en", "language_en", "model"]),
+    "field": ("field_en", "gt_field", ["subfield_en", "language_en", "model"]),
+    "subfield": ("subfield_en", "gt_field", ["field_en", "language_en", "model"]),
+    "country_seniority": ("src_iso", "seniority_bucket", ["field_en", "language_en", "model"]),
+    "role_seniority": ("role_en", "seniority_bucket", ["field_en", "language_en", "model"]),
+    "seniority_country": ("seniority_llm_bucket", "oa_country_code", ["field_en", "language_en", "model"]),
+    "language_gender": ("language_en", "gt_gender", ["field_en", "model"]),
+    "seniority_gender": ("seniority_llm_bucket", "gt_gender", ["field_en", "language_en", "model"]),
+    "field_gender": ("field_en", "gt_gender", ["language_en", "model"]),
+    "subfield_gender": ("subfield_en", "gt_gender", ["field_en", "language_en", "model"]),
+    "role_country": ("role_en", "oa_country_code", ["field_en", "language_en", "model"]),
+    "field_country": ("field_en", "oa_country_code", ["language_en", "model"]),
+    "subfield_country": ("subfield_en", "oa_country_code", ["field_en", "language_en", "model"]),
 }
 
 
 def _factual(chunk: pd.DataFrame) -> pd.DataFrame:
-    """Valid responses with factuality_author = True."""
+    """The valid responses with factuality_author = True."""
     valid = chunk[chunk["valid_flag"].isin(VALID_FLAGS)]
     # read in chunks, the column is bool or, with missing values, text
     return valid[valid["factuality_author"].astype(str) == "True"].copy()
@@ -106,6 +125,7 @@ def _annotate(df: pd.DataFrame) -> pd.DataFrame:
     df["field_en"] = df["field"].map(FIELD_NORM_MAP).fillna(df["field"])
     df["subfield_en"] = df["subfield"].map(SUBFIELD_NORM_MAP).fillna(df["subfield"])
     df["language_en"] = df["language"].map(LANGUAGE_NORM_MAP).fillna(df["language"])
+    df["role_en"] = df["role"].map(ROLE_NORM_MAP).fillna(df["role"])
     df["src_iso"] = df["location"].map(LLM_COUNTRY_TO_ISO)
     return df
 
@@ -116,27 +136,20 @@ def build(fact_path: Path, wanted: list[str], chunksize: int = 2_000_000) -> dic
 
     header = pd.read_csv(fact_path, nrows=0).columns
     usecols = [c for c in NEEDED if c in header]
-    if "tiebreak" not in usecols:
-        logger.warning(
-            "%s has no `tiebreak` column — read the factuality cascade output "
-            "(summary/factuality_full.csv)", fact_path.name
-        )
     for i, chunk in enumerate(
         pd.read_csv(fact_path, usecols=usecols, chunksize=chunksize, low_memory=False)
     ):
-        if "tiebreak" not in chunk.columns:
-            chunk["tiebreak"] = "unknown"
-        factual = _annotate(_factual(chunk))
+        rows = _annotate(_factual(chunk))
         for flow in wanted:
             src, dst, dims = SPECS[flow]
-            seen[flow][0] += len(factual)
-            sub = factual.dropna(subset=[src, dst])
+            seen[flow][0] += len(rows)
+            sub = rows.dropna(subset=[src, dst])
             seen[flow][1] += len(sub)
             if sub.empty:
                 continue
             group = [src, dst] + dims
             parts[flow].append(sub.groupby(group, dropna=False).size().rename("n"))
-        logger.info("chunk %d: %d factual rows", i, len(factual))
+        logger.info("chunk %d: %d factual rows", i, len(rows))
 
     out = {}
     for flow in wanted:
@@ -154,7 +167,7 @@ def build(fact_path: Path, wanted: list[str], chunksize: int = 2_000_000) -> dic
         )
         total, placed = seen[flow]
         logger.info(
-            "%-10s %d flows | %d of %d factual rows placeable (%.1f%%) | "
+            "%-17s %d flows | %d of %d factual rows placeable (%.1f%%) | "
             "%d sources, %d targets",
             flow,
             len(df),

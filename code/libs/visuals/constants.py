@@ -365,6 +365,7 @@ COUNTRY_ISO_NAMES = {
     "AU": "Australia",
     "BR": "Brazil",
     "CO": "Colombia",
+    "AR": "Argentina",
     "FR": "France",
     "CL": "Chile",
     "EC": "Ecuador",
