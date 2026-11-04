@@ -1,9 +1,8 @@
-"""Helpers for the manual factuality-validation notebook.
+"""Helpers for notebooks/agreement/manual_factuality_validation.ipynb.
 
-The notebook used to define ~20 functions inline (load LLM responses, look the
-recommended person up in Semantic Scholar / OpenAlex, print per-row context for
-the human reviewer). They are extracted here so the notebook stays plotting /
-orchestration only.
+Load the LLM responses, look the recommended person up in Semantic Scholar /
+OpenAlex, and print per-row context for the human reviewer, so the notebook
+stays plotting / orchestration only.
 """
 
 from __future__ import annotations

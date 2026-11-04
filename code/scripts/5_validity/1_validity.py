@@ -1,5 +1,5 @@
 """
-1_validity.py — Funnel step 3.1: validity, refusal and duplicates of every call.
+1_validity.py — Step 5.1: validity, refusal and duplicates of every call.
 
 Reads the LLM responses as parsed from the JSON files by
 scripts/3_prompting/batch_parse_results.py (recommendations.csv: one row per
@@ -11,7 +11,7 @@ Per call:
   refusal     True if the LLM declined and said why (valid_flag refused). Not
               the same as invalid: an invalid response is malformed or empty.
   duplicates  1 − unique authors / authors in the response (paper Eq. 3),
-              authors compared by "name lastname" normalized (common.author_key).
+              authors compared by "name lastname" normalized (libs.pipeline_common.author_key).
               Only for valid calls.
   n_total_recommendations, n_unique_authors   the two counts behind duplicates
 

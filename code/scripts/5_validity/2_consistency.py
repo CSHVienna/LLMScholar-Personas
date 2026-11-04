@@ -1,5 +1,5 @@
 """
-2_consistency.py — Funnel step 3.2: consistency of every setup.
+2_consistency.py — Step 5.2: consistency of every setup.
 
 Takes the valid calls of 1_validity.py and, for every setup (model + params, any
 created_at), compares the authors recommended in consecutive runs:
@@ -27,6 +27,7 @@ from libs.pipeline_common import (
 
 
 def consistency(runs: list[set]) -> float:
+    """Mean Jaccard of consecutive runs (pairs where both are empty are skipped)."""
     pairs = [len(a & b) / len(a | b) for a, b in zip(runs, runs[1:]) if a | b]
     return float(np.mean(pairs)) if pairs else np.nan
 

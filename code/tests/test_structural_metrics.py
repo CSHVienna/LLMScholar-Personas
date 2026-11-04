@@ -164,15 +164,15 @@ def test_n_used_is_the_formula_denominator():
     metrics, so n_used is what makes the result interpretable.
     """
     embeddings = unit_rows(np.random.default_rng(11).normal(size=(4, 3)))
-    embeddings[1] = np.nan  # sin features
+    embeddings[1] = np.nan  # no features
 
-    # 5 ids de entrada: 4 conocidos (uno sin embedding) + 1 ausente del index.
+    # 5 input ids: 4 known (one without an embedding) + 1 absent from the index.
     result = compute_similarity(
         ["A0", "A1", "A2", "A3", "A99"], embeddings, index_of(4)
     )
     assert result.n_used == 3
-    assert result.n_excluded == 2  # A1 sin embedding + A99 ausente
-    # Coincide con el coseno por pares de los tres que sí entraron.
+    assert result.n_excluded == 2  # A1 without an embedding + A99 absent
+    # Matches the pairwise cosine of the three that entered.
     kept = embeddings[[0, 2, 3]]
     assert result.value == pytest.approx(brute_force_similarity(kept), abs=1e-12)
 
@@ -289,8 +289,8 @@ def test_build_author_features_derives_the_base_columns():
     )
     features = build_author_features(df)
 
-    # Without `stats` the vector stays on what factuality_full.csv can supply;
-    # the summary_stats columns only appear once the extraction has run.
+    # Without `stats` the vector stays on the base columns (works, citations,
+    # years); the h/i10/e/2yr columns only appear when `stats` is passed.
     assert list(features.columns) == [
         "works_count",
         "cited_by_count",

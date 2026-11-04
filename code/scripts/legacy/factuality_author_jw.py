@@ -13,12 +13,14 @@ Algorithm:
   • per block, ONE cdist call computes the (n_queries × n_refs) JW similarity
     matrix between display_names (full names normalized)
   • argmax selects the best candidate per query
-  • accepted if JW >= dn_threshold (default 0.85)
+  • accepted if JW >= dn_threshold (default 0.85) AND every query token longer
+    than 1 char has a ref token with JW >= PER_TOKEN_THRESHOLD (0.95); initials
+    are ignored
   • per-component sims (first/last/second/dn_vs_last/dn_vs_first) are recomputed
     for accepted matches as information, but do NOT affect the decision
 
-Output columns:
-  author_status ('found' | 'hallucinated'), matched_name, researcher_id,
+Output columns (added to the recommendations):
+  original_name, author_status ('found' | 'hallucinated'), matched_name, researcher_id,
   match_score (JW similarity float 0-1, same semantics as oa_match_score),
   matched_fields (always 'display_name' for found, None for hallucinated),
   gt_field, gt_gender, gt_career_age, gt_citations,
@@ -30,9 +32,10 @@ Usage (from code/, with PYTHONPATH=.):
       --recommendations ../results/summary/recommendations.csv \\
       --parquet <path_to_ss_parquet> \\
       --output  ../results/summary/factuality_author_jw.csv \\
-      [--dn_threshold 0.85] [--workers -1] [--reference-year 2025]
+      [--dn_threshold 0.85] [--workers -1] [--reference-year 2025] [--no_cache]
 
-The --parquet default comes from [data].ss_parquet in config.ini.
+--recommendations, --parquet and --output are required (no config.ini defaults).
+The reference index is cached under <repo>/results/.cache/.
 """
 
 import argparse

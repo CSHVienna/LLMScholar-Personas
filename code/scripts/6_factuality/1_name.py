@@ -47,16 +47,16 @@ from libs.utils.logging import setup_logging  # noqa: E402
 
 logger = setup_logging()
 
-# se agrupan por las 2 primeras letras del apellido con parse_name 
 def add_name_columns(df: pd.DataFrame, name_col: str) -> pd.DataFrame:
     """Normalised name + the block it is compared in (first 2 letters of the
     last name)."""
-    df["display_name"] = df[name_col].astype(str).map(normalize) #normalizo los nombres para quedarme sin títulos académicos, etc
+    df["display_name"] = df[name_col].astype(str).map(normalize)  # no academic titles, accents or punctuation
     df["block"] = df["display_name"].map(lambda dn: block_key(parse_name(dn)[3]))
     return df
 
-# cargo los investigadores y calculo su seniority bucket
 def load_researchers(parquet_path: str) -> pd.DataFrame:
+    """The Semantic Scholar researchers, with their normalised name, block and
+    seniority bucket."""
     logger.info("Loading researchers: %s", parquet_path)
     ref = pd.read_parquet(
         parquet_path, columns=["Researcher_id", "Name", "Field", "First_year"]
@@ -67,9 +67,7 @@ def load_researchers(parquet_path: str) -> pd.DataFrame:
     logger.info("Researchers: %d", len(ref))
     return ref
 
-# se hace el match con 2 filtros
-#  Jaro-Winkler del nombre completo ≥ 0.85
-# el filtro por token
+# Two filters (names.py): JW of the full names >= DN_THRESHOLD, then the per-token check.
 def find_candidates(queries: pd.DataFrame, ref: pd.DataFrame) -> pd.DataFrame:
     """One row per (query, matching researcher), with the JW score."""
     rows = []

@@ -17,6 +17,10 @@ ss_parquet       = <path_to_ss_parquet>
 ss_data_dir      = <path_to_ss_data_dir>
 # OpenAlex snapshot (DuckDB file).
 oa_duckdb        = <path_to_oa_duckdb>
+# OpenAlex snapshot authors parquet (glob), e.g. <snapshot>/authors/updated_date=*/part_*.parquet
+oa_authors_parquet = <path_to_oa_authors_parquet>
+# OpenAlex per-author h/i10/e-index stats (directory).
+oa_author_stats = <path_to_oa_author_stats>
 # Temporary directory for OpenAlex works enrichment chunks.
 oa_works_tmp_dir = <path_to_oa_works_tmp_dir>
 # Root of the results directory (CSV tables, plots, cache, ...).

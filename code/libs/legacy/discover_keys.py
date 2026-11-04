@@ -1,10 +1,10 @@
 """
 Scans all LLM response JSON files and collects the top-level keys used when
 the model returns a dict instead of a bare list.  These keys are the "wrapper"
-keys that batch_parse_results.py needs in _WRAPPER_KEYS.
+keys that scripts/3_prompting/batch_parse_results.py needs in _WRAPPER_KEYS.
 
-Usage:
-  python discover_keys.py --results_dir ../../results [--model gpt-4.1-2025-04-14] [--language english]
+Usage (from the repo root):
+  PYTHONPATH=code/libs python code/libs/legacy/discover_keys.py --results_dir results [--model gpt-4.1-2025-04-14] [--language english]
 """
 
 import argparse
@@ -15,12 +15,12 @@ try:
     from prompt import constants as cons
     from utils import ios
     from utils import text as txtlib
-except ImportError:  # importing as libs.utils.discover_keys
+except ImportError:  # importing as libs.legacy.discover_keys
     from libs.prompt import constants as cons
     from libs.utils import ios
     from libs.utils import text as txtlib
 
-# ── Raw-content extractors (mirrors annotate_responses.py) ─────────────────
+# ── Raw-content extractors (cf. annotate_responses.extract_raw_content) ───
 
 
 def _raw_gemini(response: dict) -> str:
@@ -62,7 +62,9 @@ def discover_wrapper_keys(
 ) -> dict[str, int]:
     """
     Returns a dict mapping each discovered wrapper key (str) to how many
-    times it appeared across all responses.
+    times it appeared across all responses (optionally filtered by
+    ``model`` and ``language``). A key counts when it is the first key of a
+    parsed dict response and its value is a list or dict.
     """
     languages = cons.LANGUAGES if language is None else [language]
     sources = (

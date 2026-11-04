@@ -1,6 +1,6 @@
 # Scripts
 
-All scripts run from the `code/` directory with `PYTHONPATH=.` so that `libs.*` imports resolve. Relative paths in defaults point at `../data/` and `../results/` (one level up from `code/`).
+All scripts run from the `code/` directory with `PYTHONPATH=.` so that `libs.*` imports resolve (the exception is `4_llmcaller/`, run from the repository root with `PYTHONPATH=code`). Relative paths in defaults point at `../data/` and `../results/` (one level up from `code/`).
 
 ```
 scripts/
@@ -15,7 +15,7 @@ scripts/
 ├── 9_plot_data/         Data for specific figures (Sankey flows, countries, field baseline, ethnicity)
 ├── run_all.py           Runs 1, 2 and 5 → 9
 ├── annotation/          Interactive CLIs for manual labelling (optional)
-├── ethnicity/           Ethnicity inference (optional)
+├── ethnicity/           Ethnicity inference and NamSor checks (optional)
 └── legacy/              Scripts not used any more (replaced or one-time experiments)
 ```
 
@@ -36,11 +36,14 @@ That single `PYTHONPATH=.` makes `libs.*` importable from every script under `sc
 
 ## Ground truth (`1_ground_truth/`)
 
-Once, for every researcher of the Semantic Scholar parquet: their papers with DOI (API) → their OpenAlex author, the one who signs those papers, chosen by Jaro-Winkler on the names (threshold 1.35, `notebooks/analysis/checks/jw_threshold.ipynb`) → for the researchers without one, the cascade by name, field and seniority → the metadata of that author joined to the parquet: `1_ground_truth/ground_truth.parquet`. See `1_ground_truth/README.md`.
+Once, for every researcher of the Semantic Scholar parquet: their papers with DOI (API) → their OpenAlex author, the one who signs those papers, chosen by Jaro-Winkler on the names (threshold 1.35, `notebooks/analysis/checks/jw_threshold.ipynb`) → for the researchers without one, the cascade by name, field and seniority → the metadata of that author joined to the parquet: `1_ground_truth/ground_truth.parquet`. `run_pipeline.py` runs `1_ss_papers.py` → `2_jw_match.py` → `3_candidates.py` → `4_author_fields.py` → `5_pick.py` → `6_oa_metadata.py` (`--from_step N`, `--ids`, `--out_dir`). See `1_ground_truth/README.md`.
 
 ## Graph (`2_graph/`)
 
-`run_pipeline.py` runs `1_author_stats.py` (h / i10 / e-index of every OpenAlex author of the ground truth → `2_graph/author_stats/`) and `2_model.py` (coauthorship graph and similarity PCA over all of them, cached in `../results/2_graph/cache/*_gt.joblib`; `libs/metrics/structural_model.py`).
+`run_pipeline.py` runs `1_author_stats.py` and `2_model.py`.
+
+- `1_author_stats.py`: per OpenAlex author of the ground truth, h-index, i10-index and 2-year mean citedness read from OpenAlex's `authors.summary_stats` (needs the 2026-09 snapshot or later), and the e-index computed from per-paper citation counts (a full pass over `oa.works`). Stages checkpointed to `../results/2_graph/author_stats/` (`authors.parquet`, `summary_stats.parquet`, `author_work_citations.parquet`, `eindex.parquet`) and skipped when present; `--rebuild <stage>` redoes one. Other flags: `--ground_truth`, `--duckdb`, `--out_dir`, `--temp_dir` (default `[data].oa_works_tmp_dir`), `--memory_limit`.
+- `2_model.py`: coauthorship graph and similarity PCA over all of them (8 features, see `code/README.md`), cached in `../results/2_graph/cache/` (`coauthorship_graph_gt.joblib`, `similarity_embeddings_gt.joblib`; `libs/metrics/structural_model.py`). Flags: `--ground_truth`, `--author_stats`, `--oa_duckdb`.
 
 ## Batch processing (`3_prompting/`)
 
@@ -55,12 +58,12 @@ Three scripts work together to build and parse localised prompt combinations:
 Generates the canonical English parameters and translates them into the target language with the OpenAI API.
 
 **Arguments**
-- `-l, --language` (optional): language code; must match one of `cons.LANGUAGES`. Default: `cons.LANG_EN`.
-- `-o, --output-dir` (required): output directory. Default: `../data/context/`.
+- `-l, --language` (optional): `english`, `spanish` or `german` (`cons.LANGUAGES`). Default: `english`.
+- `-o, --output-dir` (required): output directory, normally `../data/context/`.
 
 **Configuration**
 
-Requires a `config.ini` (at the repo root) with the OpenAI credentials. See `config.ini.example`.
+Requires a `config.ini` (found by walking up from the current directory) whose `[openai].data_dir` points to the file with the OpenAI key. See `config.ini.example`.
 
 **Examples**
 
@@ -75,47 +78,51 @@ python scripts/3_prompting/batch_params.py -l spanish -o ../data/context/
 Builds prompt combinations from the translated parameters.
 
 **Arguments**
-- `-c, --combination_id` (optional): combination ID to display (0-indexed).
-- `-l, --language` (optional): language (must match what `batch_params.py` produced).
-- `-o, --output-dir` (required): output directory. Default: `../data/context/`.
+- `-c, --combination_id` (optional): combination ID to display (0-indexed). Default: 0.
+- `-l, --language` (optional): language (must match what `batch_params.py` produced). Default: `english`.
+- `-o, --output-dir` (required): directory with the `<language>/` parameter files, normally `../data/context/`.
 
 **Examples**
 
 ```bash
 # From code/
 python scripts/3_prompting/batch_prompt.py -c 0  -l german  -o ../data/context/
-python scripts/3_prompting/batch_prompt.py -c 5  -l german
-python scripts/3_prompting/batch_prompt.py -c 42 -l spanish
+python scripts/3_prompting/batch_prompt.py -c 5  -l german  -o ../data/context/
+python scripts/3_prompting/batch_prompt.py -c 42 -l spanish -o ../data/context/
 ```
 
 ### batch_parse_results.py
 
 **Arguments**
-- `--results_dir` (required): directory with the LLM responses (`.json`), e.g. `../results`.
+- `--results_dir` (required): the folder whose `responses/results_<source>_<language>/` holds the LLM responses (`.json`), e.g. `../results`.
 - `--output_dir` (required): output directory.
-- `--model` (optional): model name (see `data/context/models.txt`).
+- `--model` (optional): model name (see `data/models/models.txt`).
 - `--language` (optional): language (`spanish`, `english`, `german`).
+
+Writes `summary.csv` (one row per response) and `recommendations.csv` (one row per recommended author); with both `--model` and `--language` the names get a `_<source>_<model>_<language>` suffix. `5_validity/` reads `../results/3_recommendations/recommendations.csv`.
 
 **Example**
 
 ```bash
 # From code/, parse every combination in parallel
-nice -n 10 parallel -j 20 python scripts/3_prompting/batch_parse_results.py --results_dir ../results --output_dir ../results/3_recommendations --model {1} --language {2} :::: ../data/context/models.txt ::: english german spanish
+nice -n 10 parallel -j 20 python scripts/3_prompting/batch_parse_results.py --results_dir ../results --output_dir ../results/3_recommendations --model {1} --language {2} :::: ../data/models/models.txt ::: english german spanish
 ```
 
 ## LLMs Caller (`4_llmcaller/`)
 
 ### Requirements
-* Data must be available at `data/context/...`.
-* Add API keys for gpt an gemini in `.env`.
+* Run from the **repository root** with `PYTHONPATH=code`: the prompts are read from `data/context/<language>/all_params_and_prompts.json` (relative to the current directory; `batch_prompt.py` writes `all_prompts.txt`, not this file).
+* Add the keys `OPENAI_API_KEY` and `GEMINI_API_KEY` to a `.env` file (read by `gpt_gemini_02` and `gpt_gemini_03` with python-dotenv).
 * Install packages (see requirements.txt).
 
 ### Execution
-* Run ollama: `scripts/4_llmcaller/ollama_requests_multiprocessing.py` (see args for details)
-* Run gpt/gemini:
-  1. `scripts/4_llmcaller/gpt_gemini_01_create_batch_files.py` (modify language using args; uncomment models ony by one)
-  2. `scripts/4_llmcaller/gpt_gemini_02_create_batches.py` (modify language and model family using args)
-  3. `scripts/4_llmcaller/gpt_gemini_03_retrieve_results.py` (modify model family using args)
+* Run ollama: `code/scripts/4_llmcaller/ollama_requests_multiprocessing.py` (`-m`, `-ms small|large|all`, `-r`, `-l`, `-s` servers, `-mp` processes, `-fp` first port, `-cw`, `-mot`, `-pi`/`-pt`, `-ls`, `-mpo`; see `--help`). Responses: `ollama_<language>_<model>.json`.
+* Run gpt/gemini (files under `results_<model_family>_<language>/` next to the scripts):
+  1. `code/scripts/4_llmcaller/gpt_gemini_01_create_batch_files.py` (`-m`, `-r`, `-l`; uncomment the models of one family in `MODEL_LIST`)
+  2. `code/scripts/4_llmcaller/gpt_gemini_02_create_batches.py` (`-mf gpt|gemini`, `-r`, `-l`)
+  3. `code/scripts/4_llmcaller/gpt_gemini_03_retrieve_results.py` (`-mf gpt|gemini`)
+
+`3_prompting/batch_parse_results.py` reads these folders as `<results_dir>/responses/results_<source>_<language>/`.
 
 
 ### End-to-end workflow
@@ -130,11 +137,12 @@ python scripts/3_prompting/batch_params.py -l german -o ../data/context/
 # 2. Build and inspect combination 0
 python scripts/3_prompting/batch_prompt.py -c 0 -l german -o ../data/context/
 
-# 3. Data collection (querying LLMs via Ollama, OpenAI, and Vertex APIs)
-python scripts/4_llmcaller/ollama_requests_multiprocessing.py -m <model>  -r <repetitions> -l <language>
-python scripts/4_llmcaller/gpt_gemini_01_create_batch_files.py -m <model> -r <repetitions> -l <language>
-python scripts/4_llmcaller/gpt_gemini_02_create_batches.py -mf <model_familiy> -r <repetitions> -l <language>
-python scripts/4_llmcaller/gpt_gemini_03_retrieve_results.py -mf <model_familiy>
+# 3. Data collection (querying LLMs via Ollama, OpenAI, and Vertex APIs), from the repository root
+cd ..
+PYTHONPATH=code python code/scripts/4_llmcaller/ollama_requests_multiprocessing.py -m <model> -r <repetitions> -l <language>
+PYTHONPATH=code python code/scripts/4_llmcaller/gpt_gemini_01_create_batch_files.py -m <model> -r <repetitions> -l <language>
+PYTHONPATH=code python code/scripts/4_llmcaller/gpt_gemini_02_create_batches.py -mf <model_family> -r <repetitions> -l <language>
+PYTHONPATH=code python code/scripts/4_llmcaller/gpt_gemini_03_retrieve_results.py -mf <model_family>
 
 ```
 
@@ -156,7 +164,7 @@ parallel --bar -j 8 python scripts/3_prompting/batch_prompt.py -c {} -l german -
 - `batch_params.py` writes translated JSONs under `{output_dir}/{language}/`:
   - `instructions.json`, `locations.json`, `input.json`.
 - `batch_prompt.py` writes:
-  - `all_prompts.txt` — every generated combination.
+  - `{output_dir}/{language}/all_prompts.txt` — every generated combination (only if it does not exist yet).
   - The selected combination is printed to stdout.
 
 ### Notes
@@ -189,7 +197,7 @@ parallel --bar -j 8 python scripts/3_prompting/batch_prompt.py -c {} -l german -
 | Script | One row per | Writes |
 |---|---|---|
 | `1_factuality.py` | recommendation | factuality_*, matched_* (Semantic Scholar), bias_location (only factuality_author = True) → `factuality/` |
-| `2_socials.py` | call | diversity, parity, popularity, bias_location, similarity, connectedness, over the authors with factuality_author = True (graph and PCA of `2_graph/`; classes, parity references and tercile cuts from the ground truth) → `socials/` |
+| `2_socials.py` | call | diversity, parity, popularity (+ `pct_*` tiers), bias_location, similarity, connectedness (+ `n_used_*`, `n_excluded_*`), over the authors with factuality_author = True (graph and PCA of `2_graph/`; classes, parity references and tercile cuts from the ground truth) → `socials/` |
 | `3_calls_table.py` | call | validity, consistency, steps 1 and 2 in one table, with the column names the notebooks use → `calls.csv` |
 
 ## Data for specific figures (`9_plot_data/`)
@@ -202,6 +210,20 @@ They read the output of the funnel (`7_enrichment/factuality_full.csv`), only th
 | `build_location_flows.py` | `9_figures/tables/location_flows.csv` | `analysis/figures/metrics.ipynb` |
 | `build_gt_field_baseline.py` | `9_figures/tables/gt_field_baseline.csv` | `analysis/figures/metrics.ipynb` |
 | `build_ethnicity_distributions.py` | `9_figures/ethnicity_distributions/*.csv` | `analysis/figures/ethnicity.ipynb` |
+
+## Ethnicity (`ethnicity/`, optional)
+
+| Script | What it does |
+|---|---|
+| `apply_ethnicity_ground_truth.py` | perceived ethnicity of every Semantic Scholar researcher → `researcher_ethnicity_lookup.csv` (in `[data].ss_data_dir`, or `results/1_ground_truth/ethnicity/` if that is not writable), read by `7_enrichment/4_ethnicity.py` and `8_metrics/2_socials.py` |
+| `ethnicity_inference.py` | the inference cascade (demographicx, then ethnicolr, else Unknown); run as a script it labels the names the LLM wrote (not used by the pipeline) |
+| `namsor.py` | perceived ethnicity from the NamSor API (`--endpoint`: `us_race`, `diaspora`, `diaspora_full`) |
+| `namsor_diaspora_benchmark.py` | NamSor `diaspora` with / without / with a US `countryIso2`, on `data/ethnicity_inference/diaspora_benchmark_authors.csv` |
+| `validate_benchmark.py` | row-by-row checks of that benchmark set (`--audit`, `--offline`, `--report`) |
+
+## Annotation (`annotation/`, optional)
+
+`annotate_responses.py` and `annotate_ethnicity.py`: interactive CLIs for the manual labels under `data/`; `lookup_output.py`: prints the raw LLM output of a `summary.csv` row.
 
 ## Legacy (`legacy/`)
 

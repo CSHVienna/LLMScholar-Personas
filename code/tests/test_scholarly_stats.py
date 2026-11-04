@@ -1,7 +1,7 @@
 """h-index / i10-index / e-index and the extended similarity feature vector.
 
 The e-index reference values are computed here with a direct transcription of
-LLMScholarBench's compute_e_index (GTBuilder/APS/code/libs/scholar.py), so the
+the reference benchmark's e-index definition, so the
 vectorised implementation is checked against the definition it claims to follow
 rather than against numbers baked in by hand.
 """
@@ -17,7 +17,7 @@ from libs.metrics.similarity import _scholarly_stats_from_citations, build_autho
 
 
 def reference_e_index(citations):
-    """LLMScholarBench's formula: e = -1/N * sum c_i log(c_i / c_total).
+    """Reference benchmark formula: e = -1/N * sum c_i log(c_i / c_total).
 
     N counts the CITED papers, not every paper. The reference computes it as
     `df_author[col_publication].nunique()` over a *citation* table, where a
@@ -195,7 +195,7 @@ def test_base_vector_without_stats():
 
 
 def test_citations_per_paper_age_definition():
-    """(cited_by_count / works_count) / career_age, per LLMScholarBench."""
+    """(cited_by_count / works_count) / career_age, per the reference benchmark."""
     features = build_author_features(make_authors())
     assert features.loc["A1", "citations_per_paper_age"] == pytest.approx(
         (100 / 10) / 5
@@ -204,7 +204,7 @@ def test_citations_per_paper_age_definition():
 
 
 def test_career_age_zero_yields_zero_not_a_clipped_divisor():
-    """The reference (batch_user_rankings.py:77) returns 0 when career_age is 0.
+    """The reference benchmark returns 0 when career_age is 0.
 
     Clipping the divisor to 1 instead handed a single-year author their entire
     citations_per_work, which is the opposite of damping by career length.

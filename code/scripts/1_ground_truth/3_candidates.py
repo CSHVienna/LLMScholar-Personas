@@ -1,17 +1,20 @@
 """
-4_candidates.py — Step 4 (the cascade, for the researchers without a DOI match): every OpenAlex author whose name matches each
-recommended name (only the recommendations with factuality_author = True).
+3_candidates.py — Step 3 (the cascade, for the researchers without a
+Jaro-Winkler match): every OpenAlex author whose name matches each name of
+--recommendations. run_pipeline.py passes cascade_requests.csv (the Semantic
+Scholar researchers that 2_jw_match.py left out); the default is
+factual_authors.csv of scripts/6_factuality/.
 
-Same match as scripts/7_enrichment/1_openalex.py (normalised name equal to the
-author's display name or to one of its alternative names), but it keeps ALL the
-authors with that name instead of choosing one.
+A name matches when, normalised (lowercase, no accents, letters only), it equals
+the author's display name or one of its alternative names. ALL the authors with
+that name are kept; 5_pick.py chooses one.
 
 Output: candidates.parquet, one row per (name, OpenAlex author):
-  norm, oa_id (the OpenAlex URL, as in factuality_full.csv), display_name,
+  norm, oa_id (the OpenAlex URL, as in ground_truth.parquet), display_name,
   works_count, cited_by_count, first_year, last_year
 
 Usage (from code/, with PYTHONPATH=.):
-  python scripts/1_ground_truth/4_candidates.py --output ../results/1_ground_truth/candidates.parquet
+  python scripts/1_ground_truth/3_candidates.py --output ../results/1_ground_truth/candidates.parquet
 """
 
 import argparse

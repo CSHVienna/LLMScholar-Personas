@@ -1,9 +1,11 @@
 """
-build_valid_calls.py — Pre-compute the per-call metrics table consumed by the
-analysis notebooks.
+build_valid_calls.py — Legacy: pre-compute the per-call metrics table the analysis
+notebooks used to load. Replaced by 5_validity/ and 8_metrics/ (8_metrics/3_calls_table.py
+writes the table the notebooks read now).
 
-Ports the preprocessing stage of notebooks/analysis/metrics_pipeline.ipynb so
-the notebook can stay plotting-only. Reads factuality_full.csv plus ethnicity
+Ports the preprocessing stage of notebooks/legacy/metrics_pipeline_old.ipynb so
+the notebook can stay plotting-only. Reads <results_dir>/summary/
+factuality_full_resolved.csv (else factuality_full.csv; --input) plus ethnicity
 ground-truth CSVs and the Semantic Scholar parquet, derives every per-call
 metric (factuality, diversity, parity, consistency, duplicates, popularity,
 connectedness, similarity), and writes a single CSV that every plotting
@@ -15,7 +17,7 @@ The two structural metrics (paper Eqs. 6-8) need two things prepared first:
 
   1. the OpenAlex DuckDB snapshot, for the coauthorship graph;
   2. the per-author scholarly stats, from
-     scripts/pipeline/4_author_stats.py — run that BEFORE this script
+     scripts/2_graph/1_author_stats.py — run that BEFORE this script
      or the similarity features cannot be built.
 
 Graph and PCA pipeline are cached under <results_dir>/.cache, so the pass over
@@ -27,7 +29,7 @@ per-call table, use scripts/legacy/run_similarity.py instead — it calls the
 same code path and writes its own parquet per feature-vector variant.
 
 Usage (from code/, with PYTHONPATH=.):
-  python scripts/pipeline/4_author_stats.py      # once, ~95 min
+  python scripts/2_graph/1_author_stats.py       # once, ~95 min
   python scripts/legacy/build_valid_calls.py
   python scripts/legacy/build_valid_calls.py --results <results_dir> --parquet <path_to_ss_parquet>
   python scripts/legacy/build_valid_calls.py --with_ss_block
@@ -148,7 +150,7 @@ def match_rate_per_call(
     return matched / evaluated.replace(0, np.nan)
 
 
-# Per-recommendation verdicts written by scripts/factuality/. Read only
+# Per-recommendation verdicts written by scripts/6_factuality/. Read only
 # when the input has them; renamed so they don't clash with the per-call metrics.
 CASCADE_COLS = {"factuality_name": "cascade_name", "factuality_author": "cascade_author"}
 
@@ -329,10 +331,9 @@ def _compute_structural_metrics(
         logger=logger,
     )
     # h_index / i10_index / two_year_mean_citedness come straight from
-    # OpenAlex's own summary_stats (extracted from the raw author records, since
-    # the DuckDB dump omits the field); only e_index has to be computed, which
-    # extract_oa_author_stats.py does in its own checkpointed pass over
-    # oa.works. Both land in [data].oa_author_stats.
+    # OpenAlex's own authors.summary_stats; only e_index has to be computed,
+    # which scripts/2_graph/1_author_stats.py does in its own checkpointed pass
+    # over oa.works. Both are read from oa_author_stats_dir.
     stats = load_author_scholarly_stats(oa_author_stats_dir, logger=logger)
     # Second block, over the other corpus, mirroring the reference PCA's
     # OpenAlex + APS concatenation. Off by default so the effect of turning it
@@ -426,7 +427,7 @@ def main() -> None:
         "--oa_author_stats",
         default=config_default("oa_author_stats"),
         help="Directory holding summary_stats.parquet and eindex.parquet, as "
-        "written by scripts/pipeline/4_author_stats.py "
+        "written by scripts/2_graph/1_author_stats.py "
         "(default: [data].oa_author_stats). Needed for the similarity features.",
     )
     parser.add_argument(

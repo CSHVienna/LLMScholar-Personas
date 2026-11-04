@@ -6,7 +6,7 @@ the perceived ethnicity of the picked researcher (ground truth). Only the recomm
 factuality_author = True have an OpenAlex author; the others get
 oa_status = not_searched and location_status / affiliation_status = not_applicable.
 
-Input: summary/cascade/factuality_ss.csv (6_factuality/). Each step reads the
+Input: ../results/6_factuality/factuality_ss.csv (6_factuality/). Each step reads the
 previous one's output:
 
   1_openalex.py     → factuality_oa.csv           the OpenAlex columns of the picked researcher
@@ -14,7 +14,8 @@ previous one's output:
   3_affiliation.py  → factuality_affiliation.csv  the LLM's affiliations vs the OpenAlex institutions
   4_ethnicity.py    → factuality_full.csv (final) perceived ethnicity of the picked researcher
 
-8_metrics/ and 9_plot_data/ read summary/factuality_full.csv.
+Outputs go to ../results/7_enrichment/; 8_metrics/ and 9_plot_data/ read
+factuality_full.csv.
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/7_enrichment/run_enrichment.py

@@ -34,7 +34,8 @@ class ModelSpec:
         return self.prompt_vars + self.structural_vars
     
     def var_kind(self, term: str) -> str:
-        """Tag a coefficient term as social / technical / llm_attr / interaction."""
+        """Tag a coefficient term as intercept / interaction / persona / context /
+        llm_fe / llm_attr / structural / other."""
         if term == 'Intercept':
             return 'intercept'
         if ':' in term:

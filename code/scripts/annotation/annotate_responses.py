@@ -2,11 +2,12 @@
 Interactive CLI tool for manually annotating LLM response quality labels.
 
 Labels:
-  i = invalid      (empty or unparseable)
+  i = invalid      (unparseable)
   c = cleaned      (answered but with extra verbosity/text)
   u = unchanged    (perfect JSON response)
   r = refused      (LLM explained why it can't answer)
   f = fixed_dict   (JSON present but corrupted/partially fixed)
+  e = empty        (empty response)
   s = skip         (not sure, skip this sample)
   q = quit         (stop and compute metrics from labeled so far)
 
@@ -16,8 +17,13 @@ Usage:
     --summary_csv ../results/3_recommendations/summary.csv \
     --output ../data/annotator_agreement/manual_labels_annotator2.csv \
     --n 100 \
-    [--stratified] [--seed 42] [--model gpt-4.1-2025-04-14] [--language english]
+    [--stratified] [--seed 42] [--model gpt-4.1-2025-04-14] [--language english] \
+    [--sample_csv ../data/annotator_agreement/sample_100.csv] [--export_sample out.csv] \
+    [--show_algo_label]
 
+--export_sample writes the drawn sample to a CSV and exits (to share with a second
+annotator); --sample_csv labels that pre-defined sample instead of drawing one.
+Labels are saved after every answer, so re-running with the same --output resumes.
 After labeling, computes accuracy/precision/recall/F1 vs algorithmic valid_flag.
 """
 
@@ -82,7 +88,7 @@ LABEL_COLORS = {
 
 
 def _compute_cleaned(text: str) -> tuple[str, bool]:
-    """Apply the same cleaning logic as batch_parse_results/text.py.
+    """Apply the same cleaning logic as libs.utils.text.clean_content.
     Returns (cleaned_text, was_changed) so we can show both lengths."""
     original = text
     m = re.search(r"```[a-zA-Z]*\s*([\s\S]*?)```", text)
@@ -107,6 +113,7 @@ def _compute_cleaned(text: str) -> tuple[str, bool]:
 
 
 def get_source(model: str) -> str:
+    """Map a model name to its provider folder: 'gemini', 'gpt' or 'ollama'."""
     m = model.lower()
     if "gemini" in m:
         return "gemini"
@@ -121,6 +128,7 @@ def model_to_filename(model: str) -> str:
 
 
 def build_json_path(results_dir: str, source: str, language: str, model: str) -> Path:
+    """Path of the raw responses JSON: <results_dir>/responses/results_<source>_<language>/<source>_<language>_<model>.json."""
     folder = RESULTS_PATH_TEMPLATE.format(
         root=results_dir, source=source, language=language
     )

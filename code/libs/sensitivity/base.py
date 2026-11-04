@@ -47,8 +47,10 @@ class SensitivityModel(ABC):
                 spec.json           ← ModelSpec + class name + formula
                 coefs.parquet       ← coefficient table
                 params.parquet      ← params, SE, p-values, CIs (raw)
-                anova.parquet       ← if applicable
-                r2.json             ← if applicable
+                ...                 ← subclass extras from _save_extras()
+                                      (FixedEffectsModel: r2.json, pt_*.parquet,
+                                      model_info.json; MixedEffectsModel:
+                                      mixed_stats.json)
         """
         if self.result is None:
             raise RuntimeError("Call .fit() before .save()")

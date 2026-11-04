@@ -29,6 +29,8 @@ def _read_parser(path: Path | str | None = None) -> ConfigParser:
 
 
 def load_config(path: Path | str | None = None) -> dict:
+    """API settings from config.ini: LLM_KEYS_DIR (env var LLM_KEYS_DIR or
+    [secrets].keys_dir, required), OPENAI_API_DIR and NAMSOR_API_DIR."""
     # If no explicit path, walk up from cwd to find config.ini.
     cfg_path = Path(path) if path is not None else _find_config()
     if not cfg_path.exists():

@@ -1,8 +1,7 @@
 """
 Ethnicity inference module for LLMScholar-Personas.
 
-Implements the cascade model from:
-"Whose Name Comes Up? Auditing LLM-Based Scholar Recommendations" (arXiv:2506.00074)
+Infers ethnicity from author names with a two-model cascade.
 
 Cascade order:
   1. demographicx (BERT-based, liamliang/demographics_race_v2)
@@ -17,6 +16,11 @@ Valid output categories:
   - Black or African American
   - Hispanic or Latino
   - Unknown
+
+infer_ethnicity_batch is imported by apply_ethnicity_ground_truth.py. Run as a
+script, it adds a perceived_ethnicity column to recommendations.csv (names the LLM
+wrote) and writes recommendations_with_ethnicity.csv; the pipeline no longer uses
+that output.
 """
 
 import os
@@ -105,8 +109,8 @@ def _demographicx_batch(names: list[str]) -> list[dict]:
 
     Returns a list of dicts with keys:
       {'category': str, 'confidence': float, 'source': 'demographicx'}
-    or {'category': None, 'confidence': 0.0, 'source': 'demographicx'}
-    if confidence < threshold.
+    with category None when the max probability is below DEMOGRAPHICX_THRESHOLD
+    (confidence keeps that probability; it is 0.0 only if the batch failed).
     """
     _load_demographicx()
 
@@ -162,7 +166,8 @@ def _ethnicolr_batch(full_names: list[str]) -> list[dict]:
 
     Returns a list of dicts with keys:
       {'category': str, 'confidence': float, 'source': 'ethnicolr'}
-    or {'category': None, 'confidence': 0.0, 'source': 'ethnicolr'} on failure.
+    with category None when the name has no last name, the batch failed (confidence
+    0.0), or the max probability is below ETHNICOLR_THRESHOLD.
     """
     _load_ethnicolr()
     import ethnicolr
@@ -309,7 +314,7 @@ def _apply_to_recommendations(
     Load recommendations CSV, infer ethnicity for all scholars, save results.
 
     Deduplicates names before inference to avoid redundant computation,
-    then joins back to the full dataset.
+    then joins back to the full dataset. checkpoint_every is currently unused.
     """
     from tqdm import tqdm
 

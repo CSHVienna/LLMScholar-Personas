@@ -11,14 +11,19 @@ only when all of these hold:
             taxonomy, stratum consistent with origin vs work country, no LinkedIn
   source    source_url_1 resolves
   quote     evidence_quote is actually found in one of the cited pages
-  author    the person resolves to a real indexed author (OpenAlex exact-name
-            match), or a manual audit has cleared the row
+  author    the person resolves to a real indexed author with >= MIN_WORKS works
+            (author_check: Crossref, then Semantic Scholar, then OpenAlex), or
+            a manual audit has cleared the row
 
 `--audit` merges a hand-audit CSV (id, veredicto = CONSERVAR|CORREGIR|ELIMINAR)
 so rows a human/agent checked by hand are not re-flagged by the crude automatic
 signals. OpenAlex under-indexes social scientists, older scholars and authors
 outside Europe/North America, so a low works_count is a prompt to look, never a
 verdict on its own — the audit column is what settles those.
+
+--offline runs the schema checks only. --report writes one row per author
+(estado OK|REVISAR plus the failed checks in `problemas`; column names and console
+messages are in Spanish).
 
 Exit status is 0 only when every row passes, so this can gate the benchmark run.
 """
@@ -42,11 +47,13 @@ MIN_WORKS = 5
 
 
 def norm(s: str) -> str:
+    """ASCII-fold, lowercase and keep only [a-z0-9 ], for fuzzy text matching."""
     s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower()
     return re.sub(r"[^a-z0-9 ]", " ", " ".join(s.split()))
 
 
 def fetch_text(url: str, timeout: int = 30) -> str | None:
+    """Fetch a page and return its normalised visible text, or None on any error."""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Language": "en,es,fr,de,it,pt,ar"})
         with urllib.request.urlopen(req, timeout=timeout, context=CTX) as r:
@@ -59,6 +66,7 @@ def fetch_text(url: str, timeout: int = 30) -> str | None:
 
 
 def url_alive(url: str) -> str:
+    """HTTP status of url as a string ("200", "HTTP404", ...), "EMPTY", or the exception name."""
     if not url.strip():
         return "EMPTY"
     try:
@@ -73,6 +81,8 @@ def url_alive(url: str) -> str:
 
 
 def quote_found(row: dict) -> tuple[str, float]:
+    """Look for evidence_quote in source_url_1/2: LITERAL, NEAR (token overlap
+    >= QUOTE_THRESHOLD) or NOT_FOUND, with the best overlap score."""
     q = norm(row["evidence_quote"])
     toks = [w for w in q.split() if len(w) > 3]
     best = 0.0
@@ -93,6 +103,8 @@ def quote_found(row: dict) -> tuple[str, float]:
 
 
 def openalex(row: dict) -> dict:
+    """Best OpenAlex author for full_name (exact name, else surname; prefers one
+    whose last institution is in work_country_iso2): match, works, country."""
     tgt, ln = norm(row["full_name"]), norm(row["last_name"])
     try:
         u = "https://api.openalex.org/authors?search=%s&per-page=25" % urllib.parse.quote(row["full_name"])
@@ -101,7 +113,7 @@ def openalex(row: dict) -> dict:
             cands = json.load(r).get("results", [])
     except Exception as e:
         return {"match": "ERROR:" + type(e).__name__, "works": None, "country": None}
-    # (retries handled by the caller via openalex_retry)
+    # no retry here; openalex_retry wraps this, but author_check calls it directly
     exact = [h for h in cands
              if tgt in [norm(h.get("display_name"))] + [norm(a) for a in (h.get("display_name_alternatives") or [])]]
     pool = exact or [h for h in cands if ln and ln in norm(h.get("display_name"))]

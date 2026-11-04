@@ -1,20 +1,20 @@
 """
-factuality_field_check.py — Step 2 of the factuality pipeline.
+factuality_field_check.py — Legacy (formerly step 2 of the factuality pipeline;
+replaced by 6_factuality/2_field.py).
 
-Reads the output of factuality_author.py and decides whether each verified
+Reads the output of factuality_author_jw.py and decides whether each verified
 author actually belongs to the field the LLM was asked about.
 
 Decision per row:
   author_status = hallucinated      → field_status = not_applicable
   gt_field present                  → compare LLM `field` vs `gt_field`
   otherwise                         → field_status = field_unknown
-                                       (author only in OpenAlex; concepts not
-                                        materialized in this run)
+                                       (no gt_field, e.g. author only in OpenAlex)
 
-Output columns added to factuality_author.csv:
+Output columns added to the input table:
   field_status        {field_match | field_mismatch | field_unknown | not_applicable}
-  field_check_source  {gt | openalex_concepts | none}
-  field_evidence      string compared against (gt_field or top concepts)
+  field_check_source  {gt | none}  (CHECK_CONCEPTS is defined but never assigned)
+  field_evidence      the gt_field compared against ("" when not checked)
 
 Usage (from code/, with PYTHONPATH=.):
   python scripts/legacy/factuality_field_check.py \\
@@ -112,6 +112,7 @@ def classify_row(row: pd.Series) -> tuple[str, str, str]:
 
 
 def run(input_path: str, output_path: str) -> None:
+    """Add field_status / field_check_source / field_evidence to every row and save."""
     df = read_input_csv(input_path, logger=logger)
 
     statuses, sources, evidences = [], [], []
@@ -136,7 +137,7 @@ def main() -> None:
     )
     add_io_args(
         parser,
-        input_help="Path to factuality_author.csv (output of factuality_author.py)",
+        input_help="Path to factuality_author_jw.csv (output of factuality_author_jw.py)",
     )
     args = parser.parse_args()
 

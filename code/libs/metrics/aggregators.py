@@ -60,6 +60,13 @@ def aggregate_scores(
 
 
 def aggregate_per_attempt(df, group_cols, metric_agg):
+    """One ``metric`` value per group of ``group_cols``.
+
+    ``metric_agg`` is either a ``(column, aggfunc)`` tuple, aggregated as is, or
+    a dict with an ``ntotal`` aggregation plus one counting aggregation: the
+    metric is then ``n_counts / n_total`` when that key is ``npositive`` and
+    ``1 - n_counts / n_total`` otherwise.
+    """
 
     def pct(x):
         return x["n_counts"] / x["n_total"]
@@ -100,7 +107,7 @@ def aggregate_factuality_task(df_factuality_task, metric):
     ``<prefix>_unknown`` / ``not_applicable``. Only match and mismatch are
     evaluable — the other two mean there was nothing to check against (e.g. an
     author with no topics on the field side), so they are dropped rather than
-    counted as failures, exactly as step 6 of build_valid_calls.py does.
+    counted as failures, exactly as step 6 of scripts/legacy/build_valid_calls.py does.
     """
     status_col = constants.FACTUALITY_TASK_STATUS_COLS[metric]
     prefix = status_col.split("_")[0]

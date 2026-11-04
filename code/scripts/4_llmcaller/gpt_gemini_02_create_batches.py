@@ -1,6 +1,12 @@
-# cd scripts
-# export PYTHONPATH="${PYTHONPATH}:../" 
-# python gpt_gemini_02_create_batches.py ...
+"""
+gpt_gemini_02_create_batches.py — Step 2 of the GPT / Gemini calls: uploads the
+batch files of step 1 and submits them as batch jobs (OpenAI or Gemini Batch
+API; keys OPENAI_API_KEY / GEMINI_API_KEY from .env).
+
+Run with code/ on PYTHONPATH (files live in results_<model_family>_<language>/
+next to this script):
+  PYTHONPATH=code python code/scripts/4_llmcaller/gpt_gemini_02_create_batches.py ...
+"""
 
 import os
 import sys

@@ -1,9 +1,10 @@
 """
 2_location.py — Step 2 of run_enrichment.py: prompt country vs OpenAlex country.
 
-Reads the output of 1_openalex.py and decides whether the country
-the LLM assigned to each author matches the country of the author's actual
-last-known institution in OpenAlex.
+Reads the output of 1_openalex.py and decides whether the country of the
+prompt matches the author's OpenAlex country (oa_country_code: the institution
+of their most recent own paper, or else OpenAlex's last known institution; see
+oa_country_source).
 
 The LLM `location` column comes in EN/ES/DE for 5 countries — all variants
 collapse to a single ISO-3166-1 alpha-2 code.

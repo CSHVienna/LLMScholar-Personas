@@ -43,8 +43,8 @@ def _scholarly_stats_from_citations(
     * h-index — largest rank r whose paper still has >= r citations, i.e. the
       largest r for which the descending-sorted c[r-1] >= r.
     * i10-index — count of papers with >= 10 citations.
-    * e-index — NOT Zhang's sqrt(h-core excess) but LLMScholarBench's definition
-      (GTBuilder/APS/code/libs/scholar.py), the entropy of how an author's
+    * e-index — NOT Zhang's sqrt(h-core excess) but the reference benchmark's
+      definition, the entropy of how an author's
       citations spread over their papers:
           e = -1/N * sum_i c_i * log(c_i / c_total)
       where N counts the author's CITED papers only. Uncited papers contribute
@@ -72,7 +72,7 @@ def _scholarly_stats_from_citations(
     c_total = np.bincount(group, weights=c_s, minlength=n_groups)
     cited = c_s > 0
     # N is the number of CITED papers, not of all papers. The reference
-    # (scholar.py:compute_e_index) runs over a citation table, where an uncited
+    # benchmark computes it over a citation table, where an uncited
     # paper has no rows at all, so its `nunique()` can only ever count cited
     # ones. Dividing by every paper deflates e by the uncited share: measured
     # over the 305,893-author population only 67.1% of papers are cited, and
@@ -112,15 +112,17 @@ def build_author_scholarly_stats(
 ) -> pd.DataFrame:
     """Compute (once) and cache h-index / i10-index / e-index per author.
 
-    Returns a DataFrame indexed by author id with those three columns, ready to
-    pass as ``build_author_features(stats=...)``.
+    Returns a DataFrame indexed by author id with ``h_index``, ``i10_index`` and
+    ``e_index``. It lacks ``two_year_mean_citedness``, so on its own it is not a
+    valid ``build_author_features(stats=...)``; the pipeline passes
+    :func:`load_author_scholarly_stats` instead.
 
     They are computed from first principles, which needs nothing but
     ``works.cited_by_count`` and ``works.authorships``. (The pipeline reads
     h/i10 from OpenAlex's summary_stats instead; this version is kept for the
     tests that check both agree.)
 
-    Note what this does *not* need: the citation graph. LLMScholarBench derives
+    Note what this does *not* need: the citation graph. The reference benchmark derives
     the e-index from a publication-to-publication citation table because the APS
     dataset has one, but the formula only ever reads c_i, the citation count of
     each paper — a column OpenAlex already stores. ``referenced_works`` is never
@@ -371,9 +373,9 @@ def build_author_features(
     """Derive the scholarly-similarity features, one row per unique author.
 
     Columns are ``constants.SIMILARITY_FEATURE_COLS``, indexed by ``id_col``:
-    productivity (``works_count``, ``works_per_year``), citation impact
-    (``cited_by_count``, ``citations_per_work``, ``citations_per_paper_age``)
-    and career stage (``career_age``) — the three axes named in the paper.
+    productivity (``works_count``), citation impact (``cited_by_count``,
+    ``citations_per_paper_age``) and career stage (``career_age``) — the three
+    axes named in the paper.
 
     ``ss`` is the optional output of :func:`load_ss_author_features`. When
     given, its four columns are appended as a second block, mirroring the
@@ -382,25 +384,25 @@ def build_author_features(
     get NaN there and are median-imputed, which is what the reference does with
     its `aps_*` block for authors outside APS.
 
-    ``stats`` is the optional output of :func:`build_author_scholarly_stats`
-    (``h_index`` / ``i10_index`` / ``e_index``). When given, those three columns
-    are joined on and the result carries ``SIMILARITY_FEATURE_COLS_FULL``;
-    authors absent from ``stats`` get NaN and are median-imputed downstream like
-    any other gap. When omitted the base vector is returned unchanged, which is
-    what a run without ``--oa_duckdb`` gets.
+    ``stats`` is the optional output of :func:`load_author_scholarly_stats`
+    (the four ``SIMILARITY_STATS_COLS``: ``h_index``, ``i10_index``,
+    ``e_index``, ``two_year_mean_citedness``). When given, those columns are
+    joined on and the result carries ``SIMILARITY_FEATURE_COLS_FULL``; authors
+    absent from ``stats`` get NaN and are median-imputed downstream like any
+    other gap. When omitted the base vector is returned unchanged.
 
     ``career_age`` follows the reference's definition, ``(last_year -
     first_year) + 1``, computed from ``first_year_col`` / ``last_year_col`` when
     both are present and falling back to ``career_age_col`` when they are not
     (which is what small fixtures pass). Both reference blocks use the ``+ 1``
-    (batch_user_rankings.py:64 and batch_aps_authors_stats.py:67) and it is not
+    and it is not
     cosmetic: ``oa_career_age`` is ``last - first``, which reports 0 for an
     author active in a single year — 1.7% of this population — and a zero
     denominator is what forced the guard below.
 
-    ``citations_per_paper_age`` follows LLMScholarBench's definition,
-    ``(cited_by_count / works_count) / career_age``, including its guard
-    (batch_user_rankings.py:77): 0 when the author has no works or no career
+    ``citations_per_paper_age`` follows the reference benchmark's definition,
+    ``(cited_by_count / works_count) / career_age``, including its guard:
+    0 when the author has no works or no career
     span, rather than a clipped divisor. Clipping ``career_age`` to 1 handed a
     single-year author their whole ``citations_per_work``, which is the opposite
     of damping by career length.
@@ -414,8 +416,8 @@ def build_author_features(
     years carry disambiguation errors, so a minority of authors show impossible
     values. Measured over the 305,893-author reference population, ``career_age``
     exceeds 100 years for 2.76% of them (p99 = 139 years, max = 2036, against a
-    median of 26), and ``works_per_year`` exceeds one paper per day for 10
-    authors. These are passed through as-is rather than being reclassified as
+    median of 26), and works per year of career exceeds one paper per day for
+    10 authors. These are passed through as-is rather than being reclassified as
     missing. ``log(1+x)`` compresses them, but they still widen the standard
     deviation the shared StandardScaler learns and tilt the PCA axes, which
     shifts every Sim_i — not only the affected authors'. Revisit here, before the
@@ -437,7 +439,7 @@ def build_author_features(
     features["cited_by_count"] = citations
     features["career_age"] = career_age
     # citations_per_work is an intermediate, not a feature: it is not in the
-    # reference PCA nor in B6, and emitting it tilts the fitted axes.
+    # reference PCA nor in the reference benchmark paper, and emitting it tilts the fitted axes.
     citations_per_work = citations / works.clip(lower=1)
     # The reference guard returns 0 for an author with no works or no career
     # span, but only when those are *known* to be zero. An author absent from
@@ -454,11 +456,11 @@ def build_author_features(
     if stats is None:
         return features[constants.SIMILARITY_FEATURE_COLS]
 
-    # `stats` must carry every declared column. Two sources feed it: h_index,
-    # i10_index and two_year_mean_citedness are extracted from the raw OpenAlex
-    # author records (summary_stats), while e_index is computed by
-    # build_author_scholarly_stats because OpenAlex does not publish it. A
-    # missing column means one of the two never ran, and silently filling it
+    # `stats` must carry every declared column. Two sources feed it, both
+    # written by scripts/2_graph/1_author_stats.py: h_index, i10_index and
+    # two_year_mean_citedness come from the OpenAlex authors.summary_stats,
+    # while e_index is computed from per-paper citations because OpenAlex does
+    # not publish it. A missing column means one of the two never ran, and silently filling it
     # with NaN would hand the imputer an all-NaN column and shift the PCA.
     absent = [c for c in constants.SIMILARITY_STATS_COLS if c not in stats.columns]
     if absent:
@@ -517,7 +519,7 @@ def build_similarity_embeddings(
     Scaler and PCA are fitted ONCE over the whole reference population passed in
     ``features`` and persisted; individual responses are only transformed. This
     departs from a literal reading of the paper, which fits within each
-    response, and is deliberate: with n≈10 authors and 5 features a per-response
+    response, and is deliberate: with n≈10 authors and 8 features a per-response
     PCA is numerically unstable, the ">=90% of variance" criterion would be
     measured against the variance of those 10 authors alone (amplifying rounding
     noise when they are alike), and each response would end up in its own basis,
@@ -561,7 +563,7 @@ def build_similarity_embeddings(
     from sklearn.preprocessing import FunctionTransformer, Normalizer, StandardScaler
 
     # Take the columns the caller actually supplied rather than a fixed list:
-    # build_author_features returns the base vector without the snapshot pass
+    # build_author_features returns the base vector without `stats`
     # and SIMILARITY_FEATURE_COLS_FULL with it, so hardcoding either one
     # silently drops features in the other case. Ordered by the canonical list
     # so the fitted pipeline is reproducible.
@@ -661,7 +663,7 @@ def save_similarity_model_h5(
     feature_cols: Sequence[str] | None = None,
     logger: logging.Logger | None = None,
 ) -> Path:
-    """Export a fitted similarity model to HDF5, in LLMScholarBench's layout.
+    """Export a fitted similarity model to HDF5, in the reference benchmark's layout.
 
     The joblib cache this repo writes is a pickle, so reading it needs the same
     scikit-learn and numpy versions that wrote it. HDF5 stores plain arrays

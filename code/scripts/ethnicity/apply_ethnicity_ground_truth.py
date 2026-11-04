@@ -4,8 +4,14 @@ Apply ethnicity inference to Semantic Scholar ground truth data.
 Strategy:
   1. Extract unique (Researcher_id, Name) pairs across all 6 field files (one pass)
   2. Deduplicate by Researcher_id — infer each researcher only once
-  3. Save lookup CSV:  researcher_ethnicity_lookup.csv
+  3. Save lookup CSV researcher_ethnicity_lookup.csv (Researcher_id, Name,
+     perceived_ethnicity, __ethnicity_confidence, __ethnicity_source) to
+     [data].ss_data_dir, falling back to results/1_ground_truth/ethnicity/ if
+     that directory is not writable
   4. For each field file, merge lookup and save *_with_ethnicity.csv (chunked to handle large files)
+
+Inference resumes from a checkpoint pickle in results/1_ground_truth/ethnicity/.
+Flags: --skip-inference (reuse the existing lookup), --skip-merge (stop after step 3).
 """
 
 import os
@@ -296,6 +302,7 @@ def merge_into_field_files(lookup: pd.DataFrame) -> None:
 
 
 def print_summary(lookup_path: str) -> None:
+    """Print per-source and per-category counts of the saved lookup."""
     lookup = pd.read_csv(lookup_path)
     total = len(lookup)
     print("\n=== Ground Truth Ethnicity Inference Summary ===")

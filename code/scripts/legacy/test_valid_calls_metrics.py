@@ -7,7 +7,7 @@ out of the groupby, which restricts the metric to calls that hit at least once
 discarded 221,299 of 437,638 scoreable calls.
 
 Run from code/ with PYTHONPATH=.:
-    python -m pytest tests/test_valid_calls_metrics.py -v
+    python -m pytest scripts/legacy/test_valid_calls_metrics.py -v
 """
 
 import importlib.util

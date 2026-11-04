@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# export PYTHONPATH="$PYTHONPATH:../../libs" # <-- run this in terminal before executing the script (adjust path as needed)
+"""
+batch_params.py — Writes the prompt parameter files (instructions.json,
+locations.json, input.json from libs/prompt/constants.py) to
+<output-dir>/<language>/. For a language other than English, the values are
+translated with GPT (the OpenAI key is read from the file that OPENAI_API_DIR in
+config.ini points to); keys and structure are kept.
+
+Usage (from code/, with PYTHONPATH=.):
+  python scripts/3_prompting/batch_params.py -l german -o ../data/context/
+"""
 
 import argparse
 import json
@@ -15,6 +24,7 @@ DEFAULT_OUTPUT_DIR = "../../data/context/"
 
 
 def translate(obj, lang, api_key):
+    """(raw response, parsed JSON) of the GPT translation of `obj` into `lang`."""
     instructions, input = gen.create_translate_param_prompt(obj, lang)
     raw = llm_openai.prompt_gpt(api_key, instructions, input)
 

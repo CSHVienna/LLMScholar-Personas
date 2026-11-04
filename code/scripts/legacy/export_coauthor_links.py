@@ -2,14 +2,15 @@
 export_coauthor_links.py — Materialise the coauthorship links behind
 connectedness (paper Eqs. 6-7) as durable, inspectable files.
 
-`aggregators.compute_connectedness` only ever sees the graph as an in-memory
+`libs.metrics.coauthorship.compute_connectedness` only ever sees the graph as an in-memory
 sparse matrix cached in a joblib blob, so there is no way to look at *which*
 recommended authors actually coauthored with whom. This script writes that out:
 an undirected edge list, a per-author adjacency map, and a node table.
 
 Pipeline
 --------
-1. Read the author-level factuality table (``factuality_full.csv``), keep the
+1. Read the author-level factuality table (``<results>/summary/factuality_full.csv``,
+   or ``--factuality``), keep the
    valid responses, apply the benchmark's factual rule — ``author_found`` =
    matched in Semantic Scholar OR in OpenAlex — and report how many factual
    authors carry an OpenAlex id. Only those can have a node in the graph at all,
@@ -54,6 +55,7 @@ Usage (from code/, with PYTHONPATH=.)
   python scripts/legacy/export_coauthor_links.py
   python scripts/legacy/export_coauthor_links.py --results <dir> --out <dir>
   python scripts/legacy/export_coauthor_links.py --rebuild   # force graph rebuild
+  python scripts/legacy/export_coauthor_links.py --factuality <csv> [--chunksize 500000]
 
 Defaults come from [data] in config.ini.
 """
@@ -332,6 +334,7 @@ def export_nodes(
 
 
 def _git_commit() -> str | None:
+    """Short HEAD commit hash for the manifest, or None outside a git checkout."""
     try:
         return subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],

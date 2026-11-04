@@ -135,9 +135,9 @@ def test_feature_vector_carries_the_stats_through(populated, tmp_path):
         }
     )
     # The pipeline hands build_author_features the join of two sources: the
-    # summary_stats extracted from the raw OpenAlex author files and the e_index
-    # computed here from oa.works. Mirror that join rather than pretending one
-    # pass produces all four columns.
+    # OpenAlex authors.summary_stats and an e_index computed from oa.works (as
+    # here). Mirror that join rather than pretending one pass produces all four
+    # columns.
     extracted = pd.DataFrame(
         {"two_year_mean_citedness": [2.5, 0.4]}, index=["A1", "A2"]
     )

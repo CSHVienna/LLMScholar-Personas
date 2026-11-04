@@ -79,7 +79,7 @@ def run(recommendations_path: str, cascade_dir: str, output_path: str) -> None:
     # asked seniority are counted. bucket = None (11–19 years) is dropped.
     # The only random pick: one of the candidates that pass the three checks.
     by_author = count_and_pick(cand_field, ["query", "Field", "bucket"], "author")
-    # se agrega a la fila de recomendaciones
+    # Added to each recommendation row.
     logger.info("Loading recommendations: %s", recommendations_path)
     df = add_request_columns(pd.read_csv(recommendations_path, low_memory=False))
     df = df.merge(by_name, on="query", how="left")

@@ -14,9 +14,10 @@ Takes the recommendations of 1_factuality.py and keeps the factual ones
 
 The classes F_a are every category that exists in the ground truth (every
 Semantic Scholar researcher), not only the ones the recommendations show:
-  gender       Female, Male, Unknown (Combined_gender of ground_truth.parquet;
-               empty = Unknown)
-  ethnicity    Asian, Black, White, Hispanic, Unknown (perceived_ethnicity of
+  gender       Female, Male, Neutral (unisex), Unknown — those present
+               (Combined_gender of ground_truth.parquet; empty = Unknown)
+  ethnicity    Asian, Black, White, Hispanic, American Indian, Unknown — those
+               present (perceived_ethnicity of
                results/1_ground_truth/ethnicity/researcher_ethnicity_lookup.csv)
   location     every OpenAlex country of ground_truth.parquet (226)
   publications, citations   low / med / high: the per-field terciles (p33, p67)
@@ -28,7 +29,7 @@ Parity keeps Unknown as a class, in the call and in the ground-truth reference.
 The authors' own values come from the same tables, through the researcher_id
 the factuality cascade picked.
   bias_location     share of authors whose OpenAlex country is the prompt's
-                    country (mean of bias_location from step 3)
+                    country (mean of bias_location from 1_factuality.py)
   similarity        mean pairwise scholarly similarity (paper Eq. 8)
   connectedness     coauthorship connectedness (paper Eq. 7)
                     (n_used_<x>: how many authors entered each of the two;
@@ -75,7 +76,7 @@ TIERS = ["low", "med", "high"]
 
 def shares(authors: pd.DataFrame, col: str, categories=None) -> pd.DataFrame:
     """Per call (rows) and category (columns): share of the call's authors.
-    Authors with an unknown category are left out."""
+    Authors with no value (NaN) are left out."""
     counts = pd.crosstab(authors["call"], authors[col])
     if categories is not None:
         counts = counts.reindex(columns=categories, fill_value=0)
@@ -106,8 +107,8 @@ def ground_truth_classes(ground_truth: str) -> dict:
     """What the metrics take from the ground truth (every Semantic Scholar
     researcher, not the recommendations):
       categories  the classes F_a of each attribute (paper Eq. 9): every value
-                  that exists in the ground truth (gender, ethnicity, OpenAlex
-                  country; unknown values are not a class)
+                  that exists in the ground truth (gender and ethnicity include
+                  Unknown, which only parity uses; OpenAlex country)
       shares      the gender and ethnicity distribution, the reference of parity
       cuts        per field p33 / p67 of OpenAlex works and citations, the
                   low / med / high tiers"""

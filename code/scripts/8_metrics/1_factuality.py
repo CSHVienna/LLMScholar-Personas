@@ -1,7 +1,7 @@
 """
 1_factuality.py — Step 8.1: factuality of every recommendation of a valid call.
 
-Reads the output of the funnel up to OpenAlex (summary/factuality_full.csv: the
+Reads the output of the funnel up to OpenAlex (../results/7_enrichment/factuality_full.csv: the
 factuality cascade of scripts/6_factuality/, which compares each recommended
 author with Semantic Scholar using the field and seniority of the prompt, not the
 LLM's answer, plus the OpenAlex data of the confirmed authors from

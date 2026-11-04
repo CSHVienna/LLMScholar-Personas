@@ -6,7 +6,7 @@ parquet. These tests pin the replacement rule: prefer the homonym whose field is
 the field the prompt asked for, and say so in `tiebreak`.
 
 Run from code/ with PYTHONPATH=.:
-    python -m pytest tests/test_resolve_homonyms.py -v
+    python -m pytest scripts/legacy/test_resolve_homonyms.py -v
 """
 
 import importlib.util

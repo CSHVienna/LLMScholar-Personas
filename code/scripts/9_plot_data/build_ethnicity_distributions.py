@@ -2,14 +2,15 @@
 build_ethnicity_distributions.py — Pre-compute ethnicity distributions for the
 analysis notebook.
 
-Reads the BERT/ethnicolr ground-truth CSVs (one per field), the unique-researcher
-lookup, and the recommendations with factuality_author = True from
-summary/factuality_full.csv (the same filter as the social metrics), with their
-inferred ethnicity. Writes one
+Reads, from <results_dir>/1_ground_truth/ethnicity/, the per-field ground-truth
+ethnicity CSVs and the unique-researcher lookup (researcher_ethnicity_lookup.csv),
+and the valid recommendations with factuality_author = True from
+7_enrichment/factuality_full.csv (the same filter as the social metrics), with
+their perceived ethnicity. Writes one
 small CSV per distribution so the notebook can plot directly without any heavy
 groupby on ~140M rows.
 
-Outputs under <results_dir>/ethnicity/distributions/:
+Outputs under <results_dir>/9_figures/ethnicity_distributions/:
   - gt_overall.csv          rows: ethnicity, count
   - gt_per_field.csv        rows: field, ethnicity, count
   - rec_overall.csv         rows: ethnicity, count

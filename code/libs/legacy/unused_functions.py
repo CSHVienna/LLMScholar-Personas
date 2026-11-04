@@ -66,9 +66,9 @@ def plot_grouped_metrics_stacked(
         Metric column names; consistent across all panels.
     row_labels : dict, optional
         Global ``{df_value: display}`` mapping applied per panel via the same
-        remap mechanism as ``plot_grouped_metrics_labeled``. Per-panel /
-        per-config overrides (``column_labels``, ``label_labels``) inside each
-        ``group_configs`` entry are also honored.
+        remap mechanism as ``plot_grouped_metrics_labeled``. A per-config
+        ``column_labels`` override inside each ``group_configs`` entry is also
+        honored (``label_labels`` is stripped, not applied).
     panel_label_width : float
         Width (inches) of the leftmost column reserved for panel labels.
     panel_label_font_size : int, optional

@@ -9,7 +9,12 @@ except ImportError:  # importing as libs.utils.text (PYTHONPATH=code/)
 
 
 def clean_content(text):
-    """Cleans the output text by fixing umlauts, removing diacritics/tildes, and removing unnecessary quotation marks."""
+    """Clean an LLM output: keep the content of a code fence, fix umlauts and
+    escaped quotes, drop surrogates and strip diacritics.
+
+    Returns ``(text, flag)`` with flag ``OUTPUT_CLEANED`` if anything changed,
+    else ``OUTPUT_UNCHANGED``.
+    """
 
     original = text
 
@@ -46,7 +51,9 @@ def clean_content(text):
 
 
 def parse_valid_dicts(text):
-    """Parses valid dictionaries from a text representation of a list of dictionaries."""
+    """Return the items of the first ``[...]`` list in ``text`` that parse as
+    dicts (via ``ast.literal_eval``), skipping malformed ones. Raises
+    ``ValueError`` if no list is found."""
 
     def split_top_level(s):
         items = []

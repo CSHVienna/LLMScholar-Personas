@@ -2,7 +2,7 @@
 run_pipeline.py — Step 8: the metrics (after 5_validity/, 6_factuality/ and
 7_enrichment/; the graph and the PCA come from 2_graph/).
 
-  1. 1_factuality.py    validity + summary/factuality_full.csv → factuality/<model>.csv
+  1. 1_factuality.py    validity + 7_enrichment/factuality_full.csv → factuality/<model>.csv
   2. 2_socials.py       step 1 + the ground-truth graph and PCA → socials/<model>.csv
                         (factuality_author = True)
   3. 3_calls_table.py   validity, consistency, steps 1 and 2 → calls.csv (one table

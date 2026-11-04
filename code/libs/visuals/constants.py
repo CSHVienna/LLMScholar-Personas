@@ -23,7 +23,7 @@ ETHNICITY_PLOT_COLOR_MAP = dict(zip(ETHNICITY_PLOT_ORDER, ETHNICITY_PLOT_COLORS)
 FIG_WIDTH_PAPER = 15
 FIG_HEIGHT_PAPER = 0.8
 
-# Layout constants extracted from grouped_metrics.py.
+# Layout constants (same values as the defaults in grouped_metrics.py).
 TICK_FONT_SIZE = 8
 LABEL_FONT_SIZE = 11
 SPINE_LW = 0.3
@@ -33,7 +33,7 @@ SECTION_GAP = 0.4
 QUADRANT_COLORS = {
     "Q1": "#2ca02c",  # top-right    — high tech, high social  (green)
     "Q2": "#1f77b4",  # top-left     — low  tech, high social  (blue)
-    "Q3": "#a5a5a5",  # bottom-left  — low  tech, low  social  (red)
+    "Q3": "#a5a5a5",  # bottom-left  — low  tech, low  social  (gray)
     "Q4": "#ff7f0e",  # bottom-right — high tech, low  social  (orange)
 }
 
@@ -147,9 +147,9 @@ PLOT_LABELS |= {
 }
 
 PLOT_METRICS = [
-    # In the order of the pipeline: 5_validity (validity, refusals, duplicates,
-    # then consistency), then the factuality cascade (name → field → seniority
-    # → author; factuality_name is added by the metrics notebook).
+    # Display order: the 5_validity block (refusals, validity, consistency,
+    # duplicates), then the factuality cascade (name → field → seniority →
+    # author). Entries not in ALL_METRICS are dropped below.
     "refusals",
     "validity",
     "consistency",

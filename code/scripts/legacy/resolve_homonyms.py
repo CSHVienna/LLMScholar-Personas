@@ -44,10 +44,15 @@ match at all. The `tiebreak` column exists so a figure can restrict itself to
 `file_order`. There `field_match` is 30.8%, and that is the only one of the
 three that measures a model rather than the supply of convenient homonyms.
 
+Reads <results>/summary/factuality_full.csv (--input) and writes
+<results>/summary/factuality_full_resolved.csv (--output), adding homonym_count,
+homonym_fields and tiebreak (unique | asked_field | file_order | "" if not found).
+test_resolve_homonyms.py checks the vectorised recomputation against the
+per-row classifiers.
+
 Usage (from code/, with PYTHONPATH=.):
   python scripts/legacy/resolve_homonyms.py
-  python scripts/legacy/resolve_homonyms.py --check   # verify against the
-                                                          # per-row classifiers
+  python scripts/legacy/resolve_homonyms.py --input <csv> --output <csv> [--parquet <ss_parquet>] [--chunksize 1000000]
 """
 
 import argparse

@@ -1,6 +1,12 @@
-# cd scripts
-# export PYTHONPATH="${PYTHONPATH}:../" 
-# python gpt_gemini_03_retrieve_results.py ...
+"""
+gpt_gemini_03_retrieve_results.py — Step 3 of the GPT / Gemini calls: downloads the
+results of the finished batch jobs and adds the responses to
+<model_family>_<language>_<model>.json.
+
+Run with code/ on PYTHONPATH (files live in results_<model_family>_<language>/
+next to this script):
+  PYTHONPATH=code python code/scripts/4_llmcaller/gpt_gemini_03_retrieve_results.py ...
+"""
 
 import os
 import sys
