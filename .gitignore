@@ -214,5 +214,11 @@ __marimo__/
 *.api
 
 # own
-results/
-
+results/annotations
+results/recommendations_metadata
+results/responses_metadata
+plan*
+data/responses
+data/*.duckdb
+_old/
+logs/

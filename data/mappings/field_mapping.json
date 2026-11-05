@@ -1,0 +1,33 @@
+{
+  "_description": "Maps each prompt field (Semantic Scholar fields of study, canonical English) to OpenAlex. An author belongs to a prompt field if they have works in ANY of the listed OpenAlex fields or subfields. Subfields are NOT mapped: they remain prompt variables only.",
+  "_openalex_snapshot": "openalex_20260923",
+  "Mathematics": {
+    "openalex_fields": [{"id": 26, "display_name": "Mathematics"}],
+    "openalex_subfields": []
+  },
+  "Computer Science": {
+    "openalex_fields": [{"id": 17, "display_name": "Computer Science"}],
+    "openalex_subfields": []
+  },
+  "Physics": {
+    "openalex_fields": [{"id": 31, "display_name": "Physics and Astronomy"}],
+    "openalex_subfields": []
+  },
+  "Biology": {
+    "openalex_fields": [
+      {"id": 11, "display_name": "Agricultural and Biological Sciences"},
+      {"id": 13, "display_name": "Biochemistry, Genetics and Molecular Biology"},
+      {"id": 24, "display_name": "Immunology and Microbiology"},
+      {"id": 28, "display_name": "Neuroscience"}
+    ],
+    "openalex_subfields": []
+  },
+  "Sociology": {
+    "openalex_fields": [],
+    "openalex_subfields": [{"id": 3312, "display_name": "Sociology and Political Science"}]
+  },
+  "Psychology": {
+    "openalex_fields": [{"id": 32, "display_name": "Psychology"}],
+    "openalex_subfields": []
+  }
+}

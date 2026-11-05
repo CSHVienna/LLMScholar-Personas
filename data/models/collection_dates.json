@@ -1,0 +1,6 @@
+{
+  "_description": "Collection date (YYYY-MM-DD) per model and language, used only when the raw responses carry no timestamp (Gemini batch output). Response timestamps always take precedence.",
+  "gemini-2_5-flash": {"english": "2025-12-18", "german": "2025-12-18", "spanish": "2025-12-18"},
+  "gemini-2_5-pro": {"english": "2025-12-19", "german": "2025-12-21", "spanish": "2025-12-21"},
+  "gemini-2_5-flash-lite": {"english": "2025-12-23", "german": "2025-12-18", "spanish": "2025-12-18"}
+}
