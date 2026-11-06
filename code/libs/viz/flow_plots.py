@@ -101,6 +101,11 @@ def target_order_colors(target: str, classes: Sequence[str], gender_labels: Opti
     return order + special, colors
 
 
+def class_hatch(value: str) -> dict:
+    """Extra patch style of a class: 'unknown' is hatched (its pale colour alone is too close to the surface)."""
+    return {'hatch': viscons.UNKNOWN_HATCH, 'edgecolor': viscons.UNKNOWN_HATCH_COLOR} if value == fl.UNKNOWN else {}
+
+
 def prompt_countries() -> List[str]:
     """Country codes of the prompt locations, in the design order (kept out of 'Other' in every country table)."""
     return [fl.LOCATION_COUNTRY[l] for l in map(str, cons.VARIABLE_VALUES[cons.VAR_LOCATION]) if l in fl.LOCATION_COUNTRY]
@@ -170,9 +175,9 @@ def plot_flow(ax: plt.Axes, table: pd.DataFrame, source: str, target: str, gende
             emphasis = highlight is None or highlight.get(s) == t
             ax.fill_between(x, top, bottom, color=colors[t] if emphasis else viscons.FLOW_UNKNOWN_COLOR,
                             alpha=viscons.FLOW_BAND_ALPHA if highlight is None else (0.85 if emphasis else 0.35),
-                            linewidth=0)
+                            linewidth=0, **(class_hatch(t) if emphasis else {}))
             if (h >= viscons.FLOW_BAND_LABEL_MIN and highlight is None) or (highlight is not None and emphasis and h > 0):
-                ax.text(w + 0.012, y_left + h / 2, f"{h:.0%}", ha='left', va='center', fontsize='xx-small',
+                ax.text(w + 0.012, y_left + h / 2, f"{h:.0%}", ha='left', va='center', fontsize=viscons.MIN_FONT_SIZE,
                         color=viscons.METRIC_ROW_LABEL_COLOR)
             y_left += h
             right_fill[t] += h_right
@@ -182,12 +187,14 @@ def plot_flow(ax: plt.Axes, table: pd.DataFrame, source: str, target: str, gende
             continue
         ax.text(-0.015, left_top[s] + 0.4, label, ha='right', va='center', fontsize='x-small',
                 color=viscons.METRIC_ROW_LABEL_COLOR)
-        ax.text(-0.015, left_top[s] + 0.75, f"n = {int(n_source[s]):,}", ha='right', va='center', fontsize='xx-small',
+        ax.text(-0.015, left_top[s] + 0.75, f"n = {int(n_source[s]):,}", ha='right', va='center', fontsize=viscons.MIN_FONT_SIZE,
                 color=viscons.COLOR_TEXT_SECONDARY)
     mean_share = right_size / right_size.sum() if right_size.sum() else right_size
     for t in targets:
         h = right_size[t] * scale
-        ax.add_patch(Rectangle((1 - w, right_top[t]), w, h, color=colors[t], linewidth=0))
+        style = class_hatch(t)
+        ax.add_patch(Rectangle((1 - w, right_top[t]), w, h, facecolor=colors[t], linewidth=0 if not style else 0.3,
+                               **(style or {'edgecolor': 'none'})))
         if not right_labels:
             continue
         ax.text(1.015, right_top[t] + h / 2, f"{class_label(target, t)}  {mean_share[t]:.0%}", ha='left', va='center',
@@ -198,7 +205,7 @@ def plot_flow(ax: plt.Axes, table: pd.DataFrame, source: str, target: str, gende
     ax.set_title(title or f"{source_title(source)} → {TARGET_TITLES.get(target, target)}", fontsize='small',
                  fontweight='bold')
     if note:
-        ax.text(0.5, -0.04, note, ha='center', va='bottom', fontsize='xx-small', color=viscons.COLOR_TEXT_SECONDARY,
+        ax.text(0.5, -0.04, note, ha='center', va='bottom', fontsize=viscons.MIN_FONT_SIZE, color=viscons.COLOR_TEXT_SECONDARY,
                 transform=ax.get_xaxis_transform())
 
 
@@ -210,7 +217,7 @@ def unknown_note(people: pd.DataFrame, target: str, include_unknown: bool) -> Op
 
 
 def plot_drift_flow(people: pd.DataFrame, top: int = viscons.FLOW_TOP_COUNTRIES, include_unknown: bool = False,
-                    width: float = viscons.PAPER_TEXT_WIDTH_IN * 0.6, title: Optional[str] = None) -> plt.Figure:
+                    width: float = viscons.PAPER_TEXT_WIDTH_IN, title: Optional[str] = None) -> plt.Figure:
     """Drift as a flow: prompted location -> the people's country; each location's band to its own country in
     colour, the others faded; the prompt countries always shown (first), then the top countries, then Other."""
     locations, labels = source_order(cons.VAR_LOCATION, people[cons.VAR_LOCATION].astype(str).unique())
@@ -289,51 +296,63 @@ def plot_drift(people: pd.DataFrame, drift: pd.DataFrame, top: int = viscons.FLO
     shares = pd.crosstab(known[cons.VAR_LOCATION], known['col'], normalize='index').reindex(
         index=locations, columns=columns).fillna(0.0)
 
-    fig, (ax, bx) = plt.subplots(1, 2, figsize=(width, 0.42 * len(locations) + 1.2), layout='constrained',
-                                 gridspec_kw={'width_ratios': [len(columns), 7]})
+    fig, (ax, bx) = plt.subplots(1, 2, figsize=(width, viscons.DRIFT_ROW_IN * len(locations) + 0.62),
+                                 layout='constrained', gridspec_kw={'width_ratios': [len(columns), 5.5], 'wspace': 0.02})
     vmax = max(float(shares.to_numpy().max()), 0.05)
-    cmap = LinearSegmentedColormap.from_list('share', ['#ffffff', viscons.METRIC_BAR_COLORS['persona'], '#8a3f0a'])
+    cmap = LinearSegmentedColormap.from_list('share', [viscons.FAMILY_ZERO['persona'], viscons.FAMILY_COLORS['persona'],
+                                                       viscons.RQ1_HEATMAP_DARK['persona']])
     ax.imshow(shares.to_numpy(), cmap=cmap, vmin=0, vmax=vmax, aspect='auto')
     for i, loc in enumerate(locations):
         for j, col in enumerate(columns):
             v = shares.iat[i, j]
-            ax.text(j, i, f"{v:.0%}" if v >= 0.005 else '', ha='center', va='center', fontsize='xx-small',
-                    color='white' if v > 0.6 * vmax else viscons.METRIC_ROW_LABEL_COLOR)
+            ax.text(j, i, f"{v:.0%}" if v >= 0.005 else '', ha='center', va='center_baseline',
+                    fontsize=viscons.MIN_FONT_SIZE, color='white' if v > 0.6 * vmax else viscons.METRIC_ROW_LABEL_COLOR)
         j = columns.index(codes[loc])
         ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1, fill=False, edgecolor=viscons.METRIC_ROW_LABEL_COLOR,
-                               linewidth=1.2))
+                               linewidth=0.9))
     ax.set_xticks(range(len(columns)), [c if c != fl.OTHER else 'Other' for c in columns], fontsize='x-small')
-    ax.set_yticks(range(len(locations)), locations, fontsize='x-small')
-    ax.set_xlabel("Country of the recommended people", fontsize='x-small')
-    ax.set_ylabel("Prompted location", fontsize='x-small')
-    ax.tick_params(length=0)
+    ax.set_yticks(range(len(locations)), [f"{l} ({codes[l]})" for l in locations], fontsize='small')
+    ax.set_xlabel("Country of the recommended people", fontsize='small', labelpad=2)
+    ax.set_ylabel("Prompted location", fontsize='small')
+    ax.tick_params(length=0, pad=2)
     for side in ax.spines.values():
         side.set_visible(False)
 
+    # right: share from the prompt's own country, vs the same share when the other locations are prompted (rows as
+    # in the heatmap, so no labels of their own); the lift written right of the point
     d = drift.set_index('location').reindex(locations)
     ys = np.arange(len(locations))
     bx.hlines(ys, d['baseline'], d['share'], color=viscons.COLOR_GRID, linewidth=2, zorder=1)
-    bx.scatter(d['baseline'], ys, color=viscons.METRIC_BAR_COLORS['model'], s=22, zorder=2, label='other locations prompted')
+    bx.scatter(d['baseline'], ys, color=viscons.METRIC_BAR_COLORS['model'], s=16, zorder=2, label='other locations prompted')
+    high = d['share']
     if 'share_ci_low' in d:
         bx.errorbar(d['share'], ys, xerr=[(d['share'] - d['share_ci_low']).clip(lower=0),
                                          (d['share_ci_high'] - d['share']).clip(lower=0)],
-                    fmt='none', ecolor=viscons.METRIC_CI_COLOR, elinewidth=viscons.METRIC_CI_LINEWIDTH,
-                    capsize=viscons.METRIC_CI_CAPSIZE, zorder=2)
-    bx.scatter(d['share'], ys, color=viscons.METRIC_BAR_COLORS['persona'], s=26, zorder=3, label='this location prompted')
-    for y, (share, lift) in zip(ys, d[['share', 'lift']].to_numpy()):
+                    fmt='none', ecolor=viscons.METRIC_CI_COLOR, elinewidth=viscons.RQ_CI_LINEWIDTH,
+                    capsize=viscons.RQ_CI_CAPSIZE, capthick=viscons.RQ_CI_LINEWIDTH, zorder=2)
+        high = d[['share', 'share_ci_high']].max(axis=1)
+    bx.scatter(d['share'], ys, color=viscons.FAMILY_COLORS['persona'], s=18, zorder=3, label='this location prompted')
+    x_max = max(0.05, float(np.nanmax(high.to_numpy())) * 1.22)
+    for y, (x, lift) in zip(ys, zip(high, d['lift'])):
         if np.isfinite(lift):
-            bx.text(share, y - 0.32, f"×{lift:.1f}", ha='center', va='bottom', fontsize='xx-small',
-                    color=viscons.COLOR_TEXT_SECONDARY)
-    bx.set_yticks(ys, [f"{l} ({codes[l]})" for l in locations], fontsize='x-small')
-    bx.set_ylim(len(locations) - 0.5, -0.8)
-    bx.set_xlim(0, max(0.05, float(np.nanmax(d[['share', 'baseline'] + (['share_ci_high'] if 'share_ci_high' in d else [])]
-                                               .to_numpy())) * 1.15))
-    bx.set_xlabel("Share from the prompt's country", fontsize='x-small')
-    bx.tick_params(labelsize='x-small')
+            bx.text(x + 0.012 * x_max, y, f"×{lift:.0f}" if lift >= 10 else f"×{lift:.1f}", ha='left',
+                    va='center_baseline', fontsize=viscons.MIN_FONT_SIZE, color=viscons.COLOR_TEXT_SECONDARY)
+    bx.set_yticks(ys, [''] * len(ys))
+    bx.set_ylim(len(locations) - 0.5, -0.5)
+    bx.set_xlim(0, x_max)
+    bx.set_xlabel("Share from the prompt's country (×: lift)", fontsize='small', labelpad=2)
+    bx.tick_params(axis='x', labelsize='x-small', length=2, pad=1.5)
+    bx.tick_params(axis='y', length=0)
     bx.grid(axis='x', color=viscons.COLOR_GRID, linewidth=0.5)
-    for side in ('top', 'right'):
+    bx.set_axisbelow(True)
+    for side in ('top', 'right', 'left'):
         bx.spines[side].set_visible(False)
-    bx.legend(fontsize='xx-small', frameon=False, loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=2)
+    # inside, one column, on the right where the rows end earliest (top / middle / bottom two rows): never on a point
+    values = np.nan_to_num(high.to_numpy(), nan=0.0)
+    n = len(values)
+    spots = {'upper right': values[:2], 'center right': values[max(n // 2 - 1, 0):n // 2 + 1], 'lower right': values[-2:]}
+    bx.legend(fontsize='x-small', frameon=False, ncol=1, handletextpad=0.1, borderaxespad=0.2,
+              loc=min(spots, key=lambda k: spots[k].max() if len(spots[k]) else 0))
     if title:
         fig.suptitle(title, fontsize='small')
     return fig
@@ -344,13 +363,13 @@ def plot_flow_grid(people: pd.DataFrame, source: Optional[str] = None, target: O
                    ncols: int = viscons.FLOW_GRID_NCOLS, include_unknown: bool = False, gender_labels=None,
                    bin_labels=None, width: Optional[float] = None, title: Optional[str] = None) -> plt.Figure:
     """Source fixed (source=..., panels = targets) or target fixed (target=..., panels = sources); see the module
-    docstring. width: default the paper width for <= 3 columns, wider for more."""
+    docstring. width: default the paper text width (A4), whatever the number of columns."""
     if (source is None) == (target is None):
         raise ValueError("give exactly one of source= (vary the person attribute) or target= (vary the prompt variable)")
     pairs = [(source, t) for t in targets] if source else [(s, target) for s in sources]
     ncols = min(ncols, len(pairs))
     nrows = int(np.ceil(len(pairs) / ncols))
-    width = width or viscons.PAPER_TEXT_WIDTH_IN * max(1.0, ncols / 3)
+    width = width or viscons.PAPER_TEXT_WIDTH_IN          # always the paper text width (A4)
     tables = [country_table(people, s, t, include_unknown)
               for s, t in pairs]
     mentions = {s: people[s].astype(str).value_counts() for s, _ in pairs}       # n = all mentions (also unknown)

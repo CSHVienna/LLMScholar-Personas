@@ -14,6 +14,11 @@ Verification tasks (annotation/verification.py; the pipeline's output IS shown, 
                       (<rule>|linked, <rule>|name, none); needs B.6 (--matching_dir, --candidates_dir) and A.1
     --task authors    GT memberships (author x field), stratified by field x seniority; needs A.4 (--gt_dir) and A.1
 
+Demographics (annotation/demographics.py; blind, name only):
+    --task demographics  people (GT scholars + recommended people = B.6 matched authors), stratified by side x inferred
+                         gender x inferred ethnicity; the annotator picks perceived gender and ethnicity; needs A.4
+                         (--gt_dir) and, for the recommended side, B.6 (--matching_dir)
+
 An existing sample is never overwritten (annotations refer to its item ids) unless --overwrite.
 --refresh_codebook only replaces the codebook of an existing items file (items and ids unchanged), and
 refreshes the inferred tags of its key from the current metadata (after re-running B.2-B.3).
@@ -23,6 +28,7 @@ Usage (from any folder):
     python code/scripts/batch_annotation_sample.py --task recommendations --per_stratum 30
     python code/scripts/batch_annotation_sample.py --task matching --per_stratum 15
     python code/scripts/batch_annotation_sample.py --task authors --per_stratum 10
+    python code/scripts/batch_annotation_sample.py --task demographics --per_stratum 10
 """
 
 import _bootstrap  # noqa: F401  (adds code/libs to sys.path)
@@ -37,6 +43,7 @@ from utils import batch
 from utils import constants as cons
 from utils import ios
 from utils import logs
+from annotation import demographics
 from annotation import tasks
 from annotation import verification
 from responses.context import PromptContext
@@ -85,6 +92,10 @@ def sample_matching(args: argparse.Namespace) -> pd.DataFrame:
                                         args.max_items, args.seed, args.models, args.recommendations_metadata_dir, valid)
 
 
+def sample_demographics(args: argparse.Namespace) -> pd.DataFrame:
+    return demographics.sample_demographics(args.gt_dir, args.matching_dir, args.per_stratum, args.max_items, args.seed)
+
+
 def sample_authors(args: argparse.Namespace) -> pd.DataFrame:
     return verification.sample_authors(args.gt_dir, args.authors_dir, args.per_stratum, args.max_items, args.seed)
 
@@ -92,11 +103,20 @@ def sample_authors(args: argparse.Namespace) -> pd.DataFrame:
 SAMPLERS = {cons.ANNOTATION_TASK_RESPONSES: sample_responses,
             cons.ANNOTATION_TASK_RECOMMENDATIONS: sample_recommendations,
             cons.ANNOTATION_TASK_MATCHING: sample_matching,
-            cons.ANNOTATION_TASK_AUTHORS: sample_authors}
+            cons.ANNOTATION_TASK_AUTHORS: sample_authors,
+            cons.ANNOTATION_TASK_DEMOGRAPHICS: sample_demographics}
 STRATUM_COLUMN = {cons.ANNOTATION_TASK_RESPONSES: cons.COL_RESPONSE_TAGS,
                   cons.ANNOTATION_TASK_RECOMMENDATIONS: cons.COL_REC_TAGS,
                   cons.ANNOTATION_TASK_MATCHING: verification.STRATUM,
-                  cons.ANNOTATION_TASK_AUTHORS: verification.STRATUM}
+                  cons.ANNOTATION_TASK_AUTHORS: verification.STRATUM,
+                  cons.ANNOTATION_TASK_DEMOGRAPHICS: demographics.STRATUM}
+
+
+def builder_of(task: str):
+    """Module with codebook / items_payload / key_table of a task."""
+    if task == cons.ANNOTATION_TASK_DEMOGRAPHICS:
+        return demographics
+    return verification if task in verification.VERIFICATION_TASKS else tasks
 
 
 def refresh_key(args: argparse.Namespace, key_file: Path) -> None:
@@ -139,9 +159,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--config', default=None,
                         help='matching: analysis config whose valid_rec_tags select the recommendations (default: '
                              'DEFAULT_VALID_REC_TAGS)')
-    parser.add_argument('--matching_dir', default=cons.DEFAULT_MATCH_AUTHORS_DIR, help='matching: B.6b output (a variant)')
+    parser.add_argument('--matching_dir', default=cons.DEFAULT_MATCH_AUTHORS_DIR,
+                        help='matching / demographics: B.6b output (a variant)')
     parser.add_argument('--candidates_dir', default=cons.DEFAULT_MATCH_CANDIDATES_DIR, help='matching: B.6a candidates')
-    parser.add_argument('--gt_dir', default=cons.DEFAULT_GT_DIR, help='authors: ground truth (gt_members.parquet)')
+    parser.add_argument('--gt_dir', default=cons.DEFAULT_GT_DIR,
+                        help='authors / demographics: ground truth (gt_members / gt_authors.parquet)')
     parser.add_argument('--authors_dir', default=cons.DEFAULT_GT_AUTHORS_DIR, help='matching / authors: A.1 profiles')
     parser.add_argument('--output_dir', default=cons.DEFAULT_ANNOTATIONS_DIR)
     parser.add_argument('--overwrite', action='store_true', help='Replace an existing sample (invalidates its annotations)')
@@ -162,11 +184,10 @@ def main() -> None:
         if not items_file.exists():
             raise SystemExit(f"{items_file} does not exist: draw a sample first (without --refresh_codebook).")
         payload = json.loads(items_file.read_text(encoding='utf-8'))
-        verify = args.task in verification.VERIFICATION_TASKS
-        payload['codebook'] = (verification if verify else tasks).codebook(args.task)
+        payload['codebook'] = builder_of(args.task).codebook(args.task)
         items_file.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding='utf-8')
         ios.printf(f"codebook refreshed: {items_file} ({len(payload['items'])} items unchanged)")
-        if key_file.exists() and not verify:   # verification keys hold what was shown: never refreshed
+        if key_file.exists() and args.task in cons.ANNOTATION_TAG_TASKS:   # other keys hold what was sampled: never refreshed
             refresh_key(args, key_file)
         return
     if items_file.exists() and not args.overwrite:
@@ -178,7 +199,7 @@ def main() -> None:
     ios.printf(f"{len(sample)} items from {counts.nunique()} strata:\n{counts.value_counts().to_string()}")
 
     # 2. Items for the tool (blind for the tag tasks), and the key for the evaluation
-    builder = verification if args.task in verification.VERIFICATION_TASKS else tasks
+    builder = builder_of(args.task)
     output_dir.mkdir(parents=True, exist_ok=True)
     items_file.write_text(json.dumps(builder.items_payload(args.task, sample), ensure_ascii=False, indent=1), encoding='utf-8')
     ios.to_parquet(builder.key_table(args.task, sample), key_file)

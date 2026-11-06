@@ -79,14 +79,20 @@ def row_colors(rows: Sequence[RowGroup]) -> List[str]:
 
 def plot_metric_bars(table: pd.DataFrame, rows: Sequence[RowGroup], metrics: Sequence[Metric],
                      title: Optional[str] = None, width: float = viscons.PAPER_TEXT_WIDTH_IN,
-                     label_width: Optional[float] = None, arrows: bool = True) -> plt.Figure:
+                     label_width: Optional[float] = None, arrows: bool = True,
+                     ci_linewidth: float = viscons.METRIC_CI_LINEWIDTH,
+                     ci_capsize: float = viscons.METRIC_CI_CAPSIZE, tick_size: Optional[str] = None) -> plt.Figure:
     """One panel per metric; rows in the order of `rows` (estimate() output in `table`). arrows: the metric's
-    direction (higher / lower is better) next to its name."""
+    direction (higher / lower is better) next to its name. Rows of the persona / context families get their labels in
+    the family colour (viscons.FAMILY_COLORS), as in the RQ heatmaps."""
     positions, rules, height = _layout(rows)
     has_titles = any(g.title for g in rows)
     title_width = max((text_size(g.title, 'medium', 'bold')[0] for g in rows if g.title), default=0.0)
-    label_width = label_width or (0.06 + title_width + (0.12 if has_titles else 0)
-                                  + max(text_size(label, 'medium')[0] for g in rows for label in g.labels) + 0.08)
+    labels_width = max(text_size(label, 'medium')[0] for g in rows for label in g.labels)
+    # label area: [margin][group titles, right-aligned][gap][row labels, left-aligned][gap][panels]
+    title_right = viscons.METRIC_LABEL_MARGIN_IN + title_width
+    labels_left = title_right + (viscons.METRIC_TITLE_GAP_IN if has_titles else 0.0)
+    label_width = label_width or (labels_left + labels_width + viscons.METRIC_LABEL_GAP_IN)
     fig_height = 0.45 + viscons.METRIC_ROW_HEIGHT_IN * height
     fig, axes = plt.subplots(1, len(metrics), figsize=(width, fig_height), sharey=True, squeeze=False)
     axes = axes[0]
@@ -122,8 +128,8 @@ def plot_metric_bars(table: pd.DataFrame, rows: Sequence[RowGroup], metrics: Seq
             v = values[has_ci]
             ax.errorbar(v['mean'], positions[has_ci], xerr=[(v['mean'] - v['ci_low']).clip(lower=0),
                                                             (v['ci_high'] - v['mean']).clip(lower=0)],
-                        fmt='none', ecolor=viscons.METRIC_CI_COLOR, elinewidth=viscons.METRIC_CI_LINEWIDTH,
-                        capsize=viscons.METRIC_CI_CAPSIZE, capthick=viscons.METRIC_CI_LINEWIDTH)
+                        fmt='none', ecolor=viscons.METRIC_CI_COLOR, elinewidth=ci_linewidth,
+                        capsize=ci_capsize, capthick=ci_linewidth)
         span = high_limit - low_limit
         for y, (mean, low, high), is_bold in zip(positions, values[['mean', 'ci_low', 'ci_high']].to_numpy(), bold):
             if not np.isnan(mean) and mean < 0:                            # negative bar: value on its left end
@@ -142,7 +148,8 @@ def plot_metric_bars(table: pd.DataFrame, rows: Sequence[RowGroup], metrics: Seq
                     fontsize=value_size, fontweight='bold' if is_bold else 'normal')
         ax.set_xlim(low_limit, high_limit)
         ax.set_xticks([low_limit, (low_limit + high_limit) / 2, high_limit])
-        ax.set_xticklabels([f"{t:g}" for t in ax.get_xticks()], color=viscons.COLOR_TEXT_SECONDARY)
+        ax.set_xticklabels([f"{t:g}" for t in ax.get_xticks()], color=viscons.COLOR_TEXT_SECONDARY,
+                           **({'fontsize': tick_size} if tick_size else {}))
         if low_limit < 0:                                     # signed panel: end labels inwards (no clash between panels)
             ticks = ax.get_xticklabels()
             ticks[0].set_horizontalalignment('left')
@@ -151,16 +158,15 @@ def plot_metric_bars(table: pd.DataFrame, rows: Sequence[RowGroup], metrics: Seq
         ax.set_axisbelow(True)
         ax.spines['left'].set_visible(False)
         ax.tick_params(axis='y', length=0)
-        ax.set_title(metric.label + (viscons.METRIC_ARROWS[metric.direction] if arrows else ''), fontweight='bold',
+        ax.set_title(metric.header(len(metrics)) + (viscons.METRIC_ARROWS[metric.direction] if arrows else ''),
+                     fontweight='bold',
                      fontsize=header_size)
-        for rule in rules:
-            ax.axhline(rule, color=viscons.METRIC_GROUP_RULE_COLOR, linewidth=0.6, clip_on=False)
 
     axes[0].set_ylim(height - 0.5, -0.5)
     axes[0].set_yticks(positions)
-    axes[0].set_yticklabels([label for g in rows for label in g.labels], color=viscons.METRIC_ROW_LABEL_COLOR)
-    if has_titles:
-        _group_titles(fig, axes[0], rows, positions, label_width / width, 0.06 / width)
+    axes[0].set_yticklabels([])
+    _row_labels(fig, axes[0], rows, positions, title_right / width if has_titles else None, labels_left / width)
+    _rules(fig, axes[0], rules)
     if title:
         fig.suptitle(title, y=1.0, fontsize='medium')
     return fig
@@ -174,20 +180,31 @@ def text_size(text: str, size: str, weight: str = 'normal') -> tuple:
     return 1.12 * extents.width / 72, 1.12 * extents.height / 72
 
 
-def _group_titles(fig: plt.Figure, ax: plt.Axes, rows: Sequence[RowGroup], positions: np.ndarray,
-                  left_fraction: float, margin_fraction: float) -> None:
-    """Bold group titles at the left edge of the figure, and the rules between groups through the label area."""
+def _row_labels(fig: plt.Figure, ax: plt.Axes, rows: Sequence[RowGroup], positions: np.ndarray,
+               title_right: Optional[float], labels_left: float) -> None:
+    """Group titles (bold, right-aligned at title_right) and row labels (left-aligned at labels_left), x in figure
+    fraction, y in data: two tight columns instead of a title at the far left and labels at the axis."""
     from matplotlib.transforms import blended_transform_factory
-    title_transform = blended_transform_factory(fig.transFigure, ax.transData)
-    transform = ax.get_yaxis_transform()   # x in axes fraction, y in data
+    transform = blended_transform_factory(fig.transFigure, ax.transData)
     start = 0
-    for i, group in enumerate(rows):
+    for group in rows:
         ys = positions[start:start + len(group.levels)]
         start += len(group.levels)
-        ax.text(margin_fraction, ys.mean(), group.title, transform=title_transform,
-                ha='left', va='center', fontweight='bold', clip_on=False)
-    _, rules, _ = _layout(rows)
+        color = viscons.FAMILY_COLORS.get(group.color_key) if group.color_key in ('persona', 'context') else None
+        if title_right is not None and group.title:
+            ax.text(title_right, ys.mean(), group.title, transform=transform, ha='right', va='center',
+                    fontweight='bold', clip_on=False, color=color or viscons.METRIC_ROW_LABEL_COLOR)
+        for y, label in zip(ys, group.labels):
+            ax.text(labels_left, y, label, transform=transform, ha='left', va='center', clip_on=False,
+                    color=color or viscons.METRIC_ROW_LABEL_COLOR)
+
+
+def _rules(fig: plt.Figure, ax: plt.Axes, rules: Sequence[float]) -> None:
+    """One continuous rule per group boundary, from the left to the right edge of the figure (also across the gaps
+    between the panels)."""
+    from matplotlib.transforms import blended_transform_factory
+    transform = blended_transform_factory(fig.transFigure, ax.transData)
     for rule in rules:
-        line = Line2D([-left_fraction / ax.get_position().width, 0], [rule, rule], transform=transform,
-                      color=viscons.METRIC_GROUP_RULE_COLOR, linewidth=0.6, clip_on=False)
-        ax.add_line(line)
+        fig.add_artist(Line2D([viscons.METRIC_RULE_INSET, 1 - viscons.METRIC_RULE_INSET], [rule, rule],
+                              transform=transform, color=viscons.METRIC_GROUP_RULE_COLOR, linewidth=0.6,
+                              clip_on=False))

@@ -1,13 +1,13 @@
-# Analysis config, written by configure_analysis.py on 2026-11-06 05:24.
+# Analysis config, written by configure_analysis.py on 2026-11-06 14:07.
 # Edit with:  python code/scripts/configure_analysis.py --config <this file> [--phase early|late]
 
 # late settings (marked [late]) reviewed after the metrics? (no = provisional defaults; RQs refuse to run)
-late_reviewed: false
+late_reviewed: true
 
 # Valid responses and recommendations
 validity:
-  valid_response_tags: [correct, wrapped, python_literal, embedded]    # [late, PROVISIONAL] a response is valid if ALL its tags are in this set
-  valid_rec_tags: [correct, title_removed]    # [late, PROVISIONAL] a recommendation is valid if ALL its tags are in this set
+  valid_response_tags: [correct, wrapped, python_literal, embedded]    # [late] a response is valid if ALL its tags are in this set
+  valid_rec_tags: [correct, title_removed, repetition_removed, split]    # [late] a recommendation is valid if ALL its tags are in this set
 
 # Seniority (academic age = reference year - first publication year)
 seniority:
@@ -23,12 +23,12 @@ field:
 
 # Perceived gender (from p_female of the first name)
 gender:
-  p_female_edges: [0.1, 0.9]    # [late, PROVISIONAL] cut points on p_female, increasing, in (0, 1)
-  labels: [male, neutral, female]    # [late, PROVISIONAL] one label per interval, from p_female = 0 to 1
+  p_female_edges: [0.1, 0.9]    # [late] cut points on p_female, increasing, in (0, 1)
+  labels: [male, neutral, female]    # [late] one label per interval, from p_female = 0 to 1
 
 # Perceived ethnicity (raceBERT on the full name)
 ethnicity:
-  min_prob: 0.5    # [late, PROVISIONAL] label = top class if its probability >= this, else 'unknown'
+  min_prob: 0.5    # [late] label = top class if its probability >= this, else 'unknown'
 
 # Prominence classes: productivity, influence, collaboration (within field x seniority)
 prominence:
@@ -38,15 +38,15 @@ prominence:
 
 # Social metrics (on the matched authors of the valid responses)
 social:
-  include_unknown: false    # [late, PROVISIONAL] count 'unknown' (no usable name / country) as a class in parity and diversity
-  parity_target: field_x_seniority    # [late, PROVISIONAL] GT target of parity (scope of the GT shares)
-  top_country_share: 0.5    # [late, PROVISIONAL] popularity by country: top countries = the fewest that together hold this share of the GT scholars
+  include_unknown: true    # [late] count 'unknown' (no usable name / country) as a class in parity and diversity
+  parity_target: field_x_seniority    # [late] GT target of parity (scope of the GT shares)
+  top_country_share: 0.5    # [late] popularity by country: top countries = the fewest that together hold this share of the GT scholars
 
 # Author matching (recommended name -> OpenAlex person)
 matching:
-  jw_first: 0.9    # [late, PROVISIONAL] fuzzy rule: minimum Jaro-Winkler of the first names
-  jw_last: 0.9    # [late, PROVISIONAL] fuzzy rule: minimum Jaro-Winkler of the last names
-  jw_full: 0.9    # [late, PROVISIONAL] fuzzy rule: minimum Jaro-Winkler of the full names
+  jw_first: 0.9    # [late] fuzzy rule: minimum Jaro-Winkler of the first names
+  jw_last: 0.9    # [late] fuzzy rule: minimum Jaro-Winkler of the last names
+  jw_full: 0.9    # [late] fuzzy rule: minimum Jaro-Winkler of the full names
   seed: 42    # seed of the random pick among homonyms
   candidates_floor: 0.8    # fuzzy pairs stored by the candidate step if jw_full >= this
   fuzzy_all: false    # score every name by the fuzzy rule (not only names without a stricter match)

@@ -25,6 +25,8 @@ def save_figure(fig: plt.Figure, name: str, plots_dir: Path | str = cons.DEFAULT
     plots_dir.mkdir(parents=True, exist_ok=True)
     # matplotlib keeps the centre, left and right titles of an axes as three Text artists
     titles = [t for ax in fig.axes for t in (ax.title, ax._left_title, ax._right_title)]
+    if getattr(fig, '_suptitle', None) is not None:          # figure-level titles (suptitle) too
+        titles.append(fig._suptitle)
     paths = []
     for fmt in formats:
         visible = fmt in viscons.FORMATS_WITH_TITLES

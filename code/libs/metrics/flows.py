@@ -37,7 +37,6 @@ LOCATION_COUNTRY = {'South Africa': 'ZA', 'Germany': 'DE', 'Canada': 'CA', 'Ecua
                     'Brazil': 'BR', 'Mexico': 'MX', 'France': 'FR', 'Spain': 'ES', 'Nigeria': 'NG', 'Kenya': 'KE'}
 ETHNICITY_ORDER = ['asian', 'black', 'hispanic', 'white', 'other']
 
-
 # --- people ------------------------------------------------------------------------------------------------------
 def people_table(responses: pd.DataFrame, recs: pd.DataFrame, matches: pd.DataFrame, gt: so.GroundTruth,
                  valid_response_tags: Sequence[str], valid_rec_tags: Sequence[str],
@@ -109,10 +108,75 @@ def _drift_point(people: pd.DataFrame, codes: Dict[str, str]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def drift_counts(people: pd.DataFrame, codes: Optional[Dict[str, str]] = None) -> pd.DataFrame:
+    """Per model and prompt location: n = people with a known country, and k_<code> = people from each prompt
+    location's country (all the drift needs: shares are sums of these counts, so the bootstrap over models is a
+    weighted sum instead of a concatenation of the people table)."""
+    locations = people[cons.VAR_LOCATION].astype(str)
+    codes = codes or location_codes(sorted(locations.unique()))
+    known = people.assign(**{cons.VAR_LOCATION: locations})
+    known = known[known['country'].astype(str) != UNKNOWN]
+    grouped = known.groupby([cons.COL_MODEL, cons.VAR_LOCATION], observed=True)
+    out = grouped.size().rename('n').to_frame()
+    for code in dict.fromkeys(codes.values()):
+        out[f"k_{code}"] = grouped['country'].apply(lambda c, code=code: int((c.astype(str) == code).sum()))
+    # every model and location, also without known countries (zeros): the bootstrap then draws the same models as
+    # resampling the people table
+    models = list(people.groupby(cons.COL_MODEL, observed=True).groups)
+    full = pd.MultiIndex.from_product([models, sorted(locations.unique())], names=[cons.COL_MODEL, cons.VAR_LOCATION])
+    return out.reindex(full, fill_value=0).astype('int64').reset_index()
+
+
+def _drift_from_counts(counts: pd.DataFrame, codes: Dict[str, str], weights: Optional[np.ndarray] = None
+                       ) -> pd.DataFrame:
+    """_drift_point from the per-model counts; weights: how often each model is drawn (None = once each)."""
+    models = list(dict.fromkeys(counts[cons.COL_MODEL]))
+    w = np.ones(len(models)) if weights is None else np.asarray(weights, dtype=float)
+    weight = counts[cons.COL_MODEL].map(dict(zip(models, w))).to_numpy()
+    rows = []
+    for location, code in codes.items():
+        here = (counts[cons.VAR_LOCATION] == location).to_numpy()
+        k = counts[f"k_{code}"].to_numpy() * weight
+        n = counts['n'].to_numpy() * weight
+        n_prompted, n_other = n[here].sum(), n[~here].sum()
+        share = k[here].sum() / n_prompted if n_prompted else np.nan
+        baseline = k[~here].sum() / n_other if n_other else np.nan
+        rows.append({'location': location, 'country': code, 'n': int(round(n_prompted)), 'share': share,
+                     'baseline': baseline, 'lift': share / baseline if baseline and baseline > 0 else np.nan})
+    return pd.DataFrame(rows)
+
+
 def drift(people: pd.DataFrame, n_boot: int = cons.DEFAULT_BOOTSTRAP_SAMPLES, seed: int = cons.DEFAULT_SEED,
-          confidence: float = cons.DEFAULT_CONFIDENCE) -> pd.DataFrame:
+          confidence: float = cons.DEFAULT_CONFIDENCE, counts: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     """Per prompt location: share of the people from that country (known countries), baseline (same country when
-    the other locations are prompted), lift; CIs: cluster bootstrap over models (percentile)."""
+    the other locations are prompted), lift; CIs: cluster bootstrap over models (percentile). Computed from the
+    per-model counts (drift_counts; pass `counts` to skip the people table): the same draws and results as
+    resampling the people table, in seconds."""
+    if counts is None:
+        counts = drift_counts(people)
+    codes = location_codes(sorted(counts[cons.VAR_LOCATION].astype(str).unique()))
+    point = _drift_from_counts(counts, codes)
+    models = list(dict.fromkeys(counts[cons.COL_MODEL]))
+    position = {m: i for i, m in enumerate(models)}
+    rng = np.random.default_rng(seed)
+    draws = []
+    for _ in range(n_boot):
+        drawn = rng.choice(models, size=len(models), replace=True)
+        draws.append(_drift_from_counts(counts, codes, np.bincount([position[m] for m in drawn], minlength=len(models))))
+    alpha = (1 - confidence) / 2
+    if draws:
+        boot = pd.concat(draws, ignore_index=True)
+        for name in ('share', 'baseline', 'lift'):
+            q = boot.groupby('location')[name].quantile([alpha, 1 - alpha]).unstack()
+            point[f"{name}_ci_low"] = point['location'].map(q[alpha])
+            point[f"{name}_ci_high"] = point['location'].map(q[1 - alpha])
+    point['n_models'] = len(models)
+    return point
+
+
+def drift_slow(people: pd.DataFrame, n_boot: int = cons.DEFAULT_BOOTSTRAP_SAMPLES, seed: int = cons.DEFAULT_SEED,
+               confidence: float = cons.DEFAULT_CONFIDENCE) -> pd.DataFrame:
+    """Reference implementation (resamples the people table); kept for the equivalence test only."""
     codes = location_codes(sorted(people[cons.VAR_LOCATION].astype(str).unique()))
     point = _drift_point(people.assign(**{cons.VAR_LOCATION: people[cons.VAR_LOCATION].astype(str)}), codes)
     groups = {m: g for m, g in people.groupby(cons.COL_MODEL, observed=True)}

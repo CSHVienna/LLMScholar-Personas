@@ -15,10 +15,20 @@ Verification tasks (matching, authors; annotation/verification.py) write instead
                         re-weight the strata to their population sizes
         agreement       per label group: Krippendorff's alpha (if >= 2 annotators)
 
+Demographics (annotation/demographics.py) writes
+        summary         per mapping, side (gt / recommended) and group (gender / ethnicity): items, weighted accuracy,
+                        share annotated unknown
+        confusion       per mapping, side and group, annotated x inferred: n, weighted n, P(inferred | annotated),
+                        P(annotated | inferred) (the misclassification matrices of the D.4 correction)
+        (mapping = how the fine annotated ethnicities map onto raceBERT's classes: main = US census convention,
+        the others robustness checks, fine = unmapped; cons.ANNOTATION_ETHNICITY_MAPPINGS)
+        agreement       per group: Krippendorff's alpha (if >= 2 annotators)
+
 Usage (from any folder):
     python code/scripts/batch_annotation_evaluate.py --task responses
     python code/scripts/batch_annotation_evaluate.py --task recommendations --valid_tags correct title_removed
     python code/scripts/batch_annotation_evaluate.py --task matching
+    python code/scripts/batch_annotation_evaluate.py --task demographics
 """
 
 import _bootstrap  # noqa: F401  (adds code/libs to sys.path)
@@ -28,6 +38,7 @@ from pathlib import Path
 from utils import constants as cons
 from utils import ios
 from utils import logs
+from annotation import demographics
 from annotation import evaluation
 from annotation import verification
 
@@ -64,12 +75,30 @@ def evaluate_verification(args: argparse.Namespace, folder: Path, prefix: str) -
     ios.printf(f"\n{overall.round(3).to_string(index=False)}")
 
 
+def evaluate_demographics(args: argparse.Namespace, folder: Path, prefix: str) -> None:
+    key = ios.load_parquet(folder / f"{prefix}_key.parquet")
+    annotations = evaluation.load_annotations(folder, args.task)
+    ios.printf(f"{len(annotations)} annotations by {annotations['annotator'].nunique()} annotator(s) "
+               f"on {annotations['item_id'].nunique()} of {len(key)} items")
+    answers = verification.group_answers_of(annotations, demographics.groups())
+    tables = {**demographics.evaluate(key, verification.adjudicate_groups(answers)),
+              'agreement': verification.group_agreement(answers)}
+    for name, table in tables.items():
+        path = folder / f"{prefix}_eval_{name}.csv"
+        ios.to_csv(table, path)
+        ios.printf(f"{name}: {path}")
+    ios.printf(f"\n{tables['summary'].round(3).to_string(index=False)}")   # all mappings
+
+
 def main() -> None:
     args = build_parser().parse_args()
     logs.setup_logging('annotation_evaluate', args, params=args.task)
     folder, prefix = Path(args.annotations_dir), f"{cons.PREFIX_ANNOTATION}_{args.task}"
     if args.task in verification.VERIFICATION_TASKS:
         evaluate_verification(args, folder, prefix)
+        return
+    if args.task == cons.ANNOTATION_TASK_DEMOGRAPHICS:
+        evaluate_demographics(args, folder, prefix)
         return
     valid_tags = args.valid_tags or DEFAULT_VALID[args.task]
 

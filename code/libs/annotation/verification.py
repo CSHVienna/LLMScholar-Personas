@@ -321,10 +321,15 @@ def key_table(task: str, sample: pd.DataFrame) -> pd.DataFrame:
 # -----------------------------------------------------------------------------
 def group_answers(annotations: pd.DataFrame, task: str) -> pd.DataFrame:
     """One row per (item, annotator, group) with the chosen label ('' = none; > 1 label in a group = '')."""
+    return group_answers_of(annotations, groups(task))
+
+
+def group_answers_of(annotations: pd.DataFrame, label_groups: Dict[str, List[str]]) -> pd.DataFrame:
+    """group_answers for any group -> labels mapping (also used by the demographics task)."""
     rows = []
     for _, a in annotations[~annotations['unsure']].iterrows():
         chosen = set(t for t in str(a['tags']).split(cons.TAG_SEPARATOR) if t)
-        for group, labels in groups(task).items():
+        for group, labels in label_groups.items():
             picked = [l for l in labels if l in chosen]
             rows.append({ITEM_ID: a[ITEM_ID], 'annotator': a['annotator'], 'group': group,
                          'label': picked[0] if len(picked) == 1 else ''})

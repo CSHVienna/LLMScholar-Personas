@@ -41,6 +41,7 @@ COLOR_GRID = '#e5e4e0'
 COLOR_ERROR_BAR = '#0b0b0b'
 COLOR_BAR_EDGE = 'white'            # thin edges between adjacent bars / stacked segments
 VALUE_FONT_SIZE = 'x-small'         # numbers written on/next to bars, relative to the style's font size
+MIN_FONT_SIZE = 'x-small'           # smallest text in any figure: 5 pt at print size (xx-small = 4.2 pt is unreadable)
 
 # Sample-size symbols (matplotlib mathtext, as in LaTeX)
 SYMBOL_N_MODELS = r'$N_m$'
@@ -104,8 +105,13 @@ TAGS_PAPER_LEGEND_ROWS = 2            # e.g. 2 x 4 for 8 categories
 METRIC_BAR_COLORS = {
     'model': '#b8b4ae',
     'access': '#b3d8a6', 'size': '#e4d895', 'reasoning': '#df9f9f', 'origin': '#a2a6de',
-    'persona': '#f2b98d', 'context': '#92bfdc',
+    'persona': '#e9a46c', 'context': '#73a7cf',      # = FAMILY_COLORS (paper look)
 }
+# Row families of the RQ figures (persona / context / LLM): base colour (bands, dots, bars), light tint (zero cells,
+# row shading), dark end (strongest cells, titles); taken from the paper's RQ1 heatmap
+FAMILY_COLORS = {'persona': '#e9a46c', 'context': '#73a7cf', 'model': '#8f8f8f'}
+FAMILY_LIGHT = {'persona': '#fbf1e8', 'context': '#edf4f9', 'model': '#f1f1f1'}      # row shading (forest)
+FAMILY_ZERO = {'persona': '#fefaf6', 'context': '#f7fafd', 'model': '#f8f8f8'}       # heatmap value 0: near white
 # Model characteristics: a ramp per characteristic, light -> dark across its values (as ordered in metrics/summary)
 METRIC_ROW_RAMPS = {
     'access': ('#b7cfe9', '#2f6aa6'),       # blue
@@ -117,9 +123,17 @@ METRIC_ROW_RAMPS = {
 METRIC_FAMILY_PALETTE = ['#3b75af', '#ef8636', '#519e3e', '#c53a32', '#8d69b8', '#84584e', '#d57dbe', '#7f7f7f',
                          '#bcbe3d', '#56bbcc']
 METRIC_ROW_LABEL_COLOR = '#1f1f1f'
-METRIC_CI_CAPSIZE = 1.6               # error bar caps (points)
+METRIC_CI_CAPSIZE = 2.0               # error bar caps (points)
 METRIC_CI_COLOR = '#262626'          # confidence interval drawn at the end of each bar
-METRIC_CI_LINEWIDTH = 0.9            # thin: a line, not a block
+METRIC_CI_LINEWIDTH = 0.9            # error bar line width (points) of the metric bars; RQ bars: RQ_CI_LINEWIDTH
+METRIC_NARROW_HEADER_FROM = 8        # bar figures with this many columns or more use Metric.narrow headers (e.g. Dup.)
+METRIC_LABEL_MARGIN_IN = 0.04        # label area: left margin | group titles (right-aligned) | gap | row labels | gap
+METRIC_TITLE_GAP_IN = 0.1
+METRIC_LABEL_GAP_IN = 0.06
+RQ_CI_LINEWIDTH = 0.7                # RQ1 / RQ2 bar figures: thinner CIs than the metric bars
+RQ_CI_CAPSIZE = 1.4
+RQ_TICK_SIZE = MIN_FONT_SIZE             # RQ1 / RQ2 bar figures: x tick labels (smaller than the metric bars)
+METRIC_RULE_INSET = 0.004            # group rules run across the whole figure, this close to its edges (fraction)
 METRIC_ROW_HEIGHT_IN = 0.135         # height per row; group gaps are a fraction of a row
 METRIC_GROUP_GAP = 0.7
 METRIC_GROUP_RULE_COLOR = '#8c8a86'  # horizontal rule between groups of rows
@@ -127,22 +141,36 @@ METRIC_ARROWS = {1: ' ↑', -1: ' ↓', 0: ''}
 METRIC_HEADER_FONT_SIZE = 'small'      # column headers (metric names)
 METRIC_COMPACT_FROM = 10                # more columns than this: compact text (headers / values below)
 METRIC_HEADER_FONT_SIZE_COMPACT = 'x-small'
-VALUE_FONT_SIZE_COMPACT = 'xx-small'
+VALUE_FONT_SIZE_COMPACT = 'x-small'
 METRIC_VALUE_INSIDE_FROM = 0.86      # value written inside the bar (left of its CI) when the bar ends beyond this share
 
 # RQ1 heatmap (viz/rq_plots.plot_rq1_heatmap): one ramp per row family (white -> dark), on one shared scale
-RQ1_HEATMAP_DARK = {'persona': '#8a3f0a', 'context': '#0f4c81', 'model': '#3d3d3d'}
+RQ1_HEATMAP_DARK = {'persona': '#9a4a17', 'context': '#163f66', 'model': '#333333'}
 RQ1_HEATMAP_BAND = '#e9e9ee'            # background of the TECHNICAL / SOCIAL column bands
 RQ1_HEATMAP_FADED_TEXT = '#b5b5b5'      # value of a cell whose CI includes 0
-RQ1_HEATMAP_CELL_IN = (0.34, 0.2)       # cell width, height
+RQ1_HEATMAP_CELL_IN = (0.34, 0.2)       # cell width (the most; narrower to fit HEATMAP_WIDTH_IN), height
 RQ1_HEATMAP_BAND_GAP = 0.6             # gap between the TECHNICAL and SOCIAL bands (cell widths)
 RQ1_HEATMAP_ROW_GAP = 0.25             # gap between row families and before the residual row (cell heights)
+HEATMAP_WIDTH_IN = PAPER_TEXT_WIDTH_IN  # RQ1 / RQ2 heatmaps: the cell width is chosen so the figure fits this width
+HEATMAP_MIN_CELL_W_IN = 0.2             # never narrower (values switch to the compact font below 0.27)
+HEATMAP_BORDER = 1.0                    # white border between cells (points)
+HEATMAP_RESIDUAL_HEIGHT = 0.62          # residual boxes: share of a cell height
+HEATMAP_RESIDUAL_EDGE = '#c9c9c9'
+HEATMAP_BRACKET_IN = 0.17               # below the column labels: subgroup brackets + their names
+HEATMAP_BAND_IN = 0.19                  # TECHNICAL / SOCIAL band height
+HEATMAP_TITLE_GAP_IN = 0.05             # band -> x-axis title
 
 # RQ3 trade-off scatter (viz/rq_plots.plot_rq3): one point per model, coloured by quadrant
 RQ3_QUADRANT_COLORS = {'Q1': '#2e8b57', 'Q2': '#3b75af', 'Q3': '#8c8a86', 'Q4': '#ef8636'}
 RQ3_FIGURE_IN = (PAPER_TEXT_WIDTH_IN, 3.4)   # width, height
 RQ3_MARKER_SIZE = 34
-RQ3_SPLIT_LINE = {'color': '#8c8a86', 'linestyle': '--', 'linewidth': 0.8}
+RQ3_SPLIT_LINE = {'color': '#b5b3ae', 'linestyle': (0, (3, 2)), 'linewidth': 0.6}   # thin and light
+RQ3_LABEL_SIZE = 'xx-small'             # model names (quadrant colour): 4.2 pt, below MIN_FONT_SIZE on purpose (43 names; at 5 pt they overlap)
+RQ3_LABEL_EXPAND = (1.15, 1.35)         # adjustText: room kept around each label (x, y); larger = fewer overlaps
+RQ3_LABEL_FORCE_TEXT = (0.3, 0.5)       # adjustText: label-label repulsion
+RQ3_LABEL_FORCE_STATIC = (0.25, 0.4)    # adjustText: label-point repulsion
+RQ3_LABEL_TIME_LIM = 1                  # adjustText: seconds of label placement (more = fewer overlaps)
+RQ3_CONNECT_FROM_IN = 0.06              # a curved connector only when the label is this far from its point
 RQ3_PARETO_LINE = {'color': '#1f1f1f', 'linestyle': ':', 'linewidth': 0.8}
 
 # RQ2 heatmap (viz/rq_plots.plot_rq2_heatmap): deviation from the grand mean, oriented by the metric's direction
@@ -153,24 +181,43 @@ RQ2_HEATMAP_CELL_IN = (0.34, 0.17)      # cell width, height
 RQ2_HEATMAP_MIN_SCALE = 0.05           # full colour needs |deviation| >= max(this, the metric's largest |deviation|)
 
 # RQ2 forest plot (viz/rq_plots.plot_rq2_forest): one dot + CI per value, one panel per metric
-RQ2_FOREST_ROW_IN = 0.15                # height per row (header rows included)
-RQ2_FOREST_SHADE_ALPHA = 0.08           # row shading in the family colour (persona / context)
-RQ2_FOREST_MARKER_SIZE = 3.2
+RQ2_FOREST_ROW_IN = 0.118               # height per row (header rows included)
+RQ2_FOREST_SHADE_ALPHA = 0.08           # (unused since the rows are shaded in FAMILY_LIGHT)
+RQ2_FOREST_ROW_GAP = 0.16               # white gap between shaded rows (share of a row)
+RQ2_FOREST_FIT_ROWS = 2.5               # rows kept free at the bottom of every panel for the R^2 text
+RQ2_FOREST_ZERO_COLOR = '#a8a8a8'       # the only vertical line (0): thin, light, behind the dots
+RQ2_FOREST_ZERO_WIDTH = 0.5
+RQ2_FOREST_MARKER_SIZE = 3.4
 
 # Flow figures (viz/flow_plots.py; data: metrics/flows.py). Categorical order validated for colour-vision deficiency
 # (adjacent pairs, dataviz validator): categories stacked next to each other stay distinguishable.
 FLOW_CATEGORICAL = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
 FLOW_OTHER_COLOR = '#b8b4ae'            # pooled 'other' classes
-FLOW_UNKNOWN_COLOR = '#dcdad5'          # 'unknown' (only when included)
-FLOW_DIVERGING = ('#1c5cab', '#c8c6c0', '#c03535')   # ordered classes with a middle (gender): blue pole, grey, red pole
+FLOW_UNKNOWN_COLOR = '#e6e4df'          # 'unknown' (only when included): pale grey + hatch (UNKNOWN_HATCH)
+# ordered classes with a middle (gender): blue pole, mid-grey neutral, red pole. Validated (dataviz validator,
+# light): neutral vs poles CVD dE >= 11.8, neutral vs unknown dE 27.8; unknown is low-contrast, so it is also hatched
+FLOW_DIVERGING = ('#1c5cab', '#8f8c86', '#c03535')
+UNKNOWN_HATCH = '////'                  # texture of 'unknown' segments / nodes / bands (second cue besides lightness)
+UNKNOWN_HATCH_COLOR = '#a9a59e'
 FLOW_SEQUENTIAL = ('#b7d3f6', '#104281')             # ordered classes without a middle (L < M < H): light -> dark
 FLOW_TOP_COUNTRIES = 8                  # countries shown; the rest pooled as 'other'
 FLOW_ROW_IN = 0.2                       # height per node (inches)
 FLOW_NODE_WIDTH = 0.035                 # node bar width (share of the flow width)
 FLOW_BAND_ALPHA = 0.5
 FLOW_BAND_LABEL_MIN = 0.12              # write the share on a band if it is at least this share of its source
+DRIFT_ROW_IN = 0.24                     # plot_drift: height per prompted location
 FLOW_GRID_NCOLS = 3                     # panels per row of plot_flow_grid (6 panels: 3 -> 2 x 3, 6 -> 1 x 6)
 # The appendix figures (notebook 5_flows.ipynb): one figure per prompt variable (source fixed), its panels the person
 # attributes metrics/flows.TARGETS; and the reverse (target fixed). Sources: prompt variables or model characteristics.
 FLOW_SOURCES = ['field', 'subfield', 'k', 'seniority', 'role', 'language', 'location', 'origin']
 FLOW_TARGET_FIGURES = ['gender', 'ethnicity']   # target fixed: one figure each, panels = FLOW_SOURCES
+
+# GT descriptives (viz/gt_plots.py, notebook 0_gt.ipynb; data: groundtruth/stats.py). Seniority uses the flows'
+# sequential ramp (junior light -> senior dark), classes the flows' colours (viz/flow_plots.target_order_colors).
+GT_ROW_IN = 0.13                        # height per bar row (field x seniority)
+GT_GROUP_GAP = 1.3                      # gap between field groups, in rows (holds the field name)
+GT_COMPOSITION_NCOLS = 3                # panels per row of plot_gt_composition
+GT_COMPOSITION_ATTRIBUTES = ['gender', 'ethnicity', 'country', 'productivity', 'influence', 'collaboration']
+GT_PANEL_HEIGHT_IN = 2.0                # bibliometrics / histogram panels
+GT_THRESHOLD_LINE = {'color': '#1f1f1f', 'linestyle': '--', 'linewidth': 0.7}
+GT_HEATMAP_CMAP = 'Blues'

@@ -82,6 +82,19 @@ class TestFlows(unittest.TestCase):
         self.assertEqual(len(set(top['target'])), 3)                        # 2 countries + other
         self.assertIn(fl.OTHER, set(top['target']))
 
+    def test_drift_fast_equals_reference(self):
+        p = people()
+        fast = fl.drift(p, n_boot=40, seed=3)
+        slow = fl.drift_slow(p, n_boot=40, seed=3)
+        pd.testing.assert_frame_equal(fast.reset_index(drop=True), slow.reset_index(drop=True), check_dtype=False)
+        counts = fl.drift_counts(p)
+        pd.testing.assert_frame_equal(fl.drift(None, n_boot=40, seed=3, counts=counts), fast, check_dtype=False)
+        # a model without any known country still counts in the draws
+        extra = p.iloc[:3].assign(**{cons.COL_MODEL: 'zzz-model', 'country': 'unknown'})
+        q = pd.concat([p, extra], ignore_index=True)
+        pd.testing.assert_frame_equal(fl.drift(q, n_boot=25, seed=1).reset_index(drop=True),
+                                      fl.drift_slow(q, n_boot=25, seed=1).reset_index(drop=True), check_dtype=False)
+
     def test_drift(self):
         d = fl.drift(people(), n_boot=30).set_index('location')
         self.assertEqual(d.loc['Germany', 'country'], 'DE')

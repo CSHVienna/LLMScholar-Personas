@@ -36,6 +36,12 @@ class Metric:
     decimals: int = 2
     limits: Optional[tuple] = (0.0, 1.0)   # None: scaled to the data (e.g. effect sizes)
     short: str = ''                        # compact label under a subgroup bracket (heatmaps), e.g. 'Name'
+    narrow: str = ''                       # header in wide bar figures (many columns), e.g. 'Dup.'; '' = label
+
+    def header(self, n_columns: int) -> str:
+        """Column header of a bar figure: the narrow label when the figure has many columns."""
+        from viz import constants as viscons
+        return self.narrow if self.narrow and n_columns >= viscons.METRIC_NARROW_HEADER_FROM else self.label
 
     @property
     def band(self) -> str:
@@ -47,8 +53,8 @@ METRICS: Dict[str, Metric] = {m.key: m for m in [
     Metric('refusals', 'Refusals', LOWER, 'technical', 'refusals', short='Refusals'),
     Metric('validity', 'Validity', HIGHER, 'technical', 'validity', short='Validity'),
     Metric('behaviour_consistency', 'Consist.$_{behav}$', NEUTRAL, 'technical', 'consistency', short='Behaviour'),
-    Metric('recommendation_consistency', 'Consist.$_{recs}$', NEUTRAL, 'technical', 'consistency', short='Recs'),
-    Metric('duplicates', 'Duplicates', LOWER, 'technical', 'duplicates', short='Duplicates'),
+    Metric('recommendation_consistency', 'Consist.$_{recs}$', NEUTRAL, 'technical', 'consistency', short='Recs.'),
+    Metric('duplicates', 'Duplicates', LOWER, 'technical', 'duplicates', short='Duplicat.', narrow='Dup.'),
     Metric('k_ratio', 'k ratio', NEUTRAL, 'technical', 'k_ratio', limits=(0.0, 2.0), short='k ratio'),
     Metric('factuality_name', 'Fact.$_{name}$', HIGHER, 'factuality', 'factuality', short='Name'),
     Metric('factuality_name_field', 'Fact.$_{field}$', HIGHER, 'factuality', 'factuality', short='Field'),

@@ -12,7 +12,7 @@
   * Offline: open this file in a browser and load annotation_<task>_items.json from disk.
   1. Choose the task (served) or load annotation_<task>_items.json (offline).
   2. Enter your annotator id. Items are shown one at a time, in an order shuffled for you.
-  3. Tick every tag that applies (keys 1-9, 0, -, =; verification tasks: one label per group), add fields / notes, move with Enter / arrows.
+  3. Tick every tag that applies (keys 1-9, 0, -, =, q-y; verification tasks: one label per group), add fields / notes, move with Enter / arrows.
   4. Your work is autosaved in this browser (and on the server when served). "Export CSV" downloads
      annotation_<task>_<annotator>.csv (offline: put it into results/annotations/). Then run
      batch_annotation_evaluate.py.
@@ -142,7 +142,7 @@
     </div>
     <details style="margin-top:12px"><summary>Instructions, codebook and rules</summary>
       <p id="instructions" class="muted"></p><div id="codebook"></div></details>
-    <p class="muted" style="margin-top:12px"><small>Keys: 1–9, 0, -, = toggle tags · u unsure · Enter/→ next · ← previous ·
+    <p class="muted" style="margin-top:12px"><small>Keys: 1–9, 0, -, =, q–y toggle tags · u unsure · Enter/→ next · ← previous ·
       Ctrl+S export. In a field, shortcuts are off and Enter goes to the next item.</small></p>
   </aside>
 </main>
@@ -177,7 +177,7 @@ const SHORT = {
     initials: 'both = initials',
     placeholder: 'template, e.g. "Candidate 1"',
     invalid: 'no usable name' } };
-const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
+const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'q', 'w', 'e', 'r', 't', 'y'];   // not u (unsure)
 const $ = (id) => document.getElementById(id);
 
 // Seeded shuffle (mulberry32): a different but reproducible order per annotator

@@ -279,6 +279,17 @@ demographics continues inside a name shard from its last stored part (every 20k 
 Smoke test without touching the full database: build a mini copy (a few thousand works and their authors) in
 `<project>/tmp/smoke/` and run `run_gt_pipeline.sh -o tmp/smoke/mini_openalex.duckdb -n 4 -k 5000 -r tmp/smoke -l tmp/smoke/logs` (`-r` = results root: the ground truth goes to `tmp/smoke/groundtruth/`).
 
+### GT descriptives — `code/notebooks/0_gt.ipynb`
+
+No script: the notebook aggregates the A.1 / A.4 outputs in DuckDB (`libs/groundtruth/stats.py`; 4 threads / 16 GB,
+`cons.GT_STATS_*`; the big tables are never loaded into pandas) and plots with `libs/viz/gt_plots.py`. Aggregated
+tables are cached in `groundtruth/descriptives/` and recomputed when an A.4 file is newer. Sections: population (funnel,
+scholars per field x seniority, field overlap), academic age with the seniority cut-offs, bibliometrics (per field x
+seniority, by perceived gender, by perceived ethnicity), perceived gender / ethnicity (unknown reasons, p_female and
+each raceBERT probability with the config thresholds, composition = the parity targets), countries (+ the prompt
+countries), prominence (L / M / H ranges, composition, perceived gender / ethnicity inside each class and the top x %).
+Per field only (no subfield level in the GT). Plots `plots/gt_*`.
+
 ### Author matching (step B.6) — `run_matching_pipeline.sh`, `batch_match_candidates.py`, `batch_match_authors.py`
 
 Needs B.3 and A.1 / A.2. Code: `libs/matching/` (the factuality metric is computed later from its `matched_*` columns). Two steps, like probabilities → labels in A.3 / A.4:

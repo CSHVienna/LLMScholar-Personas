@@ -398,8 +398,10 @@ ANNOTATION_TASK_RESPONSES = 'responses'
 ANNOTATION_TASK_RECOMMENDATIONS = 'recommendations'
 ANNOTATION_TASK_MATCHING = 'matching'   # verification: recommended name -> OA person (annotation/verification.py)
 ANNOTATION_TASK_AUTHORS = 'authors'     # verification: GT field, seniority, country of an OA profile
+ANNOTATION_TASK_DEMOGRAPHICS = 'demographics'   # blind: perceived gender + ethnicity from the name (annotation/demographics.py)
 ANNOTATION_TAG_TASKS = [ANNOTATION_TASK_RESPONSES, ANNOTATION_TASK_RECOMMENDATIONS]   # blind tag tasks (tasks.py)
-ANNOTATION_TASKS = ANNOTATION_TAG_TASKS + [ANNOTATION_TASK_MATCHING, ANNOTATION_TASK_AUTHORS]
+ANNOTATION_TASKS = ANNOTATION_TAG_TASKS + [ANNOTATION_TASK_MATCHING, ANNOTATION_TASK_AUTHORS,
+                                           ANNOTATION_TASK_DEMOGRAPHICS]
 # Renamed tags: old name in saved annotations -> current name (applied by the tool and the evaluation)
 ANNOTATION_TAG_ALIASES = {ANNOTATION_TASK_RESPONSES: {'fixed': RESPONSE_TRUNCATED},
                           ANNOTATION_TASK_RECOMMENDATIONS: {'fixed': REC_REPETITION_REMOVED}}
@@ -466,7 +468,34 @@ ETHNICITY_CLASSES = [ETHNICITY_ASIAN, ETHNICITY_BLACK, ETHNICITY_HISPANIC, ETHNI
 RACEBERT_LABELS = {'api': ETHNICITY_ASIAN, 'nh_black': ETHNICITY_BLACK, 'hispanic': ETHNICITY_HISPANIC,
                    'nh_white': ETHNICITY_WHITE, 'aian': ETHNICITY_OTHER}   # AIAN merged into Other
 DEFAULT_ETHNICITY_MIN_PROB = 0.5         # label = argmax class if its probability >= this, else unknown
+# Demographics annotation (perceived, from the name): the classes the annotator picks from (+ 'unknown' = cannot tell).
+# Ethnicity is annotated in finer, origin-based classes (disjoint, defined by the language / region a name comes from)
+# and mapped onto the raceBERT classes for the evaluation: 'main' follows the US census (OMB 1997) convention raceBERT
+# was trained on (Florida voters); the other mappings are robustness checks, never chosen by fit.
+ANNOTATION_GENDER_CLASSES = [GENDER_MALE, GENDER_FEMALE, GENDER_NEUTRAL, GENDER_UNKNOWN]
+ANN_EUROPEAN, ANN_HISPANIC, ANN_PORTUGUESE_BRAZILIAN, ANN_MENA = 'european', 'hispanic', 'portuguese_brazilian', 'mena'
+ANN_EAST_ASIAN, ANN_SOUTH_ASIAN, ANN_BLACK, ANN_AIAN = 'east_asian', 'south_asian', 'black', 'aian'
+ANNOTATION_ETHNICITY_CLASSES = [ANN_EUROPEAN, ANN_HISPANIC, ANN_PORTUGUESE_BRAZILIAN, ANN_MENA, ANN_EAST_ASIAN,
+                                ANN_SOUTH_ASIAN, ANN_BLACK, ANN_AIAN, ETHNICITY_UNKNOWN]
+ANNOTATION_MAPPING_MAIN = 'main'
+_ETHNICITY_MAIN = {ANN_EUROPEAN: ETHNICITY_WHITE, ANN_HISPANIC: ETHNICITY_HISPANIC, ANN_PORTUGUESE_BRAZILIAN: ETHNICITY_WHITE,
+                   ANN_MENA: ETHNICITY_WHITE, ANN_EAST_ASIAN: ETHNICITY_ASIAN, ANN_SOUTH_ASIAN: ETHNICITY_ASIAN,
+                   ANN_BLACK: ETHNICITY_BLACK, ANN_AIAN: ETHNICITY_OTHER, ETHNICITY_UNKNOWN: ETHNICITY_UNKNOWN}
+ANNOTATION_ETHNICITY_MAPPINGS = {
+    ANNOTATION_MAPPING_MAIN: _ETHNICITY_MAIN,
+    'portuguese_brazilian_hispanic': {**_ETHNICITY_MAIN, ANN_PORTUGUESE_BRAZILIAN: ETHNICITY_HISPANIC},
+    'mena_asian': {**_ETHNICITY_MAIN, ANN_MENA: ETHNICITY_ASIAN},
+    'mena_other': {**_ETHNICITY_MAIN, ANN_MENA: ETHNICITY_OTHER},
+}
+ANNOTATION_MAPPING_FINE = 'fine'      # no mapping: the annotated fine classes vs the inferred ones (where each group lands)
 DEFAULT_RACEBERT_BATCH_SIZE = 256
+
+# GT descriptives (groundtruth/stats.py, notebook 0_gt.ipynb): DuckDB aggregations over the A.1 / A.4 outputs with
+# small, bounded resources (interactive use on the shared server; tens of millions of rows, never loaded into pandas)
+GT_STATS_DUCKDB_THREADS = 4
+GT_STATS_DUCKDB_MEMORY = '16GB'
+GT_STATS_METRICS = ['academic_age', 'n_works', 'n_citations', 'n_coauthors', 'h_index', 'citations_per_paper_per_year']
+GT_STATS_QUANTILES = [0.05, 0.25, 0.5, 0.75, 0.95]
 
 # xpac = OpenAlex "expansion pack" (works added in 2025 from DataCite / repositories: datasets, repository copies,
 # theses; poorer metadata). Excluded by default, as in OpenAlex itself.
@@ -532,6 +561,9 @@ METRIC_COLUMN_SETS['popularity_cohesion'] = METRIC_COLUMN_SETS['popularity'] + M
 METRIC_COLUMN_SETS['social'] = (METRIC_COLUMN_SETS['parity'] + METRIC_COLUMN_SETS['diversity']
                                 + METRIC_COLUMN_SETS['popularity'] + METRIC_COLUMN_SETS['cohesion'])
 METRIC_COLUMN_SETS['all'] = METRIC_COLUMN_SETS['technical_factuality'] + METRIC_COLUMN_SETS['social']
+# The columns of the paper's figures (one per metric family; the full sets go to the appendix)
+METRIC_COLUMN_SETS['paper'] = ['refusals', 'validity', 'recommendation_consistency', 'duplicates', 'factuality_author',
+                               'parity_gender', 'diversity_gender', 'popularity_influence', 'similarity']
 
 # RQ3: socio-technical trade-off (analysis/tradeoff.py). Per model, the sum of the metrics of each axis; metrics where
 # lower is better (refusals, duplicates) enter as complements (1 - x), so larger is better on both axes.
