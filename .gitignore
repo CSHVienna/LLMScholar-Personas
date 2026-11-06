@@ -222,3 +222,4 @@ data/responses
 data/*.duckdb
 _old/
 logs/
+cache/
