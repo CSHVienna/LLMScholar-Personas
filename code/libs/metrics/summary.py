@@ -121,7 +121,7 @@ MODEL_ATTRIBUTES = {   # column of the model metadata -> (title, levels, labels)
     'origin': ('Origin', ['USA', 'FRA', 'CHN', 'ARE'], ['USA', 'FRA', 'CHN', 'ARE']),
 }
 PROMPT_TITLES = {cons.VAR_LANGUAGE: 'Language', cons.VAR_LOCATION: 'Location', cons.VAR_ROLE: 'Role', cons.VAR_SUBFIELD: 'Subfield',
-                 cons.VAR_K: 'K', cons.VAR_FIELD: 'Field', cons.VAR_SENIORITY: 'Target'}
+                 cons.VAR_K: 'K', cons.VAR_FIELD: 'Field', cons.VAR_SENIORITY: 'Seniority'}   # display titles
 PROMPT_LABELS = {'Director/Recruiter': 'Recruiter', 'PhD student': 'Student', 'Computer Science': 'Computer Sc.'}
 PERSONA, CONTEXT = 'persona', 'context'
 

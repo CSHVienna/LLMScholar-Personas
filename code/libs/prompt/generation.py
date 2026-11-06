@@ -174,6 +174,31 @@ def create_prompt(persona_context, user_request, language=cons.LANG_EN):
     return instructions, input
 
 
+def build_prompt_records(instructions: List[Dict[str, Any]], locations: List[str], inputs: Dict[str, Any],
+                         language: str = cons.LANG_EN) -> List[Dict[str, Any]]:
+    """All prompts of a language as ``[{id, parameters: {persona_context, user_request}, prompt}]``.
+
+    ``id`` is the position in :func:`combine_all` (0, 1, ...): the prompt id of the response files, so the
+    order of ``combine_all`` must never change.
+    """
+    records = []
+    for prompt_id, combo in enumerate(combine_all(instructions, locations, inputs)):
+        instruction_text, input_text = create_prompt(combo['persona_context'], combo['user_request'], language=language)
+        records.append({'id': prompt_id,
+                        'parameters': {'persona_context': combo['persona_context'],
+                                       'user_request': combo['user_request']},
+                        'prompt': instruction_text + "\n\n" + input_text})
+    return records
+
+
+def read_prompt_records(language_dir: Path | str, language: str) -> List[Dict[str, Any]]:
+    """:func:`build_prompt_records` from the parameter files of ``<context_dir>/<language>/``."""
+    folder = Path(language_dir)
+    return build_prompt_records(read_instructions(folder / "instructions.json"),
+                                read_locations(folder / "locations.json"),
+                                read_inputs(folder / "input.json"), language=language)
+
+
 # ---------------------------
 # Translate params
 # ---------------------------

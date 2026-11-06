@@ -30,7 +30,7 @@ PLOT_FONTS = ['DejaVu Serif', 'Liberation Serif', 'Times New Roman', 'DejaVu San
 FIGURE_DPI = 300
 FIGURE_FORMATS = ['png']            # default (quick looks); pass formats=['pdf'] (or PAPER_FIGURE_FORMATS) when needed
 PAPER_FIGURE_FORMATS = ['pdf']      # paper figures: vector only
-FORMATS_WITH_TITLES = ['png']       # rule: titles only in PNG (quick looks); PDFs (paper) have none
+FORMATS_WITH_TITLES = ['png']       # rule: figure titles only in PNG; PDFs keep subplot titles of multi-panel figures
 
 # Paper page: full A4 text width (each family of figures sets its own height)
 PAPER_TEXT_WIDTH_IN = 7.0
@@ -101,7 +101,7 @@ TAGS_PAPER_LEGEND_ROWS = 2            # e.g. 2 x 4 for 8 categories
 ###############################################################################
 
 # One colour per kind of row: models (grey), each model characteristic, and the two prompt families
-# (persona variables: language, location, role; context variables: k, field, target)
+# (persona variables: language, location, role; context variables: k, field, seniority)
 METRIC_BAR_COLORS = {
     'model': '#b8b4ae',
     'access': '#b3d8a6', 'size': '#e4d895', 'reasoning': '#df9f9f', 'origin': '#a2a6de',

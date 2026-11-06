@@ -5,6 +5,28 @@
 conda activate py311_llmscholar
 export PYTHONPATH="$PYTHONPATH:code/libs" LOGS=logs; MODELS=data/models/models.txt
 ```
+## Collect responses (3 prompts, 1 run, English, into tmp/smoke/responses)
+
+``` bash
+python code/scripts/batch_input_prompts.py
+```
+
+``` bash
+python code/scripts/batch_collect_cloud_prepare.py --models gpt-4_1-nano-2025-04-14 gemini-2_5-flash-lite --languages english --repetitions 1 --limit_prompts 3 --responses_dir tmp/smoke/responses --log_dir tmp/smoke/logs
+```
+
+``` bash
+python code/scripts/batch_collect_cloud_submit.py --models gpt-4_1-nano-2025-04-14 gemini-2_5-flash-lite --languages english --responses_dir tmp/smoke/responses --log_dir tmp/smoke/logs
+```
+
+``` bash
+python code/scripts/batch_collect_cloud_retrieve.py --models gpt-4_1-nano-2025-04-14 gemini-2_5-flash-lite --languages english --responses_dir tmp/smoke/responses --log_dir tmp/smoke/logs
+```
+
+``` bash
+python code/scripts/batch_collect_local.py --models gemma3-4b-it-q4_K_M --languages english --repetitions 1 --limit_prompts 3 --responses_dir tmp/smoke/responses --log_dir tmp/smoke/logs
+```
+
 ## Sample GT
 
 ``` bash
@@ -62,6 +84,51 @@ bash code/scripts/run_metrics_pipeline.sh -s rq2 -r tmp/smoke -M tmp/smoke/model
 
 ``` bash
 bash code/scripts/run_metrics_pipeline.sh -s flows -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs
+```
+
+
+# Inputs and LLM responses
+
+## 1. Prompt parameters (only for NEW parameters: re-translating changes the German / Spanish prompts of the existing responses)
+- [ ] done | date:
+``` bash
+python code/scripts/batch_input_params.py -l english
+```
+
+## 2. Prompts of all languages (writes all_params_and_prompts.json; keeps existing files)
+- [ ] done | date:
+``` bash
+python code/scripts/batch_input_prompts.py
+```
+
+## 3. Model list from metadata.json (checks api / api_name; keeps models.txt if the models are the same)
+- [ ] done | date:
+``` bash
+python code/scripts/batch_input_models.py
+```
+
+## 4. Collect GPT / Gemini (prepare, submit, then retrieve until nothing is open; prepare again if prompts are missing)
+- [ ] done | date:
+``` bash
+python code/scripts/batch_collect_cloud_prepare.py --models gpt-4_1-nano-2025-04-14 gpt-4_1-mini-2025-04-14 gpt-4_1-2025-04-14 gemini-2_5-flash-lite gemini-2_5-flash gemini-2_5-pro
+```
+
+``` bash
+python code/scripts/batch_collect_cloud_submit.py --models gpt-4_1-nano-2025-04-14 gpt-4_1-mini-2025-04-14 gpt-4_1-2025-04-14 gemini-2_5-flash-lite gemini-2_5-flash gemini-2_5-pro
+```
+
+``` bash
+python code/scripts/batch_collect_cloud_retrieve.py --models gpt-4_1-nano-2025-04-14 gpt-4_1-mini-2025-04-14 gpt-4_1-2025-04-14 gemini-2_5-flash-lite gemini-2_5-flash gemini-2_5-pro
+```
+
+## 5. Collect Ollama (servers on ports 11434.. running; one model per process)
+- [ ] done | date:
+``` bash
+python code/scripts/batch_input_models.py --apis ollama --output tmp/models_ollama.txt
+```
+
+``` bash
+parallel -j 1 --joblog logs/collect_local.joblog python code/scripts/batch_collect_local.py --nr_servers 4 --max_processes 8 --models {} :::: tmp/models_ollama.txt
 ```
 
 

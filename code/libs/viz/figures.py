@@ -1,5 +1,5 @@
 """
-Helpers shared by all figures: saving (titles only in PNG), bars, colour shades and axes styling.
+Helpers shared by all figures: saving (figure titles only in PNG), bars, colour shades and axes styling.
 All sizes (fonts, lines, export dpi) come from the style: call ``viz.style.apply_style()`` first.
 Family-specific plots (e.g. ``viz/tag_plots.py``) build on these.
 """
@@ -19,14 +19,21 @@ def save_figure(fig: plt.Figure, name: str, plots_dir: Path | str = cons.DEFAULT
                 formats: List[str] = viscons.FIGURE_FORMATS) -> List[Path]:
     """Save ``fig`` as <plots_dir>/<name>.<format> for every format; returns the paths.
 
-    Rule: titles are kept only in ``viscons.FORMATS_WITH_TITLES`` (PNG); e.g. PDFs for the paper have none.
+    Rule: titles are kept in ``viscons.FORMATS_WITH_TITLES`` (PNG); other formats (PDFs for the paper) drop the
+    figure title (suptitle) and, for a figure with a single subplot, that subplot's title. Subplot titles of
+    multi-panel figures are kept (they name the panels).
     """
     plots_dir = Path(plots_dir)
     plots_dir.mkdir(parents=True, exist_ok=True)
-    # matplotlib keeps the centre, left and right titles of an axes as three Text artists
-    titles = [t for ax in fig.axes for t in (ax.title, ax._left_title, ax._right_title)]
-    if getattr(fig, '_suptitle', None) is not None:          # figure-level titles (suptitle) too
+    titles = []
+    if getattr(fig, '_suptitle', None) is not None:          # figure-level title (suptitle)
         titles.append(fig._suptitle)
+    # panels = axes with data or a title (colorbars and empty / legend-only axes are skipped); matplotlib keeps the centre,
+    # left and right titles of an axes as three Text artists
+    panels = [ax for ax in fig.axes if getattr(ax, '_colorbar', None) is None
+              and (ax.has_data() or any(t.get_text() for t in (ax.title, ax._left_title, ax._right_title)))]
+    if len(panels) == 1:
+        titles += [panels[0].title, panels[0]._left_title, panels[0]._right_title]
     paths = []
     for fmt in formats:
         visible = fmt in viscons.FORMATS_WITH_TITLES

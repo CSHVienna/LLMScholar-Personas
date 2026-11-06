@@ -335,11 +335,17 @@ def _colorbars(frame: 'HeatmapFrame', cmaps, norm: Normalize, rows: Sequence[sum
             bar.set_label(label, fontsize='x-small', labelpad=2)
 
 
-def rq1_figure_name(kind: str, measure: str, metrics: Optional[str | Sequence[str]] = None) -> str:
-    """File name of an RQ1 figure: rq1_<metrics>_<measure>_<kind>, metrics = 'all' / a family / keys joined by '-'
-    (e.g. rq1_technical_shapley_r2_heatmap, rq1_all_omega2_bars)."""
+def rq_figure_name(rq: int, kind: str, measure: str, metrics: Optional[str | Sequence[str]] = None) -> str:
+    """File name of an RQ figure: rq<rq>_<measure>_<metrics>_<kind>, metrics = 'all' / a column set / keys joined by
+    '-', kind = 'heatmap' | 'bar' ('bars' accepted) | 'forest' (e.g. rq1_omega2_paper_bar, rq2_deviation_all_heatmap)."""
     selection = 'all' if metrics is None else metrics if isinstance(metrics, str) else '-'.join(metrics)
-    return f"rq1_{selection}_{measure}_{kind}"
+    kind = 'bar' if kind == 'bars' else kind
+    return f"rq{rq}_{measure}_{selection}_{kind}"
+
+
+def rq1_figure_name(kind: str, measure: str, metrics: Optional[str | Sequence[str]] = None) -> str:
+    """rq1_<measure>_<metrics>_<kind> (see rq_figure_name; e.g. rq1_omega2_technical_heatmap)."""
+    return rq_figure_name(1, kind, measure, metrics)
 
 
 # --- RQ3: socio-technical trade-off ------------------------------------------------------------------------------
@@ -582,9 +588,8 @@ def plot_rq2_heatmap(results: pd.DataFrame, metrics: Optional[str | Sequence[str
 
 
 def rq2_figure_name(kind: str, value: str = 'deviation', metrics: Optional[str | Sequence[str]] = None) -> str:
-    """rq2_<metrics>_<value>_<kind>, as rq1_figure_name (e.g. rq2_all_deviation_heatmap, rq2_technical_emm_bars)."""
-    selection = 'all' if metrics is None else metrics if isinstance(metrics, str) else '-'.join(metrics)
-    return f"rq2_{selection}_{value}_{kind}"
+    """rq2_<value>_<metrics>_<kind> (see rq_figure_name; e.g. rq2_deviation_all_heatmap, rq2_emm_technical_bar)."""
+    return rq_figure_name(2, kind, value, metrics)
 
 
 def plot_rq2_forest(results: pd.DataFrame, value: str = 'contrast', metrics: Optional[str | Sequence[str]] = 'technical',

@@ -132,7 +132,7 @@ class TestFigures(unittest.TestCase):
             self.assertEqual(len(fig.axes), 2)
         labels = [t.get_text() for t in fig.axes[0].get_yticklabels()]
         self.assertIn('Language', labels)
-        self.assertEqual(rq_plots.rq2_figure_name('heatmap'), 'rq2_all_deviation_heatmap')
+        self.assertEqual(rq_plots.rq2_figure_name('heatmap'), 'rq2_deviation_all_heatmap')
 
 
 if __name__ == '__main__':

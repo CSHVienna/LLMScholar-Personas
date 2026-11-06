@@ -37,6 +37,19 @@ def add_raw_response_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument('--limit_prompts', type=int, default=None, help='Only the first N prompts per file (smoke tests)')
 
 
+def add_collect_arguments(parser: argparse.ArgumentParser, prompts: bool = True) -> None:
+    """Arguments of the scripts that collect the raw responses (batch_collect_*.py)."""
+    add_model_arguments(parser)
+    parser.add_argument('--models_metadata_file', default=cons.DEFAULT_MODELS_METADATA_FILE,
+                        help='Models metadata with api and api_name per model slug')
+    parser.add_argument('--responses_dir', default=cons.DEFAULT_RESPONSES_DIR, help='Folder with results_<api>_<language>/')
+    if prompts:
+        parser.add_argument('--context_dir', default=cons.DEFAULT_CONTEXT_DIR,
+                            help='Folder with <language>/all_params_and_prompts.json')
+        parser.add_argument('--repetitions', type=int, default=cons.DEFAULT_REPETITIONS, help='Runs per prompt')
+        parser.add_argument('--limit_prompts', type=int, default=None, help='Only the first N prompts (smoke tests)')
+
+
 def model_file(folder: Path | str, model: str, extension: str = 'parquet') -> Path:
     """Per-model file: <folder>/<model>.<extension>"""
     return Path(folder) / f"{model}.{extension}"

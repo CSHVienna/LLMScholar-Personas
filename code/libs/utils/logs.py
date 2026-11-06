@@ -65,3 +65,27 @@ def params_tag(args: argparse.Namespace) -> str:
 
 def get_logger() -> logging.Logger:
     return logging.getLogger(LOGGER_NAME)
+
+
+def current_log_file() -> Optional[Path]:
+    """The file the pipeline logger writes to (None if logging is not set up)."""
+    for handler in get_logger().handlers:
+        if isinstance(handler, logging.FileHandler):
+            return Path(handler.baseFilename)
+    return None
+
+
+def setup_worker_logging(log_file: Optional[Path | str]) -> None:
+    """In a worker process (multiprocessing 'spawn' starts without the parent's handlers): log to the console
+    and append to the parent's log file."""
+    logger = get_logger()
+    logger.setLevel(logging.INFO)
+    logger.handlers.clear()
+    formatter = logging.Formatter(LOG_FORMAT, LOG_DATE_FORMAT)
+    handlers = [logging.StreamHandler(sys.stdout)]
+    if log_file:
+        handlers.append(logging.FileHandler(log_file, mode='a', encoding='utf-8'))
+    for handler in handlers:
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    logger.propagate = False

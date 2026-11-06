@@ -153,6 +153,33 @@ LOG_TIMESTAMP_FORMAT = '%Y-%m-%d-%H:%M'
 RESPONSES_SOURCE_DIR_TEMPLATE = 'results_{source}_{language}'
 RESPONSES_FILE_TEMPLATE = '{source}_{language}_{model}.json'
 
+# -----------------------------------------------------------------------------
+# Inputs and collection (batch_input_*.py, batch_collect_*.py)
+# -----------------------------------------------------------------------------
+PROMPTS_TEXT_FILE = 'all_prompts.txt'                  # <context_dir>/<language>/: readable list of prompts
+PROMPTS_FILE = 'all_params_and_prompts.json'           # <context_dir>/<language>/: [{id, parameters, prompt}]
+
+# metadata.json: "api" picks the caller and the response folder (results_<api>_<language>/), "api_name" is the
+# model name the API expects; the key is its slug (model_slug(api_name)), as in models.txt.
+META_API = 'api'
+META_API_NAME = 'api_name'
+CLOUD_APIS = [SOURCE_GPT, SOURCE_GEMINI]                # asynchronous batch APIs (prepare -> submit -> retrieve)
+LOCAL_APIS = [SOURCE_OLLAMA]                            # local servers, answered right away
+DEFAULT_REPETITIONS = 10                                # runs per prompt
+
+# Cloud batch files: <responses_dir>/results_<api>_<language>/_batches/<api>__<language>__<model>__run<NN>.jsonl
+BATCHES_DIR = '_batches'
+BATCHES_DONE_DIR = 'done'
+BATCHES_FAILED_DIR = 'failed'
+BATCH_FILE_TEMPLATE = '{api}__{language}__{model}__run{run:02d}'
+BATCH_REQUESTS_SUFFIX = '.requests.jsonl'
+BATCH_SUBMITTED_SUFFIX = '.submitted.json'
+BATCH_RESPONSES_SUFFIX = '.responses.jsonl'
+TEMP_RESPONSES_DIR = '_temp_{model}'                    # one JSON per answer until merged into the response file
+
+DEFAULT_OLLAMA_HOST = 'localhost'
+DEFAULT_OLLAMA_FIRST_PORT = 11434
+
 # Per-model files are named <model>.parquet inside their folder (the folder says what they are)
 PREFIX_PLOT_TAGS = 'tags'               # plots: tags_<what>.<ext>
 PREFIX_ANNOTATION = 'annotation'        # annotation_<task>_items.json / _key.parquet / _<annotator>.csv / _eval_<table>.csv
@@ -562,8 +589,9 @@ METRIC_COLUMN_SETS['social'] = (METRIC_COLUMN_SETS['parity'] + METRIC_COLUMN_SET
                                 + METRIC_COLUMN_SETS['popularity'] + METRIC_COLUMN_SETS['cohesion'])
 METRIC_COLUMN_SETS['all'] = METRIC_COLUMN_SETS['technical_factuality'] + METRIC_COLUMN_SETS['social']
 # The columns of the paper's figures (one per metric family; the full sets go to the appendix)
-METRIC_COLUMN_SETS['paper'] = ['refusals', 'validity', 'recommendation_consistency', 'duplicates', 'factuality_author',
-                               'parity_gender', 'diversity_gender', 'popularity_influence', 'similarity']
+METRIC_COLUMN_SETS['paper'] = ['refusals', 'validity', 'recommendation_consistency', 'factuality_author',
+                               'parity_gender', 'diversity_gender', 'popularity_influence', 'popularity_location',
+                               'similarity']
 
 # RQ3: socio-technical trade-off (analysis/tradeoff.py). Per model, the sum of the metrics of each axis; metrics where
 # lower is better (refusals, duplicates) enter as complements (1 - x), so larger is better on both axes.

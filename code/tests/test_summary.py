@@ -90,7 +90,7 @@ class TestSelectionAndTable(unittest.TestCase):
     def test_rows(self):
         prompt = {g.title: g for g in s.prompt_rows()}
         self.assertEqual(prompt['Language'].color_key, s.PERSONA)
-        self.assertEqual(prompt['Target'].color_key, s.CONTEXT)
+        self.assertEqual(prompt['Seniority'].color_key, s.CONTEXT)
         self.assertIn('South Africa', prompt['Location'].labels)
         self.assertIn('Computer Sc.', prompt['Field'].labels)
 

@@ -1,30 +1,20 @@
-# config.py
-from configparser import ConfigParser, ExtendedInterpolation
-from pathlib import Path
+"""
+API keys, read from environment variables only (never from files in the project).
+
+Set them once in the conda environment (see README.md, *Setup*):
+
+    conda env config vars set OPENAI_API_KEY=... GEMINI_API_KEY=... -n py311_llmscholar
+"""
 import os
 
-import openai
+API_KEY_ENV_VARS = {'openai': 'OPENAI_API_KEY', 'gpt': 'OPENAI_API_KEY', 'gemini': 'GEMINI_API_KEY'}
 
-def _expand(p: str) -> Path:
-    return Path(p).expanduser().resolve()
 
-def load_config(path: Path | str = "config.ini") -> dict:
-    cfg_path = Path(path)
-    if not cfg_path.exists():
-        raise FileNotFoundError(f"Missing {cfg_path}. Create it first.")
-
-    parser = ConfigParser(interpolation=ExtendedInterpolation())
-    parser.read(cfg_path, encoding="utf-8")
-
-    # --- required field(s) ---
-    keys_dir = os.environ.get("LLM_KEYS_DIR") or parser.get("secrets", "keys_dir", fallback="")
-    if not keys_dir:
-        raise ValueError("Keys Dir key is missing. Set env var LLM_KEYS_DIR or fill [secrets].keys_dir in config.ini")
-
-    # --- typed reads with defaults ---
-    openai_api_dir = parser.get("openai", "data_dir", fallback="")
-    
-    return {
-        "LLM_KEYS_DIR": keys_dir,
-        "OPENAI_API_DIR": openai_api_dir,
-    }
+def read_api_key(api: str) -> str:
+    """API key of ``api`` ('openai' / 'gpt' or 'gemini') from its environment variable."""
+    var = API_KEY_ENV_VARS[api]
+    key = os.environ.get(var, '').strip()
+    if not key:
+        raise RuntimeError(f"{var} is not set. Set it with: conda env config vars set {var}=<key> -n py311_llmscholar "
+                           f"(then conda activate py311_llmscholar again); see README.md")
+    return key

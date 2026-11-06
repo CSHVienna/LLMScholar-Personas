@@ -1,66 +1,132 @@
 # Batch Processing Scripts
 
-This folder contains the prompt-generation scripts and the audit pipeline scripts for generating and managing prompts in multiple languages: `batch_params.py` and `batch_prompt.py`.
+Scripts run from any folder (no `PYTHONPATH`: `_bootstrap.py` adds `code/libs`). Env: `py311_llmscholar`.
 
-## Overview
-
-These scripts work together to create localized prompt combinations:
-
-1. **`batch_params.py`** - Must be run first. Translates parameter files (instructions, locations, inputs) into the target language.
-2. **`batch_prompt.py`** - Run after params. Generates prompt combinations from the translated parameters.
-3. **Audit pipeline** - Run after collecting data from LLMs (see *Audit pipeline* below).
-
-## Prerequisites
-`
-Before running either script, set the `PYTHONPATH`. If you are inside `code/scripts` then:
-```bash
-export PYTHONPATH="$PYTHONPATH:../libs"
+```mermaid
+flowchart TD
+    subgraph inputs ["1. Inputs"]
+        direction LR
+        IP[batch_input_params] --> IQ[batch_input_prompts]
+        IM[batch_input_models]
+    end
+    subgraph collect ["2. Collect"]
+        direction LR
+        CP[batch_collect_cloud_prepare] --> CS[batch_collect_cloud_submit] --> CR[batch_collect_cloud_retrieve]
+        CL[batch_collect_local]
+    end
+    subgraph gt ["3. Ground truth: run_gt_pipeline.sh"]
+        direction LR
+        G1[authorships] --> G2[pairs → edges] --> G3[bibliometrics] --> G4[names] --> G5[demographics] --> G6[population]
+    end
+    subgraph audit ["4. Audit"]
+        direction LR
+        A1["run_responses_pipeline.sh<br/>eval_responses → eval_recommendations"]
+        A2["run_matching_pipeline.sh<br/>candidates → authors"]
+        A3["run_metrics_pipeline.sh<br/>technical, social, flows, rq1, rq2"]
+        A1 --> A2 --> A3
+    end
+    inputs --> collect --> audit
+    gt --> audit
 ```
 
-## batch_params.py
+`configure_analysis.py` sets the analysis config (early settings after the GT bibliometrics, late settings
+after the first metrics); the annotation scripts validate the tags and the matching (see below).
 
-Generates all English params, and translates them to a target language using OpenAI's API.
+## Inputs
 
-### Parameters
+| Script | Writes |
+|---|---|
+| `batch_input_params.py` | `data/context/<language>/{instructions,locations,input}.json` (non-English: translated with OpenAI) |
+| `batch_input_prompts.py` | `data/context/<language>/all_params_and_prompts.json` + `all_prompts.txt` |
+| `batch_input_models.py` | `data/models/models.txt` from `data/models/metadata.json` |
 
-- `-l, --language` (optionsl): Target language code. Must be one of the supported languages defined in `cons.LANGUAGES`. Default: `cons.LANG_EN` (english).
-- `-o, --output-dir` (required): Output directory. Default: `../data/context/`
-
-### Configuration
-
-Requires a `config.ini` file with OpenAI API credentials at `../../config.ini`.
-
-### Example Usage
 ```bash
-# Translate parameters to German
-python batch_params.py -l german -o ../data/context/
-
-# Translate parameters to Spanish
-python batch_params.py -l spanish -o ../data/context/
+python code/scripts/batch_input_params.py -l english
+python code/scripts/batch_input_prompts.py
+python code/scripts/batch_input_models.py
+python code/scripts/batch_input_models.py --apis ollama --output tmp/models_ollama.txt
 ```
 
-## batch_prompt.py
+| Script | Argument | Default | Description |
+|---|---|---|---|
+| params | `-l, --language` | english | target language |
+| params | `-o, --output-dir` | `data/context` | |
+| prompts | `-l, --languages` | all | |
+| prompts | `-o, --output-dir` | `data/context` | folder with `<language>/` parameters |
+| prompts | `-c, --combination_id` | none | print this combination |
+| prompts | `--overwrite` | off | rewrite existing prompt files |
+| models | `--models_metadata_file` | `data/models/metadata.json` | |
+| models | `--output` | `data/models/models.txt` | |
+| models | `--apis` | all | only gpt / gemini / ollama models |
+| models | `--overwrite` | off | replace a list with other models |
 
-Generates prompt combinations from the translated parameter files.
+Notes:
+- Prompt `id` = position of the combination = key of the response files. Never change the order.
+- Re-translating (params `-l german|spanish`) changes those prompts: only for new parameters.
+- `metadata.json`: key = model slug; `api` (gpt | gemini | ollama) and `api_name` (name the API expects),
+  with key = `model_slug(api_name)`.
+- API keys: environment variables `OPENAI_API_KEY` / `GEMINI_API_KEY` (how to set them: main README, *Setup*).
 
-### Parameters
+## Collect
 
-- `-c, --combination_id` (optional): The combination ID to display (0-indexed).
-- `-l, --language` (optional): Target language code (must match the language used in `batch_params.py`).
-- `-o, --output-dir` (required): Output directory. Default: `../data/context/`
+Per model and language, appends to `data/responses/results_<api>_<language>/<api>_<language>_<model>.json`.
+Resumable: only missing runs are requested. Models of another API are skipped.
 
-### Example Usage
+### Cloud (GPT, Gemini)
+
+| Script | Does |
+|---|---|
+| `batch_collect_cloud_prepare.py` | writes one requests file per run, with the prompts still needed |
+| `batch_collect_cloud_submit.py` | uploads new requests files and starts the batch jobs |
+| `batch_collect_cloud_retrieve.py` | merges finished jobs (`_batches/done/`), moves failed ones to `_batches/failed/` |
+
 ```bash
-# See total combinations available
-python batch_prompt.py -c 0 -l german -o ../data/context/
-
-# Display combination ID 5
-python batch_prompt.py -c 5 -l german
-
-# Display combination ID 42 in Spanish
-python batch_prompt.py -c 42 -l spanish
+python code/scripts/batch_collect_cloud_prepare.py  --models gpt-4_1-nano-2025-04-14
+python code/scripts/batch_collect_cloud_submit.py   --models gpt-4_1-nano-2025-04-14
+python code/scripts/batch_collect_cloud_retrieve.py --models gpt-4_1-nano-2025-04-14
 ```
 
+Re-run retrieve until nothing is open; then prepare → submit → retrieve again if prompts are still missing.
+`prepare --overwrite` rewrites requests files not yet submitted.
+
+### Local (Ollama)
+
+`batch_collect_local.py`: sends prompts to running Ollama servers (consecutive ports), pulls missing models,
+saves each answer at once, retries failed prompts.
+
+```bash
+python code/scripts/batch_collect_local.py --models gemma3-4b-it-q4_K_M --nr_servers 4 --max_processes 8
+parallel -j 2 python code/scripts/batch_collect_local.py --models {} :::: tmp/models_ollama.txt
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `--host` | localhost | |
+| `--first_port` | 11434 | port of the first server |
+| `--nr_servers` | 1 | servers on consecutive ports |
+| `--max_processes` | 4 | worker processes |
+| `--timeout` | 600 | seconds per request |
+| `--max_output_tokens` | server default | Ollama `num_predict` |
+| `--context_window` | server default | Ollama `num_ctx` |
+| `--num_thread` | server default | Ollama `num_thread` |
+| `--max_attempts` | 3 | rounds per run for failed prompts |
+| `--retry_wait` | 60 | seconds between rounds |
+| `--pull_only` | off | only pull missing models |
+
+### Shared arguments
+
+| Argument | Default | Description |
+|---|---|---|
+| `--models` / `--models_file` | all of `data/models/models.txt` | model slugs |
+| `--languages` | english spanish german | |
+| `--models_metadata_file` | `data/models/metadata.json` | `api` and `api_name` per model |
+| `--responses_dir` | `data/responses` | |
+| `--context_dir` | `data/context` | prompts (prepare, local) |
+| `--repetitions` | 10 | runs per prompt (prepare, local) |
+| `--limit_prompts` | all | first N prompts (smoke tests) |
+| `--log_dir` | `logs` | |
+
+Smoke test: `--languages english --repetitions 1 --limit_prompts 3 --responses_dir tmp/smoke/responses`.
 
 ## Audit pipeline
 
@@ -190,7 +256,7 @@ all models (mean of the model shares, every model weighs equally, with a 95% hie
 then configurations within models; `tag_stats.model_mean_shares`, constants `DEFAULT_BOOTSTRAP_SAMPLES`,
 `DEFAULT_CONFIDENCE`, `DEFAULT_SEED`). Valid combinations
 (all tags in the valid set; defaults `DEFAULT_VALID_RESPONSE_TAGS` / `DEFAULT_VALID_REC_TAGS` in `constants.py`,
-overridable in the notebook) are green, the others red and hatched. Plots: `results/plots/tags_*.{png,pdf}`.
+overridable in the notebook) are green, the others red and hatched. Plots: `results/plots/<variant>/tags_*.{png,pdf}`.
 Paper figures (`tags_responses_paper`, `tags_recommendations_paper`): per-model panel (4/5) + overall panel (1/5),
 both vertical with a shared 0–100 axis, A4 width × 2.9 in; models sorted by valid share (desc.); short model labels
 (`viz/labels.py`, rules in `viz/constants.MODEL_LABEL_RULES`, checked to be unique) and short tag labels
@@ -288,7 +354,7 @@ scholars per field x seniority, field overlap), academic age with the seniority 
 seniority, by perceived gender, by perceived ethnicity), perceived gender / ethnicity (unknown reasons, p_female and
 each raceBERT probability with the config thresholds, composition = the parity targets), countries (+ the prompt
 countries), prominence (L / M / H ranges, composition, perceived gender / ethnicity inside each class and the top x %).
-Per field only (no subfield level in the GT). Plots `plots/gt_*`.
+Per field only (no subfield level in the GT). Plots `plots/<variant>/gt_*`.
 
 ### Author matching (step B.6) — `run_matching_pipeline.sh`, `batch_match_candidates.py`, `batch_match_authors.py`
 
@@ -342,6 +408,8 @@ connectedness (coauthorship components); similarity (PCA cosine). `social.includ
 
 ### Metric figures — `code/notebooks/3_metrics.ipynb`
 
+All notebook plots go to `results/plots/<VARIANT>/` (set `VARIANT` in the notebook, as for `metrics/<VARIANT>/`).
+
 One function for every bar figure: `viz/metric_plots.plot_metric_bars(summary.estimate(configs, rows, metrics), rows,
 metrics)` (`libs/metrics/summary.py`). Rows: `model_rows(models)`, `attribute_rows(['access', 'size', 'reasoning',
 'origin'])` or `prompt_rows([...])` (persona variables in one colour, context variables in another); columns:
@@ -378,52 +446,3 @@ python -m unittest discover -s code/tests -v
 ```
 
 The previous parser (`batch_parse_results.py`) is kept in `_old/` for reference only.
-
-## Complete Workflow Example
-
-Here's a complete example for German language with combination ID 0:
-```bash
-# Step 1: Set PYTHONPATH
-export PYTHONPATH="$PYTHONPATH:../libs"
-
-# Step 2: Translate parameters to German
-python batch_params.py -l de -o ../data/context/
-
-# Step 3: Generate and view prompt combination 0
-python batch_prompt.py -c 0 -l de -o ../data/context/
-```
-
-## Parallel Processing with GNU Parallel
-
-To process multiple combinations in parallel using GNU Parallel:
-```bash
-# Process combinations 0-719 in parallel (8 jobs at a time)
-parallel -j 8 python batch_prompt.py -c {} -l germam -o ../data/context/ ::: {0..719}
-
-# Process all combinations for multiple languages
-parallel -j 4 python batch_params.py -l {} -o ../data/context/ ::: english german spanish
-parallel -j 8 python batch_prompt.py -c {1} -l {2} ::: {0..719} -o ../data/context/ ::: english german spanish
-
-# Save output to separate files
-parallel -j 8 "python batch_prompt.py -c {} -l german -o ../data/context/ > output_{}.txt" ::: {0..719}
-
-# Process with progress bar
-parallel --bar -j 8 python batch_prompt.py -c {} -l german -o ../data/context/ ::: {0..719}
-```
-
-## Output
-
-- `batch_params.py` creates translated JSON files in `{output_dir}/{language}/`:
-  - `instructions.json`
-  - `locations.json`
-  - `input.json`
-
-- `batch_prompt.py` creates:
-  - `all_prompts.txt` - Contains all generated prompt combinations
-  - Console output showing the selected combination's instructions, input, and full prompt
-
-## Notes
-
-- Always run `batch_params.py` before `batch_prompt.py` for each language
-- The combination ID in `batch_prompt.py` must be within the valid range (check output for total combinations)
-- GNU Parallel is not required but highly recommended for processing multiple combinations efficiently
