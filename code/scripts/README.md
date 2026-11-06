@@ -345,6 +345,11 @@ RQ1 (`run_metrics_pipeline.sh -s rq1`, one process per metric): partial ω² (ty
 model and of every configuration variable on each metric, cluster-bootstrap CIs over models →
 `metrics/<variant>/rq1/<metric>.parquet`. Options for the RQ scripts via `-q`, e.g. `-q "--n_boot 200 --metrics factuality"`.
 
+Flows (`run_metrics_pipeline.sh -s flows`, appendix figures in `code/notebooks/5_flows.ipynb`): per model, the people
+table (valid response × factual person, with the prompt variables and the person's GT attributes) →
+`metrics/<variant>/flows/<model>.parquet`; figures: one prompt variable vs the person attributes (or the reverse), any prompt variable or model characteristic → person attribute is a
+cross-tab in the notebook, plus the location drift (prompted location → the people's country).
+
 RQ2 (`run_metrics_pipeline.sh -s rq2`, one process per metric): per value of every configuration variable, the
 estimated marginal mean and its deviation from the grand mean (weighted effect coding, same model as RQ1),
 cluster-bootstrap CIs over models, plus the contrast vs a reference value (`cons.RQ2_REFERENCE_LEVELS`) and R² /

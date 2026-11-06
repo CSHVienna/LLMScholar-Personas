@@ -49,11 +49,19 @@ bash code/scripts/run_metrics_pipeline.sh -r tmp/smoke -M tmp/smoke/models.txt -
 ## Address RQs
 
 ``` bash
+bash code/scripts/run_metrics_pipeline.sh -s flows -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs
+```
+
+``` bash
 bash code/scripts/run_metrics_pipeline.sh -s rq1 -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs
 ```
 
 ``` bash
 bash code/scripts/run_metrics_pipeline.sh -s rq2 -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs
+```
+
+``` bash
+bash code/scripts/run_metrics_pipeline.sh -s flows -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs
 ```
 
 
@@ -78,7 +86,7 @@ python code/scripts/configure_analysis.py --config config/analysis.yaml --phase 
 ```
 
 ## 4. Perceived demographics and population from OA (A.2-A.4)
-- [ ] done | date:
+- [...] done | date: 2026-11-06
 ``` bash
 systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 bash code/scripts/run_gt_pipeline.sh -s names,demographics,population -C _old/ethnicity,_old/demographics
 ```
@@ -117,15 +125,15 @@ bash code/scripts/check_eval_runs.sh
 #### Evaluate classificaiton
 
 ##### Draw the blind samples: responses
-- [ ] done | date:
+- [x] done | date: 2026-11-06
 ``` python
-python code/scripts/batch_annotation_sample.py --task responses --refresh_codebook
+python code/scripts/batch_annotation_sample.py --task responses --refresh_codebook --per_stratum 10
 ```
 
 ##### Draw the blind samples: recommendations
-- [ ] done | date:
+- [x] done | date: 2026-11-06
 ``` python
-python code/scripts/batch_annotation_sample.py --task recommendations --refresh_codebook
+python code/scripts/batch_annotation_sample.py --task recommendations --refresh_codebook --per_stratum 10
 ```
 
 ##### Start the tool server and leave it running:
@@ -192,10 +200,10 @@ python code/scripts/batch_annotation_evaluate.py --task authors
 ```
 
 
-## 3. Metrics (technical, social; with the provisional late settings)
+## 3. Metrics (technical, social, people table of the flows; with the provisional late settings)
 - [ ] done | date:
 ``` bash
-bash code/scripts/run_metrics_pipeline.sh -s technical,social
+bash code/scripts/run_metrics_pipeline.sh -s technical,social,flows
 ```
 
 ## 4. Analysis config, late settings (valid tags, gender / ethnicity thresholds, social, Jaro-Winkler), then re-run what it lists

@@ -156,3 +156,21 @@ RQ2_HEATMAP_MIN_SCALE = 0.05           # full colour needs |deviation| >= max(th
 RQ2_FOREST_ROW_IN = 0.15                # height per row (header rows included)
 RQ2_FOREST_SHADE_ALPHA = 0.08           # row shading in the family colour (persona / context)
 RQ2_FOREST_MARKER_SIZE = 3.2
+
+# Flow figures (viz/flow_plots.py; data: metrics/flows.py). Categorical order validated for colour-vision deficiency
+# (adjacent pairs, dataviz validator): categories stacked next to each other stay distinguishable.
+FLOW_CATEGORICAL = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
+FLOW_OTHER_COLOR = '#b8b4ae'            # pooled 'other' classes
+FLOW_UNKNOWN_COLOR = '#dcdad5'          # 'unknown' (only when included)
+FLOW_DIVERGING = ('#1c5cab', '#c8c6c0', '#c03535')   # ordered classes with a middle (gender): blue pole, grey, red pole
+FLOW_SEQUENTIAL = ('#b7d3f6', '#104281')             # ordered classes without a middle (L < M < H): light -> dark
+FLOW_TOP_COUNTRIES = 8                  # countries shown; the rest pooled as 'other'
+FLOW_ROW_IN = 0.2                       # height per node (inches)
+FLOW_NODE_WIDTH = 0.035                 # node bar width (share of the flow width)
+FLOW_BAND_ALPHA = 0.5
+FLOW_BAND_LABEL_MIN = 0.12              # write the share on a band if it is at least this share of its source
+FLOW_GRID_NCOLS = 3                     # panels per row of plot_flow_grid (6 panels: 3 -> 2 x 3, 6 -> 1 x 6)
+# The appendix figures (notebook 5_flows.ipynb): one figure per prompt variable (source fixed), its panels the person
+# attributes metrics/flows.TARGETS; and the reverse (target fixed). Sources: prompt variables or model characteristics.
+FLOW_SOURCES = ['field', 'subfield', 'k', 'seniority', 'role', 'language', 'location', 'origin']
+FLOW_TARGET_FIGURES = ['gender', 'ethnicity']   # target fixed: one figure each, panels = FLOW_SOURCES
