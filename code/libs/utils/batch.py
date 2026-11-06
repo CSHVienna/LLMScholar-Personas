@@ -53,17 +53,24 @@ def run_per_model(script: str, job: Job, args: argparse.Namespace) -> None:
     The process exits with code 1 if any model failed (so GNU parallel's ``--joblog`` records it).
     """
     logs.setup_logging(script, args)
-    start = ios.datetime.now()
     models = args.models or read_models(args.models_file)
     ios.printf(f"Models: {len(models)} | languages: {args.languages}")
+    run_jobs(models, job, args)
 
+
+def run_jobs(items: List, job: Callable, args: argparse.Namespace) -> None:
+    """Run ``job(item, args)`` for every item (logging must be set up); a failing item never stops the others.
+
+    Logs one report line per item; exits with code 1 if any item failed (for GNU parallel's ``--joblog``).
+    """
+    start = ios.datetime.now()
     failed = []
-    for model in models:
+    for item in items:
         try:
-            ios.printf(job(model, args))
+            ios.printf(job(item, args))
         except Exception:
-            failed.append(model)
-            logs.get_logger().error(f"FAILED [{model}]\n{traceback.format_exc()}")
+            failed.append(item)
+            logs.get_logger().error(f"FAILED [{item}]\n{traceback.format_exc()}")
 
     ios.printf(f"Done in {ios.datetime.now() - start} | failed: {failed or 'none'}")
     if failed:

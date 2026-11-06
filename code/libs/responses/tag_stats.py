@@ -2,7 +2,7 @@
 Statistics of tag combinations (inputs of the tag plots).
 
 Tags are multi-label, so each response / recommendation is summarised by its *combination*
-(the joined tags, e.g. 'wrapped|extra_incomplete'). A combination is **valid** if all its tags are in
+(the joined tags, e.g. 'embedded|wrapped'). A combination is **valid** if all its tags are in
 the valid set (alone or combined). For readability, each family (valid / not valid) keeps its
 ``top_n`` most frequent combinations and folds the rest into "other valid" / "other invalid".
 """

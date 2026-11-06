@@ -10,9 +10,15 @@ Writes  <annotations_dir>/annotation_<task>_eval_<table>.csv  for the tables
         agreement       per tag: Krippendorff's alpha between annotators (if >= 2 annotators)
         disagreements   items whose inferred tags differ from the adjudicated ones (to inspect)
 
+Verification tasks (matching, authors; annotation/verification.py) write instead
+        rates           per label group, stratum and label: n, k, share, Wilson CI; 'overall (weighted)' rows
+                        re-weight the strata to their population sizes
+        agreement       per label group: Krippendorff's alpha (if >= 2 annotators)
+
 Usage (from any folder):
     python code/scripts/batch_annotation_evaluate.py --task responses
     python code/scripts/batch_annotation_evaluate.py --task recommendations --valid_tags correct title_removed
+    python code/scripts/batch_annotation_evaluate.py --task matching
 """
 
 import _bootstrap  # noqa: F401  (adds code/libs to sys.path)
@@ -23,6 +29,7 @@ from utils import constants as cons
 from utils import ios
 from utils import logs
 from annotation import evaluation
+from annotation import verification
 
 DEFAULT_VALID = {cons.ANNOTATION_TASK_RESPONSES: cons.DEFAULT_VALID_RESPONSE_TAGS,
                  cons.ANNOTATION_TASK_RECOMMENDATIONS: cons.DEFAULT_VALID_REC_TAGS}
@@ -40,10 +47,30 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def evaluate_verification(args: argparse.Namespace, folder: Path, prefix: str) -> None:
+    key = ios.load_parquet(folder / f"{prefix}_key.parquet")
+    annotations = evaluation.load_annotations(folder, args.task)
+    ios.printf(f"{len(annotations)} annotations by {annotations['annotator'].nunique()} annotator(s) "
+               f"on {annotations['item_id'].nunique()} of {len(key)} items")
+    answers = verification.group_answers(annotations, args.task)
+    gold = verification.adjudicate_groups(answers)
+    tables = {'rates': verification.label_rates(key, gold, args.task),
+              'agreement': verification.group_agreement(answers)}
+    for name, table in tables.items():
+        path = folder / f"{prefix}_eval_{name}.csv"
+        ios.to_csv(table, path)
+        ios.printf(f"{name}: {path}")
+    overall = tables['rates'][tables['rates']['stratum'] == 'overall (weighted)']
+    ios.printf(f"\n{overall.round(3).to_string(index=False)}")
+
+
 def main() -> None:
     args = build_parser().parse_args()
     logs.setup_logging('annotation_evaluate', args, params=args.task)
     folder, prefix = Path(args.annotations_dir), f"{cons.PREFIX_ANNOTATION}_{args.task}"
+    if args.task in verification.VERIFICATION_TASKS:
+        evaluate_verification(args, folder, prefix)
+        return
     valid_tags = args.valid_tags or DEFAULT_VALID[args.task]
 
     # 1. Inputs: key (inferred) and annotations (manual)

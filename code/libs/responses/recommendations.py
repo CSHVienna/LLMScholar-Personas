@@ -1,5 +1,5 @@
 """
-Recommendation tagging (multi-label): correct, title_removed, fixed, split,
+Recommendation tagging (multi-label): correct, title_removed, repetition_removed, split,
 initials_name, initials_lastname, initials, placeholder, invalid.
 
 Each recommended person has a first name (``name``) and a last name (``lastname``).
@@ -7,15 +7,21 @@ Every tag that applies is kept (tag order as in ``cons.REC_TAGS``); "valid" is d
 later as a combination of tags.
 
 1. a part is a template instead of a name ("Candidate 1", "Last Name")    -> placeholder (alone)
-2. cosmetic cleaning: missing values (N/A, none, ...) -> empty; parentheses and edge
-   punctuation removed; honorifics/degrees removed (Dr., Prof., PhD)      -> title_removed
+2. cosmetic cleaning: text repaired with utils.text.clean_text (the same clean-up as for the OpenAlex names:
+   escapes written as text, mojibake, invisible characters); missing values (N/A, none, ...) -> empty; parentheses and edge punctuation removed; honorifics/degrees removed
+   (Dr., Prof., PhD)                                                      -> title_removed
 3. only one part (or both identical):
      nothing left, or a single word only                                -> invalid
      >1 word: split into first + last name (lower-case particles such as
      'van', 'de la' go to the last name; "Smith, John" is last, first)   -> split
-4. both parts, one repeated inside the other, e.g. name="John Smith"/lastname="Smith",
-   name="Yamamoto Hiroshi"/lastname="Yamamoto", name="John"/lastname="John Smith":
-   the repetition is removed                                              -> fixed
+4. both parts, one repeated inside the other as WHOLE words (a hyphenated or apostrophe word such as
+   'Fei-Fei', "O'Connell" is one word), e.g. name="John Smith"/lastname="Smith",
+   name="Yamamoto Hiroshi"/lastname="Yamamoto", name="John"/lastname="John Smith",
+   name="Kevin O'Connell"/lastname="O'Connell": the repetition is removed (never leaving a part empty;
+   'Wei-Chen'/'Chen' and 'Fei'/'Fei-Fei' are kept as written)          -> repetition_removed
+   4b. a double surname cut in half: the last name is the end of the first name's last (hyphenated) word,
+   which follows other words, e.g. name="Marie Skłodowska-Curie"/lastname="Curie" -> Marie / Skłodowska-Curie
+                                                                          -> repetition_removed
 5. initials only (after 2-4): first name -> initials_name, last name -> initials_lastname,
    both -> initials
 6. no title removal, split or fix was needed, and no part is initials only -> correct
@@ -33,6 +39,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 from utils import constants as cons
+from utils.text import clean_text
 from responses import tags as tag_utils
 from responses.persons import clean_name_value, is_template, missing_fields, raw_name_parts
 
@@ -41,7 +48,7 @@ _PARTICLES = frozenset(cons.NAME_PARTICLES)
 _PARENTHESES = re.compile(r'\([^)]*\)|\[[^\]]*\]')
 _EDGE_PUNCTUATION = '.;:"\'“”‘’`*'   # commas are kept: they mark "Last, First"
 # Tags that prevent `correct`: any repair, or initials instead of a full name part
-_NOT_CORRECT_TAGS = frozenset([cons.REC_TITLE_REMOVED, cons.REC_FIXED, cons.REC_SPLIT,
+_NOT_CORRECT_TAGS = frozenset([cons.REC_TITLE_REMOVED, cons.REC_REPETITION_REMOVED, cons.REC_SPLIT,
                                cons.REC_INITIALS_NAME, cons.REC_INITIALS_LASTNAME, cons.REC_INITIALS])
 
 # Recommendation metadata kept from the LLM output (output column -> accepted keys, lower-case)
@@ -62,6 +69,7 @@ FIX_SPLIT_LASTNAME = 'split_lastname'
 FIX_SPLIT_COMMA = 'split_comma'
 FIX_MISSING = 'missing'
 FIX_SINGLE_WORD = 'single_word'
+FIX_DOUBLE_LASTNAME = 'double_lastname_in_name'
 
 
 @dataclass(frozen=True)
@@ -105,7 +113,7 @@ class NameTagger:
         else:
             first, last, fix = remove_repetition(first, last)
             if fix:
-                tags.append(cons.REC_FIXED)
+                tags.append(cons.REC_REPETITION_REMOVED)
 
         # Rules 5-6: initials; correct if nothing had to be repaired and both parts are full names
         tags += initials_tags(first, last)
@@ -147,8 +155,8 @@ def tag_recommendations(persons: List[dict], tagger: Optional[NameTagger] = None
 # Name helpers (module-level so they can be tested and reused, e.g. for GT names)
 # -----------------------------------------------------------------------------
 def clean_name(value) -> Tuple[Optional[str], bool]:
-    """Remove placeholders, parentheses, edge punctuation and honorifics. Returns (name, title_removed)."""
-    value = clean_name_value(value)
+    """Repair the text, remove placeholders, parentheses, edge punctuation and honorifics. Returns (name, title_removed)."""
+    value = clean_name_value(clean_text(value))
     if value is None:
         return None, False
     tokens = [t.strip(_EDGE_PUNCTUATION) for t in _PARENTHESES.sub(' ', value).split()]
@@ -163,26 +171,78 @@ def clean_name(value) -> Tuple[Optional[str], bool]:
 
 
 def remove_repetition(first: str, last: str) -> Tuple[str, str, Optional[str]]:
-    """If one part repeats the other (at its start or end), remove it. Returns (first, last, fix)."""
-    first_tokens, last_tokens = first.split(), last.split()
-    first_norm, last_norm = normalize_tokens(first), normalize_tokens(last)
-    n_first, n_last = len(first_norm), len(last_norm)
+    """If one part repeats the other (at its start or end), remove it; complete a double surname cut in half.
+
+    Name tokens are compared in order (case / accents ignored), but a part is only cut BETWEEN two words, never
+    inside one: a word is a run of letters, digits, hyphens and apostrophes ('Fei-Fei', "O'Connell", 'Wei-Chen').
+    The cut is made in the original text (spelling kept) and never leaves a part empty. Returns (first, last, fix).
+    """
+    first_words, last_words = _words(first), _words(last)
+    first_tokens = [token for _, _, tokens in first_words for token in tokens]
+    last_tokens = [token for _, _, tokens in last_words for token in tokens]
+    n_first, n_last = len(first_tokens), len(last_tokens)
+    if not n_first or not n_last:
+        return first, last, None
 
     # Last name repeated inside the first name ("John Smith" / "Smith", "Yamamoto Hiroshi" / "Yamamoto")
     if n_first > n_last:
-        if first_norm[-n_last:] == last_norm:
-            return ' '.join(first_tokens[:-n_last]), last, FIX_LASTNAME_IN_NAME
-        if first_norm[:n_last] == last_norm:
-            return ' '.join(first_tokens[n_last:]), last, FIX_LASTNAME_IN_NAME
+        if first_tokens[-n_last:] == last_tokens and (cut := _cut(first_words, n_first - n_last)) is not None:
+            return _strip(first[:first_words[cut][0]]), last, FIX_LASTNAME_IN_NAME
+        if first_tokens[:n_last] == last_tokens and (cut := _cut(first_words, n_last)) is not None:
+            return _strip(first[first_words[cut][0]:]), last, FIX_LASTNAME_IN_NAME
 
     # First name repeated inside the last name ("John" / "John Smith")
     if n_last > n_first:
-        if last_norm[:n_first] == first_norm:
-            return first, ' '.join(last_tokens[n_first:]), FIX_NAME_IN_LASTNAME
-        if last_norm[-n_first:] == first_norm:
-            return first, ' '.join(last_tokens[:-n_first]), FIX_NAME_IN_LASTNAME
+        if last_tokens[:n_first] == first_tokens and (cut := _cut(last_words, n_first)) is not None:
+            return first, _strip(last[last_words[cut][0]:]), FIX_NAME_IN_LASTNAME
+        if last_tokens[-n_first:] == first_tokens and (cut := _cut(last_words, n_last - n_first)) is not None:
+            return first, _strip(last[:last_words[cut][0]]), FIX_NAME_IN_LASTNAME
+
+    # Double surname cut in half ("Marie Skłodowska-Curie" / "Curie" -> "Marie" / "Skłodowska-Curie")
+    if len(first_words) >= 2:
+        start, end, parts = first_words[-1]
+        word = first[start:end]
+        if '-' in word and n_last < len(parts) and parts[-n_last:] == last_tokens:
+            return _strip(first[:start]), word, FIX_DOUBLE_LASTNAME
 
     return first, last, None
+
+
+_WORD_JOINERS = frozenset("-'’_")   # '_' is a word character for normalize_tokens too
+_CUT_EDGES = re.compile(r'^[\W_]+|[\W_]+$')   # punctuation / spaces left at a cut ('Lukas.' -> 'Lukas')
+
+
+def _is_word_char(ch: str) -> bool:
+    """Letters, digits, combining marks (a decomposed 'ö' is 'o' + U+0308) and the joiners - ' ’ _."""
+    return ch.isalnum() or ch in _WORD_JOINERS or unicodedata.category(ch).startswith('M')
+
+
+def _words(text: str) -> List[Tuple[int, int, List[str]]]:
+    """(start, end, normalised tokens) of every word with letters or digits."""
+    words, start = [], None
+    for index, ch in enumerate(text + ' '):
+        if _is_word_char(ch) and index < len(text):
+            start = index if start is None else start
+        elif start is not None:
+            words.append((start, index, normalize_tokens(text[start:index])))
+            start = None
+    return [word for word in words if word[2]]
+
+
+def _cut(words: List[Tuple[int, int, List[str]]], n_tokens: int) -> Optional[int]:
+    """Index of the word that starts after the first n_tokens tokens, if that falls between two words (else None)."""
+    count = 0
+    for index, (_, _, tokens) in enumerate(words):
+        if count == n_tokens:
+            return index if index > 0 else None
+        count += len(tokens)
+        if count > n_tokens:
+            return None                                # inside a word ('Wei-Chen' / 'Chen')
+    return None
+
+
+def _strip(text: str) -> str:
+    return _CUT_EDGES.sub('', text)
 
 
 def split_single(text: Optional[str], fix: str) -> Tuple[Optional[str], Optional[str], str]:
@@ -221,10 +281,17 @@ def split_full_name(tokens: List[str]) -> Tuple[str, str]:
     return ' '.join(tokens[:start]), ' '.join(tokens[start:])
 
 
+# Letters without a Unicode decomposition, transliterated for comparisons ('ß' -> 'ss' already by casefold)
+_TRANSLITERATION = str.maketrans({'ø': 'o', 'ł': 'l', 'æ': 'ae', 'œ': 'oe', 'đ': 'd', 'ð': 'd', 'þ': 'th',
+                                  'ı': 'i', 'ħ': 'h', 'ŧ': 't', 'ŀ': 'l'})
+
+
 def normalize_tokens(text: str) -> List[str]:
-    """Lower-case, accent-free tokens without punctuation (hyphens split tokens)."""
-    decomposed = unicodedata.normalize('NFKD', text)
-    stripped = ''.join(ch for ch in decomposed if not unicodedata.combining(ch)).casefold()
+    """Lower-case, accent-free tokens without punctuation (hyphens split tokens), after clean_text (both sides:
+    recommendation keys and the OpenAlex name index, A.2). Letters without a decomposition are transliterated
+    ('Bjørn' -> 'bjorn', 'Łukasz' -> 'lukasz', 'Straße' -> 'strasse')."""
+    decomposed = unicodedata.normalize('NFKD', clean_text(text) or '')
+    stripped = ''.join(ch for ch in decomposed if not unicodedata.combining(ch)).casefold().translate(_TRANSLITERATION)
     return re.sub(r"[^\w\s]", ' ', stripped.replace('-', ' ')).split()
 
 

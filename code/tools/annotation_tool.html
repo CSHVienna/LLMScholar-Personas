@@ -12,7 +12,7 @@
   * Offline: open this file in a browser and load annotation_<task>_items.json from disk.
   1. Choose the task (served) or load annotation_<task>_items.json (offline).
   2. Enter your annotator id. Items are shown one at a time, in an order shuffled for you.
-  3. Tick every tag that applies (keys 1-9, 0, -, =), add fields / notes, move with Enter / arrows.
+  3. Tick every tag that applies (keys 1-9, 0, -, =; verification tasks: one label per group), add fields / notes, move with Enter / arrows.
   4. Your work is autosaved in this browser (and on the server when served). "Export CSV" downloads
      annotation_<task>_<annotator>.csv (offline: put it into results/annotations/). Then run
      batch_annotation_evaluate.py.
@@ -37,23 +37,31 @@
   header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 16px;
            border-bottom: 1px solid var(--border); background: var(--panel); position: sticky; top: 0; z-index: 2; }
   header h1 { font-size: 16px; margin: 0 8px 0 0; }
-  main { display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr); gap: 16px; padding: 16px;
-         max-width: 1400px; margin: 0 auto; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr); gap: 16px; padding: 16px;
+         max-width: 1600px; margin: 0 auto; }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  aside.card { position: sticky; top: 64px; align-self: start; max-height: calc(100vh - 80px); overflow: auto; }
+  @media (max-width: 900px) { aside.card { position: static; max-height: none; } }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
   .section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 10px 0 4px; }
   .section pre, .section p { margin: 0; white-space: pre-wrap; word-break: break-word; }
   .section pre { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-                 max-height: 55vh; overflow: auto; padding: 8px; background: var(--surface);
+                 max-height: 30vh; overflow: auto; resize: vertical; padding: 8px; background: var(--surface);
                  border: 1px solid var(--border); border-radius: 6px; }
-  .label { display: grid; grid-template-columns: 26px 1fr; gap: 6px; align-items: start; padding: 6px 8px;
+  .label { display: grid; grid-template-columns: 22px 1fr; gap: 4px; align-items: start; padding: 2px 6px;
            border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  #labels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 6px; }
+  @media (max-width: 520px) { #labels { grid-template-columns: 1fr; } }
   .label:hover { border-color: var(--border); }
   .label.checked { background: var(--checked); border-color: var(--accent); }
+  .group-title { grid-column: 1 / -1; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+                 margin: 6px 0 0; opacity: .75; }
+  pre a { color: var(--accent); word-break: break-all; }
   .label kbd { font: 12px ui-monospace, monospace; border: 1px solid var(--border); border-radius: 4px;
                padding: 0 4px; color: var(--muted); justify-self: start; }
-  .label b { display: block; }
-  .label small { color: var(--muted); }
+  .label b { display: block; line-height: 1.2; }
+  .label small { color: var(--muted); display: block; font-size: 12px; line-height: 1.2; }
+  .label small em { font-style: normal; font-family: ui-monospace, monospace; }
   .label input { position: absolute; opacity: 0; pointer-events: none; }
   input[type=number] { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
                        background: var(--surface); color: var(--text); font: inherit; }
@@ -68,6 +76,8 @@
   button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .progress { flex: 1; min-width: 160px; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
   .progress > div { height: 100%; background: var(--accent); width: 0; }
+  .pos { font-weight: 600; padding: 2px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+  .pos.done { border-color: var(--accent); }
   .muted { color: var(--muted); }
   .warn { color: var(--warn); background: var(--warn-bg); border-radius: 6px; padding: 6px 8px; margin-top: 8px; }
   .nav { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
@@ -89,6 +99,7 @@
   <h1>Annotation</h1>
   <span id="status" class="muted" aria-live="polite">Load an items file to start.</span>
   <div class="progress" aria-hidden="true"><div id="bar"></div></div>
+  <span id="position" class="pos"></span>
   <span id="counter" class="muted"></span>
   <button id="export" class="hidden" title="Download your annotations (Ctrl+S)">Export CSV</button>
 </header>
@@ -115,7 +126,6 @@
     <div id="sections"></div>
   </article>
   <aside class="card" aria-label="Your annotation">
-    <p id="instructions" class="muted"></p>
     <fieldset style="border:0;padding:0;margin:0">
       <legend class="muted">Tags (tick all that apply)</legend>
       <div id="labels"></div>
@@ -123,14 +133,15 @@
     <div id="rule-warning" class="warn hidden" role="status"></div>
     <div id="fields"></div>
     <label class="label" id="unsure-label"><input type="checkbox" id="unsure"><kbd>u</kbd>
-      <span><b>Unsure</b><small>I cannot tell with confidence</small></span></label>
+      <span><b>Unsure</b><small>cannot tell</small></span></label>
     <div class="field"><label for="notes" class="muted">Notes (optional)</label><textarea id="notes"></textarea></div>
     <div class="nav">
       <button id="prev" title="Previous (←)">← Previous</button>
       <button id="next" class="primary" title="Save and next (Enter or →)">Save &amp; next →</button>
       <button id="jump" title="First item without an annotation">Next unannotated</button>
     </div>
-    <details style="margin-top:12px"><summary>Codebook and rules</summary><div id="codebook"></div></details>
+    <details style="margin-top:12px"><summary>Instructions, codebook and rules</summary>
+      <p id="instructions" class="muted"></p><div id="codebook"></div></details>
     <p class="muted" style="margin-top:12px"><small>Keys: 1–9, 0, -, = toggle tags · u unsure · Enter/→ next · ← previous ·
       Ctrl+S export. In a field, shortcuts are off and Enter goes to the next item.</small></p>
   </aside>
@@ -143,6 +154,29 @@
 // ---------------------------------------------------------------------------
 const state = { task: null, codebook: null, items: [], order: [], position: 0, annotator: '', answers: {},
                 separator: '|', shownAt: 0, served: false };
+// Short descriptions shown next to each tag (full definition: hover, and in the codebook below)
+const SHORT = {
+  responses: {
+    correct: 'clean JSON array, nothing else wrong',
+    python_literal: "Python syntax, not JSON (' quotes, None, trailing ,)",
+    embedded: 'text before/after the JSON: <em>Here you go: [ … ]</em>',
+    truncated: 'cut off mid-record; recovered up to last full record',
+    wrapped: 'root is an object holding the list: <em>{"candidates": [ … ]}</em>',
+    toy: 'names said to be fictional / examples',
+    empty: 'nothing at all (blank / whitespace only)',
+    empty_list: 'object with only empty lists: <em>{"candidates": []}</em>',
+    refused: 'declines, explains why, no names',
+    invalid: 'broken / unparsable, <em>[]</em>, or no person entries' },
+  recommendations: {
+    correct: 'first + last name as requested',
+    title_removed: 'had Dr. / Prof. / PhD',
+    repetition_removed: 'one part repeated in the other',
+    split: 'full name in one field',
+    initials_name: 'first name = initials',
+    initials_lastname: 'last name = initials',
+    initials: 'both = initials',
+    placeholder: 'template, e.g. "Candidate 1"',
+    invalid: 'no usable name' } };
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '='];
 const $ = (id) => document.getElementById(id);
 
@@ -183,21 +217,87 @@ $('begin').addEventListener('click', async () => {
   state.order = seededOrder(state.items.length, `${state.task}:${annotator}`);
   const saved = restore();
   if (saved) { state.answers = saved.answers || {}; state.position = saved.position || 0; }
+  applyAliases();
+  // Served: merge the annotations already saved on the server (e.g. another browser, or cleared storage),
+  // so that the next save never overwrites them with fewer rows. Per item, the latest saved_at wins.
+  if (state.served) {
+    try {
+      const response = await fetch(`annotations?task=${encodeURIComponent(state.task)}&annotator=${encodeURIComponent(annotator)}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const added = mergeServerCsv(await response.text());
+      applyAliases();
+      if (added) save();
+    } catch (e) {
+      error.textContent = `Could not read your saved annotations from the server (${e.message}). Not starting, so that ` +
+                          'they are not overwritten. Reload and try again.';
+      error.classList.remove('hidden'); return;
+    }
+  }
   buildCodebook();
   $('start').classList.add('hidden'); $('work').classList.remove('hidden'); $('export').classList.remove('hidden');
   render();
 });
 
+function applyAliases() {              // renamed tags in saved answers (e.g. response 'fixed' -> 'truncated')
+  const aliases = state.codebook.aliases || {};
+  Object.values(state.answers).forEach((a) => { a.tags = [...new Set((a.tags || []).map((t) => aliases[t] || t))]; });
+}
+
+function parseCsv(text) {               // RFC 4180 (quoted fields, "" escapes, newlines inside quotes)
+  const rows = []; let row = [], field = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) { if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else quoted = false; } else field += c; }
+    else if (c === '"') quoted = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(field); rows.push(row); row = []; field = ''; }
+    else field += c;
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.length > 1 || r[0]);
+}
+
+function mergeServerCsv(text) {         // returns the number of items taken from the server
+  const rows = parseCsv(text); if (rows.length < 2) return 0;
+  const header = rows[0]; const col = (name) => header.indexOf(name); let added = 0;
+  const fieldIds = state.codebook.fields.map((f) => f.id);
+  rows.slice(1).forEach((r) => {
+    const id = r[col('item_id')]; if (!id) return;
+    const local = state.answers[id];
+    if (local && (local.saved_at || '') >= (r[col('saved_at')] || '')) return;
+    state.answers[id] = { tags: r[col('tags')] ? r[col('tags')].split(state.separator) : [],
+                          fields: Object.fromEntries(fieldIds.filter((f) => col(f) >= 0).map((f) => [f, r[col(f)]])),
+                          unsure: r[col('unsure')] === '1', notes: r[col('notes')] || '',
+                          seconds: Number(r[col('seconds')]) || 0, saved_at: r[col('saved_at')] || '' };
+    added++;
+  });
+  return added;
+}
+
 function buildCodebook() {
   const cb = state.codebook;
   $('instructions').textContent = cb.instructions;
   $('labels').innerHTML = '';
+  let previousGroup = null;
   cb.labels.forEach((label, i) => {
+    if (label.group && label.group !== previousGroup) {   // verification tasks: one label per group
+      const heading = document.createElement('div'); heading.className = 'group-title';
+      heading.textContent = `${label.group} (one)`; $('labels').appendChild(heading); previousGroup = label.group;
+    }
     const row = document.createElement('label');
-    row.className = 'label'; row.dataset.tag = label.id;
+    row.className = 'label'; row.dataset.tag = label.id; row.dataset.group = label.group || ''; row.title = label.definition;
+    const short = (SHORT[cb.task] || {})[label.id] || label.short || label.definition;
     row.innerHTML = `<input type="checkbox" value="${label.id}"><kbd>${KEYS[i] || ''}</kbd>
-                     <span><b>${label.id}</b><small>${label.definition}</small></span>`;
-    row.querySelector('input').addEventListener('change', () => { row.classList.toggle('checked', row.querySelector('input').checked); checkRules(); });
+                     <span><b>${label.id}</b><small>${short}</small></span>`;
+    row.querySelector('input').addEventListener('change', () => {
+      const input = row.querySelector('input');
+      if (input.checked && label.group) {                  // untick the other labels of the group
+        document.querySelectorAll(`#labels .label[data-group="${label.group}"]`).forEach((other) => {
+          if (other !== row) { other.querySelector('input').checked = false; other.classList.remove('checked'); }
+        });
+      }
+      row.classList.toggle('checked', input.checked); checkRules();
+    });
     $('labels').appendChild(row);
   });
   $('fields').innerHTML = cb.fields.map((f) => {
@@ -216,14 +316,22 @@ function buildCodebook() {
 const CHECK_DEFAULTS = {
   name_keys: ['name', 'firstname', 'first_name', 'given_name', 'full_name', 'fullname', 'nombre', 'vorname'],
   lastname_keys: ['lastname', 'last_name', 'surname', 'family_name', 'apellido', 'apellidos', 'nachname'],
-  requested_fields: ['current_affiliations', 'areas_of_research_or_work', 'reason', 'source'],
-  na_allowed: ['source'],
-  missing_values: ['', 'n/a', 'na', 'none', 'null', 'nil', 'unknown', '-', '--', '...', '?', 'tbd'] };
+  requested_fields: ['current_affiliations', 'areas_of_research_or_work', 'reason', 'source'] };
 const checkConfig = () => Object.assign({}, CHECK_DEFAULTS, state.codebook.checks || {});
 
 function visibleControls(text) {   // tabs and control characters other than line breaks
   return text.replace(/\t/g, '⇥').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u00A0\u200B-\u200D\uFEFF]/g,
     (c) => `⟨U+${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')}⟩`);
+}
+
+function appendLinked(parent, text) {   // text with http(s) URLs as links (built as nodes: no HTML injection)
+  const pattern = /https?:\/\/[^\s)]+/g; let last = 0;
+  for (const m of text.matchAll(pattern)) {
+    parent.append(document.createTextNode(text.slice(last, m.index)));
+    const a = document.createElement('a'); a.href = m[0]; a.textContent = m[0]; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    parent.append(a); last = m.index + m[0].length;
+  }
+  parent.append(document.createTextNode(text.slice(last)));
 }
 
 function requestedK(prompt) {
@@ -274,17 +382,9 @@ function fieldValue(record, keys) {
   return entry === undefined ? undefined : entry[1];
 }
 
-function missingFields(record, cfg) {
-  const lower = Object.fromEntries(Object.entries(record).map(([k, v]) => [k.trim().toLowerCase(), v]));
-  return cfg.requested_fields.filter((field) => {
-    const v = lower[field];
-    if (v === undefined || v === null) return true;
-    if (typeof v === 'string') { const t = v.trim().toLowerCase();
-      return !t || (!cfg.na_allowed.includes(field) && cfg.missing_values.includes(t)); }
-    if (Array.isArray(v)) return v.length === 0;
-    if (typeof v === 'object') return Object.keys(v).length === 0;
-    return false;
-  });
+function missingFields(record, cfg) {   // requested keys that are absent (a present key is fine, even if empty)
+  const keys = new Set(Object.keys(record).map((k) => k.trim().toLowerCase()));
+  return cfg.requested_fields.filter((field) => !keys.has(field));
 }
 
 function el(tag, text, className) {      // element with plain text (never HTML)
@@ -302,7 +402,8 @@ function responseChecks(item) {
   box.append(facts);
 
   const k = requestedK(prompt); fact('Requested k', k ?? 'unknown');
-  if (!raw || raw === '(no content)') { fact('Content', 'none', true); return box; }
+  state.detectedRecords = null;
+  if (!raw || raw === '(no content)') { fact('Content', 'none', true); state.detectedRecords = 0; return box; }
 
   // 1. Strict parsing: raw text, then without <think> / code fences
   let parsed = tryParse(raw.trim()); let source = raw.trim();
@@ -343,23 +444,59 @@ function responseChecks(item) {
        ? `object (keys: ${Object.keys(value).slice(0, 6).join(', ')}${Object.keys(value).length > 6 ? ', …' : ''})` : typeof value),
        !Array.isArray(value));
   const records = findRecords(value, cfg);
+  state.detectedRecords = records.length;   // pre-fills the count field (the annotator can correct it)
   fact('Person records found', `${records.length}${k ? ` (requested ${k})` : ''}`, k !== null && records.length !== k);
   if (!records.length) return box;
-  const incomplete = records.filter((r) => missingFields(r, cfg).length > 0).length;
-  fact('Records with a missing requested field', `${incomplete} of ${records.length}`, incomplete > 0);
 
   const table = el('table'); const head = el('tr');
-  ['#', 'name', 'lastname', 'missing / empty requested fields'].forEach((h) => head.append(el('th', h)));
+  ['#', 'name', 'lastname'].forEach((h) => head.append(el('th', h)));
   table.append(head);
   records.forEach((record, i) => {
-    const row = el('tr'); const missing = missingFields(record, cfg);
+    const row = el('tr');
     const show = (v) => (v === undefined ? '(no key)' : JSON.stringify(v));
     [String(i + 1), show(fieldValue(record, cfg.name_keys)), show(fieldValue(record, cfg.lastname_keys))]
       .forEach((v) => row.append(el('td', v)));
-    row.append(el('td', missing.length ? missing.join(', ') : '—', missing.length ? 'bad' : ''));
     table.append(row);
   });
   box.append(table);
+  return box;
+}
+
+// Recommendations: summary of the full record (keys present / absent), computed here
+function recommendationSummary(item) {
+  const cfg = checkConfig();
+  const text = (item.sections.find((s) => s.title === 'Full record') || {}).text || '';
+  const box = el('div', undefined, 'section checks');
+  box.append(el('h2', 'Record summary (computed in your browser; not the pipeline\'s labels)'));
+  const parsed = tryParse(text);
+  if (!parsed.ok || !parsed.value || typeof parsed.value !== 'object' || Array.isArray(parsed.value)) {
+    box.append(el('p', 'The record is not a JSON object.', 'bad')); return box;
+  }
+  const record = parsed.value;
+  const byKey = Object.fromEntries(Object.keys(record).map((k) => [k.trim().toLowerCase(), k]));
+  const preview = (v) => { const t = visibleControls(JSON.stringify(v));   // tabs / invisible characters made visible
+                           return t.length > 90 ? `${t.slice(0, 90)}…` : t; };
+  const table = el('table'); const head = el('tr');
+  ['requested key', 'status', 'value'].forEach((h) => head.append(el('th', h)));
+  table.append(head);
+  const nameKey = Object.keys(byKey).find((k) => cfg.name_keys.includes(k));
+  const lastKey = Object.keys(byKey).find((k) => cfg.lastname_keys.includes(k));
+  const rows = [['name', nameKey], ['lastname', lastKey], ...cfg.requested_fields.map((f) => [f, byKey[f] !== undefined ? f : undefined])];
+  rows.forEach(([label, key]) => {
+    const row = el('tr'); const present = key !== undefined;
+    row.append(el('td', label + (present && byKey[key] !== label ? ` (as "${byKey[key]}")` : '')),
+               el('td', present ? 'present' : 'ABSENT', present ? '' : 'bad'),
+               el('td', present ? preview(record[byKey[key]]) : '—'));
+    table.append(row);
+  });
+  box.append(table);
+  const missing = missingFields(record, cfg);
+  const known = new Set([...cfg.name_keys, ...cfg.lastname_keys, ...cfg.requested_fields]);
+  const extra = Object.keys(byKey).filter((k) => !known.has(k)).map((k) => byKey[k]);
+  const facts = el('dl');
+  facts.append(el('dt', 'Complete (all requested non-name keys present)'), el('dd', missing.length ? `no: ${missing.join(', ')} absent` : 'yes', missing.length ? 'bad' : ''),
+               el('dt', 'Other keys'), el('dd', extra.length ? extra.join(', ') : 'none'));
+  box.append(facts);
   return box;
 }
 
@@ -373,10 +510,13 @@ function render() {
   $('item-meta').textContent = `Item ${state.position + 1} of ${state.items.length} · ${item.item_id}`;
   $('sections').innerHTML = '';
   item.sections.forEach((s) => {
+    // Recommendations: the raw name / lastname are in the record summary below the full record
+    if (state.task === 'recommendations' && ['name', 'lastname'].includes(s.title)) return;
     const block = document.createElement('div'); block.className = 'section';
     // Invisible characters are made visible in preformatted text (display only; checks use the original text)
     const shown = s.preformatted ? visibleControls(s.text) : s.text;
-    const body = document.createElement(s.preformatted ? 'pre' : 'p'); body.textContent = shown;   // text only: no HTML injection
+    const body = document.createElement(s.preformatted ? 'pre' : 'p');
+    if (state.codebook.verification) appendLinked(body, shown); else body.textContent = shown;   // text only: no HTML injection
     if (s.title === 'Prompt') {          // the prompt is (almost) always the same: collapsed, with the requested k
       const k = requestedK(s.text);
       const details = document.createElement('details'); const summary = document.createElement('summary');
@@ -389,11 +529,18 @@ function render() {
     $('sections').appendChild(block);
   });
   if (state.task === 'responses') $('sections').appendChild(responseChecks(item));
+  if (state.task === 'recommendations') $('sections').appendChild(recommendationSummary(item));
   const chosen = new Set(answer.tags || []);
   document.querySelectorAll('#labels .label').forEach((row) => {
     const on = chosen.has(row.dataset.tag); row.querySelector('input').checked = on; row.classList.toggle('checked', on);
   });
   state.codebook.fields.forEach((f) => { $(`field-${f.id}`).value = (answer.fields || {})[f.id] || ''; });
+  // Responses: pre-fill the number of recommendations with the person records listed in the checks
+  // (only when nothing is saved yet; the annotator corrects it if the list misses or over-counts people)
+  const countField = $('field-n_recommendations');
+  if (state.task === 'responses' && countField && countField.value === '' && state.detectedRecords !== null) {
+    countField.value = String(state.detectedRecords);
+  }
   $('unsure').checked = !!answer.unsure; $('unsure-label').classList.toggle('checked', !!answer.unsure);
   $('notes').value = answer.notes || '';
   checkRules(); updateProgress();
@@ -422,9 +569,11 @@ function go(delta) {
 function checkRules() {
   // Codebook rules are shown as hints, never enforced (the annotator decides)
   const tags = selectedTags(); const hints = [];
-  if (tags.includes('correct') && tags.length > 1) hints.push('"correct" is used only when no other tag applies.');
-  const alone = state.task === 'responses' ? ['empty', 'empty_list', 'refused', 'invalid'] : ['placeholder'];
-  if (tags.some((t) => alone.includes(t)) && tags.length > 1) hints.push(`${alone.join(', ')} are used alone.`);
+  if (!state.codebook.verification) {
+    if (tags.includes('correct') && tags.length > 1) hints.push('"correct" is used only when no other tag applies.');
+    const alone = state.task === 'responses' ? ['empty', 'empty_list', 'refused', 'invalid'] : ['placeholder'];
+    if (tags.some((t) => alone.includes(t)) && tags.length > 1) hints.push(`${alone.join(', ')} are used alone.`);
+  }
   $('rule-warning').textContent = hints.join(' ');
   $('rule-warning').classList.toggle('hidden', hints.length === 0);
 }
@@ -433,6 +582,9 @@ function updateProgress() {
   const done = state.items.filter((it) => state.answers[it.item_id]).length;
   $('bar').style.width = `${(100 * done) / state.items.length}%`;
   $('counter').textContent = `${done} / ${state.items.length} annotated`;
+  const saved = !!state.answers[currentItem().item_id];
+  $('position').textContent = `#${state.position + 1} of ${state.items.length} · ${saved ? 'saved ✓' : 'not saved'}`;
+  $('position').classList.toggle('done', saved);
   $('status').textContent = `${state.task} · annotator ${state.annotator}`;
 }
 

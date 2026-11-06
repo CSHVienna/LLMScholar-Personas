@@ -52,6 +52,14 @@ class AnnotationHandler(BaseHTTPRequestHandler):
             task = path.removeprefix('/items/')
             if task in cons.ANNOTATION_TASKS and self._items_file(task).exists():
                 return self._send(200, self._items_file(task).read_bytes(), 'application/json; charset=utf-8')
+        if path == '/annotations':      # the annotator's saved CSV (to resume in another browser)
+            query = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+            task, annotator = query.get('task', ''), query.get('annotator', '')
+            if task in cons.ANNOTATION_TASKS and NAME.match(annotator):
+                target = self.annotations_dir / f"{cons.PREFIX_ANNOTATION}_{task}_{annotator}.csv"
+                body = target.read_bytes() if target.exists() else b''
+                return self._send(200, body, 'text/csv; charset=utf-8')
+            return self._send(400, b'bad request', 'text/plain')
         return self._send(404, b'not found', 'text/plain')
 
     # -- POST --------------------------------------------------------------------------------

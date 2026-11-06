@@ -12,12 +12,12 @@
 # Usage:
 #   bash code/scripts/run_responses_pipeline.sh                       # all steps, all models, 10 jobs
 #   bash code/scripts/run_responses_pipeline.sh -j 20 -s summary      # one step
-#   bash code/scripts/run_responses_pipeline.sh -m my_models.txt -x "--overwrite"
-#   bash code/scripts/run_responses_pipeline.sh -r /tmp/smoke -l /tmp/smoke/logs -x "--limit_prompts 5"
+#   bash code/scripts/run_responses_pipeline.sh -M my_models.txt -x "--overwrite"
+#   bash code/scripts/run_responses_pipeline.sh -r tmp/smoke -l tmp/smoke/logs -x "--limit_prompts 5"
 #
-# Options:
+# Options (same letters as in run_gt_pipeline.sh / run_matching_pipeline.sh):
 #   -j N      parallel jobs (default 10)
-#   -m FILE   models file (default data/models/models.txt)
+#   -M FILE   models file (default data/models/models.txt)
 #   -s STEP   summary | recommendations | all (default all)
 #   -p ENV    python executable (default: python of the active environment)
 #   -r DIR    results root (default <project>/results): DIR/responses_metadata, DIR/recommendations_metadata
@@ -38,10 +38,10 @@ MODELS_FILE="${PROJECT_ROOT}/data/models/models.txt"
 STEP="all"
 PYTHON="python"
 EXTRA_ARGS=""
-while getopts "j:m:s:p:r:l:x:h" option; do
+while getopts "j:M:s:p:r:l:x:h" option; do
     case "${option}" in
         j) JOBS="${OPTARG}" ;;
-        m) MODELS_FILE="${OPTARG}" ;;
+        M) MODELS_FILE="${OPTARG}" ;;
         s) STEP="${OPTARG}" ;;
         p) PYTHON="${OPTARG}" ;;
         r) RESULTS_DIR="${OPTARG}" ;;
@@ -74,9 +74,9 @@ run_per_model() {
 
 # --- Steps --------------------------------------------------------------------
 if [[ "${STEP}" == "all" || "${STEP}" == "summary" ]]; then
-    run_per_model "responses_summary" "batch_responses_summary.py" "--output_dir ${RESPONSES_METADATA_DIR}"
+    run_per_model "responses_summary" "batch_eval_responses.py" "--output_dir ${RESPONSES_METADATA_DIR}"
 fi
 if [[ "${STEP}" == "all" || "${STEP}" == "recommendations" ]]; then
-    run_per_model "recommendations" "batch_recommendations.py" \
+    run_per_model "recommendations" "batch_eval_recommendations.py" \
         "--responses_metadata_dir ${RESPONSES_METADATA_DIR} --output_dir ${RECOMMENDATIONS_METADATA_DIR}"
 fi

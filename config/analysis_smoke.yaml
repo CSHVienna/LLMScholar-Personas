@@ -1,0 +1,49 @@
+# Analysis config, written by configure_analysis.py on 2026-11-06 03:59.
+# Edit with:  python code/scripts/configure_analysis.py --config <this file>
+
+# Valid responses and recommendations
+validity:
+  valid_response_tags: [correct, wrapped, python_literal, embedded]    # a response is valid if ALL its tags are in this set
+  valid_rec_tags: [correct, title_removed, repetition_removed, split]    # a recommendation is valid if ALL its tags are in this set
+
+# Seniority (academic age = reference year - first publication year)
+seniority:
+  reference_year: 2025    # year academic age is measured at
+  junior_max: 10    # junior: academic age <= this
+  senior_min: 20    # senior: academic age >= this (between: mid)
+  single_cutoff: 15    # two-class variant: junior <= this < senior
+  matching_definition: three    # which definition author matching uses for the requested seniority
+
+# Field membership
+field:
+  min_field_share: 0.0    # minimum share of a scholar's works in a field to belong to it (0 = any work)
+
+# Perceived gender (from p_female of the first name)
+gender:
+  p_female_edges: [0.1, 0.9]    # cut points on p_female, increasing, in (0, 1)
+  labels: [male, neutral, female]    # one label per interval, from p_female = 0 to 1
+
+# Perceived ethnicity (raceBERT on the full name)
+ethnicity:
+  min_prob: 0.5    # label = top class if its probability >= this, else 'unknown'
+
+# Prominence classes: productivity, influence, collaboration (within field x seniority)
+prominence:
+  bin_edges: [0.3333, 0.6667]    # cut points on the percent rank, increasing, in (0, 1)
+  bin_labels: [L, M, H]    # one label per interval, from low to high
+  top_percentile: 5.0    # popularity: top group = top x % by works and by citations (within field x seniority)
+
+# Social metrics (on the matched authors of the valid responses)
+social:
+  include_unknown: true    # count 'unknown' (no usable name / country) as a class in parity and diversity
+  parity_target: field_x_seniority    # GT target of parity (scope of the GT shares)
+  top_country_share: 0.5    # popularity by country: top countries = the fewest that together hold this share of the GT scholars
+
+# Author matching (recommended name -> OpenAlex person)
+matching:
+  jw_first: 0.9    # fuzzy rule: minimum Jaro-Winkler of the first names
+  jw_last: 0.9    # fuzzy rule: minimum Jaro-Winkler of the last names
+  jw_full: 0.9    # fuzzy rule: minimum Jaro-Winkler of the full names
+  seed: 42    # seed of the random pick among homonyms
+  candidates_floor: 0.9    # fuzzy pairs stored by the candidate step if jw_full >= this
+  fuzzy_all: false    # score every name by the fuzzy rule (not only names without a stricter match)

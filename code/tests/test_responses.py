@@ -18,7 +18,8 @@ from responses import tags as tag_utils                                  # noqa:
 from responses.content_parser import ContentParser                       # noqa: E402
 from responses.context import PromptContext                              # noqa: E402
 from responses.persons import missing_fields                             # noqa: E402
-from responses.recommendations import NameTagger, tag_recommendations    # noqa: E402
+from responses.recommendations import NameTagger, normalize_tokens, tag_recommendations  # noqa: E402
+from utils.text import clean_text                                         # noqa: E402
 from responses.sources import RawResponse, get_adapter                   # noqa: E402
 from responses.taxonomy import classify                                  # noqa: E402
 
@@ -49,12 +50,10 @@ class TestResponseTags(unittest.TestCase):
             tags, parsed = tags_of(json.dumps(value))
             self.assertEqual((tags, len(parsed.persons) >= 1), ([C.RESPONSE_WRAPPED], True), value)
 
-    def test_incomplete_is_independent_of_names(self):
+    def test_completeness_is_not_a_response_tag(self):
         no_source = {k: v for k, v in PERSON.items() if k != 'source'}
-        self.assertEqual(tags_of(json.dumps([PERSON, no_source]))[0], [C.RESPONSE_EXTRA_INCOMPLETE])
-        self.assertEqual(tags_of(json.dumps({"candidates": [{**PERSON, "reason": "N/A"}]}))[0],
-                         [C.RESPONSE_WRAPPED, C.RESPONSE_EXTRA_INCOMPLETE])
-        self.assertEqual(tags_of(json.dumps([{**PERSON, "lastname": ""}]))[0], [C.RESPONSE_CORRECT])
+        self.assertEqual(tags_of(json.dumps([PERSON, no_source]))[0], [C.RESPONSE_CORRECT])
+        self.assertEqual(tags_of(json.dumps({"candidates": [{**PERSON, "reason": "N/A"}]}))[0], [C.RESPONSE_WRAPPED])
 
     def test_python_literal(self):
         self.assertEqual(tags_of(str([PERSON]))[0], [C.RESPONSE_PYTHON_LITERAL])          # single quotes
@@ -62,12 +61,12 @@ class TestResponseTags(unittest.TestCase):
     def test_embedded(self):
         self.assertEqual(tags_of("Here you go: " + json.dumps([PERSON]))[0], [C.RESPONSE_EMBEDDED])
 
-    def test_fixed_only_for_truncation(self):
+    def test_truncated_only_for_truncation(self):
         for cut in (30, 3):  # cut inside a string / right after a comma
             tags, parsed = tags_of(json.dumps([PERSON, PERSON])[:-cut])
-            self.assertEqual((tags, parsed.method, len(parsed.persons)), ([C.RESPONSE_FIXED], C.PARSE_TRUNCATED, 1))
+            self.assertEqual((tags, parsed.method, len(parsed.persons)), ([C.RESPONSE_TRUNCATED], C.PARSE_TRUNCATED, 1))
         wrapped = json.dumps({"candidates": [PERSON, PERSON]})[:-40]
-        self.assertEqual(tags_of(wrapped)[0], [C.RESPONSE_FIXED, C.RESPONSE_WRAPPED])
+        self.assertEqual(tags_of(wrapped)[0], [C.RESPONSE_TRUNCATED, C.RESPONSE_WRAPPED])
         # broken in the middle (missing comma) is not truncation
         broken = json.dumps([PERSON, PERSON]).replace('}, {', '} {', 1)
         self.assertEqual(tags_of(broken)[0], [C.RESPONSE_INVALID])
@@ -103,17 +102,18 @@ class TestRequiredFields(unittest.TestCase):
     def test_complete(self):
         self.assertEqual(missing_fields(PERSON), [])
 
-    def test_only_non_name_fields_in_prompt_order(self):
-        person = {"name": "", "lastname": "Candidate 1", "reason": "", "source": "N/A"}
-        self.assertEqual(missing_fields(person), ['current_affiliations', 'areas_of_research_or_work', 'reason'])
+    def test_only_absent_non_name_keys_in_prompt_order(self):
+        person = {"name": "", "lastname": "Candidate 1", " Reason ": "", "source": "N/A"}
+        self.assertEqual(missing_fields(person), ['current_affiliations', 'areas_of_research_or_work'])
+        self.assertEqual(missing_fields({**PERSON, "reason": None, "source": [], "current_affiliations": ""}), [])
 
 
 class TestTagEncoding(unittest.TestCase):
 
     def test_columns(self):
-        columns = tag_utils.tag_columns([C.REC_FIXED, C.REC_TITLE_REMOVED], C.REC_TAGS, C.REC_TAG_PREFIX)
-        self.assertEqual(columns['rec_tags'], 'title_removed|fixed')
-        self.assertTrue(columns['rec_fixed'] and columns['rec_title_removed'] and not columns['rec_correct'])
+        columns = tag_utils.tag_columns([C.REC_REPETITION_REMOVED, C.REC_TITLE_REMOVED], C.REC_TAGS, C.REC_TAG_PREFIX)
+        self.assertEqual(columns['rec_tags'], 'title_removed|repetition_removed')
+        self.assertTrue(columns['rec_repetition_removed'] and columns['rec_title_removed'] and not columns['rec_correct'])
 
 
 class TestNameTagger(unittest.TestCase):
@@ -130,10 +130,48 @@ class TestNameTagger(unittest.TestCase):
         self.assertTag("Dr. Ada", "Lovelace", "Ada", "Lovelace", [C.REC_TITLE_REMOVED])
         self.assertTag("Ada", "Lovelace, PhD", "Ada", "Lovelace", [C.REC_TITLE_REMOVED])
 
-    def test_fixed(self):
-        self.assertTag("John Smith", "Smith", "John", "Smith", [C.REC_FIXED])
-        self.assertTag("Yamamoto Hiroshi", "Yamamoto", "Hiroshi", "Yamamoto", [C.REC_FIXED])  # family name first
-        self.assertTag("John", "John Smith", "John", "Smith", [C.REC_FIXED])
+    def test_repetition_removed(self):
+        self.assertTag("John Smith", "Smith", "John", "Smith", [C.REC_REPETITION_REMOVED])
+        self.assertTag("Yamamoto Hiroshi", "Yamamoto", "Hiroshi", "Yamamoto", [C.REC_REPETITION_REMOVED])  # family name first
+        self.assertTag("John", "John Smith", "John", "Smith", [C.REC_REPETITION_REMOVED])
+        self.assertTag("Juan de la Cruz", "de la Cruz", "Juan", "de la Cruz", [C.REC_REPETITION_REMOVED])
+
+    def test_repetition_whole_words_only(self):
+        """A hyphenated / apostrophe word is one word: it is removed entirely or not at all, never emptying a part."""
+        self.assertTag("Kevin O'Connell", "O'Connell", "Kevin", "O'Connell", [C.REC_REPETITION_REMOVED])
+        self.assertTag("Dror Bar-Natan", "Bar-Natan", "Dror", "Bar-Natan", [C.REC_REPETITION_REMOVED])
+        self.assertTag("Wei-Chen", "Chen", "Wei-Chen", "Chen", [C.REC_CORRECT])       # given name Wei-Chen
+        self.assertTag("Fei", "Fei-Fei", "Fei", "Fei-Fei", [C.REC_CORRECT])
+        self.assertTag("Fei", "Fei-Fei Li", "Fei", "Fei-Fei Li", [C.REC_CORRECT])
+        self.assertTag("Kaito", "Ito", "Kaito", "Ito", [C.REC_CORRECT])              # never inside a word
+        self.assertTag("Juan Carlos Suárez Zeira", "Suárez-Zeira", "Juan Carlos", "Suárez-Zeira",
+                       [C.REC_REPETITION_REMOVED])                                       # tokens compared, cut between words
+        self.assertTag("Willem*J.*Rousseau", "Rousseau", "Willem*J", "Rousseau", [C.REC_REPETITION_REMOVED])
+        self.assertTag("Friedhelm Gödde", "Gödde", "Friedhelm", "Gödde", [C.REC_REPETITION_REMOVED])  # decomposed ö
+
+    def test_double_lastname_cut_in_half(self):
+        self.assertTag("Marie Skłodowska-Curie", "Curie", "Marie", "Skłodowska-Curie", [C.REC_REPETITION_REMOVED])
+        self.assertTag("José María Torres-Pérez", "Pérez", "José María", "Torres-Pérez", [C.REC_REPETITION_REMOVED])
+        self.assertEqual(NameTagger().tag("Pumla Gobodo-Madikizela", "Madikizela").fix, 'double_lastname_in_name')
+        self.assertTag("Paul-Eckert", "Eckert", "Paul-Eckert", "Eckert", [C.REC_CORRECT])          # no word before it
+        self.assertTag("Wolf-Christian Butterbach", "Wolf", "Wolf-Christian Butterbach", "Wolf",   # not the last word
+                       [C.REC_CORRECT])
+
+    def test_text_fixes(self):
+        """Escapes written as text are decoded; invisible characters are removed (not turned into word breaks)."""
+        self.assertTag("Carlos", "Garc\\u00EDa", "Carlos", "García", [C.REC_CORRECT])
+        self.assertTag("Elisabeth", "​J​u​n​g", "Elisabeth", "Jung", [C.REC_CORRECT])  # not initials
+        self.assertTag("Luis", "de Leó​n", "Luis", "de León", [C.REC_CORRECT])
+        self.assertTag("Kazuo Miyashita", "Miya\xadshita", "Kazuo", "Miyashita", [C.REC_REPETITION_REMOVED])
+        self.assertTag("Niko\xa0B.\xa0Ganz", "Ganz", "Niko B", "Ganz", [C.REC_REPETITION_REMOVED])
+        self.assertEqual(clean_text("\\ud83d\\ude00 \\ud800 a\tb"), "\U0001F600 \\ud800 a b")   # pair decoded, lone kept
+        self.assertEqual(clean_text("Claudia Y. Wilson-GarcÃ\xada"), "Claudia Y. Wilson-García")   # mojibake (ftfy)
+        self.assertEqual(clean_text("RodrÃƒÂ\xadguez"), "Rodríguez")                             # doubly encoded
+        self.assertEqual(clean_text("Tarcí\xadsio"), "Tarcísio")                                 # soft hyphen
+        for name in ["Müller", "Zoë Çelik", "Łukasz Żółć", "김민수", "Wei Zhang", "Jean-Pierre O'Neil"]:
+            self.assertEqual(clean_text(name), name)                                            # correct names unchanged
+        self.assertTag("Claudia", "Wilson-GarcÃ\xada", "Claudia", "Wilson-García", [C.REC_CORRECT])
+        self.assertEqual(normalize_tokens("Garc\\u00EDa​-López"), ['garcia', 'lopez'])
 
     def test_split(self):
         self.assertTag("Ludwig van Beethoven", None, "Ludwig", "van Beethoven", [C.REC_SPLIT])
@@ -143,7 +181,7 @@ class TestNameTagger(unittest.TestCase):
         self.assertTag("Van Morrison", None, "Van", "Morrison", [C.REC_SPLIT])       # capitalised: not a particle
 
     def test_all_tags_are_kept(self):
-        self.assertTag("Prof. Dr. Jörg Müller", "Muller", "Jörg", "Muller", [C.REC_TITLE_REMOVED, C.REC_FIXED])
+        self.assertTag("Prof. Dr. Jörg Müller", "Muller", "Jörg", "Muller", [C.REC_TITLE_REMOVED, C.REC_REPETITION_REMOVED])
         self.assertTag("Dr. Ada Lovelace", None, "Ada", "Lovelace", [C.REC_TITLE_REMOVED, C.REC_SPLIT])
 
     def test_initials(self):
@@ -156,6 +194,13 @@ class TestNameTagger(unittest.TestCase):
         self.assertTag("Candidate Name", "Lastname", None, None, [C.REC_PLACEHOLDER])
         self.assertTag("Candidato 1", "Candidato 1", None, None, [C.REC_PLACEHOLDER])
         self.assertTag("Ada", "Last Name", None, None, [C.REC_PLACEHOLDER])
+
+    def test_na_nan_are_names_but_NA_is_missing(self):
+        self.assertTag("Li", "Na", "Li", "Na", [C.REC_CORRECT])                     # Li Na
+        self.assertTag("Jinkyung", "Na", "Jinkyung", "Na", [C.REC_CORRECT])         # Korean surname Na
+        self.assertTag("Nan", "Zhang", "Nan", "Zhang", [C.REC_CORRECT])
+        self.assertTag("Matthew Farrer", "NA", "Matthew", "Farrer", [C.REC_SPLIT])  # 'NA' = not available
+        self.assertTag("Matthew Farrer", "N/A", "Matthew", "Farrer", [C.REC_SPLIT])
 
     def test_invalid(self):
         self.assertTag("Smith", None, None, "Smith", [C.REC_INVALID])
@@ -241,14 +286,23 @@ class TestAnnotationEvaluation(unittest.TestCase):
         gold = evaluation.adjudicate(rows, C.ANNOTATION_TASK_RESPONSES).set_index('item_id')
         self.assertEqual((gold.loc['i1', 'gold_n_recommendations'], gold.loc['i2', 'gold_n_recommendations']), ('5', ''))
 
+    def test_renamed_tags_in_saved_annotations(self):
+        import tempfile
+        from pathlib import Path
+        from annotation import evaluation
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / 'annotation_responses_x.csv').write_text(
+                'item_id,annotator,task,tags,unsure\ni1,x,responses,fixed|wrapped,0\n', encoding='utf-8')
+            self.assertEqual(evaluation.load_annotations(folder, C.ANNOTATION_TASK_RESPONSES)['tags'][0], 'truncated|wrapped')
+
     def test_tag_metrics(self):
         import pandas as pd
         from annotation import evaluation
-        compared = pd.DataFrame({'inferred_tags': ['wrapped', 'wrapped|extra_incomplete', 'correct'],
+        compared = pd.DataFrame({'inferred_tags': ['wrapped', 'wrapped|toy', 'correct'],
                                  'gold_tags': ['wrapped', 'wrapped', 'correct']})
         metrics = evaluation.tag_metrics(compared, C.ANNOTATION_TASK_RESPONSES).set_index('tag')
         self.assertEqual((metrics.loc['wrapped', 'precision'], metrics.loc['wrapped', 'recall']), (1.0, 1.0))
-        self.assertEqual(metrics.loc['extra_incomplete', 'fp'], 1)
+        self.assertEqual(metrics.loc['toy', 'fp'], 1)
 
 
 class TestParquetWriting(unittest.TestCase):

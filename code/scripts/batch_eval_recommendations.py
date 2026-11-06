@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Step B.3: tag every recommendation (multi-label; rules in libs/responses/recommendations.py):
-correct, title_removed, fixed, split, initials_name, initials_lastname, initials,
+correct, title_removed, repetition_removed, split, initials_name, initials_lastname, initials,
 placeholder, invalid.
 
 Reads   <responses_metadata_dir>/<model>.parquet   (to select the responses)
@@ -15,7 +15,7 @@ The recommendations of every response with named recommendations are stored (wha
 tags), so that tags can be inspected (notebook responses_tags.ipynb) before deciding what goes downstream.
 
 Usage (from any folder; paths default to the project folders):
-    python batch_recommendations.py --models gpt-4_1-nano-2025-04-14 --limit_prompts 5 --responses_metadata_dir /tmp/smoke/responses --output_dir /tmp/smoke
+    python batch_eval_recommendations.py --models gpt-4_1-nano-2025-04-14 --limit_prompts 5 --responses_metadata_dir /tmp/smoke/responses --output_dir /tmp/smoke
     bash run_responses_pipeline.sh    # all steps, all models (GNU parallel, timestamped joblogs)
 """
 
@@ -37,7 +37,7 @@ def run_model(model: str, args: argparse.Namespace) -> str:
 
     summary_file = batch.model_file(args.responses_metadata_dir, model)
     if not summary_file.exists():
-        raise FileNotFoundError(f"missing responses metadata {summary_file} (run batch_responses_summary.py first)")
+        raise FileNotFoundError(f"missing responses metadata {summary_file} (run batch_eval_responses.py first)")
 
     summary = ios.load_parquet(summary_file)
     df = build_recommendations(ResponseReader.from_args(args), model, args.languages, summary)

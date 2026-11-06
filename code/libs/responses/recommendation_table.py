@@ -45,7 +45,7 @@ def build_recommendations(reader: ResponseReader, model: str, languages: List[st
         recomputed = tag_utils.join(response.tags, cons.RESPONSE_TAGS)
         if recomputed != selected[key]:
             raise OutdatedSummaryError(f"[{model}] {key}: summary tags={selected[key]!r} but recomputed "
-                                       f"tags={recomputed!r}. Re-run batch_responses_summary.py --overwrite (responses metadata).")
+                                       f"tags={recomputed!r}. Re-run batch_eval_responses.py --overwrite (responses metadata).")
 
         # Response identifiers + one row per recommended person
         response_ids = {**response.ids,

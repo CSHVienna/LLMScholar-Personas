@@ -40,6 +40,8 @@ def load_annotations(folder: Path | str, task: str) -> pd.DataFrame:
         raise FileNotFoundError(f"No {cons.PREFIX_ANNOTATION}_{task}_<annotator>.csv files in {folder}")
     df = pd.concat([pd.read_csv(f, dtype=str, keep_default_na=False) for f in files], ignore_index=True)
     df['unsure'] = df['unsure'].astype(int).astype(bool)
+    aliases = cons.ANNOTATION_TAG_ALIASES.get(task, {})   # renamed tags (e.g. response 'fixed' -> 'truncated')
+    df['tags'] = df['tags'].map(lambda joined: cons.TAG_SEPARATOR.join(aliases.get(t, t) for t in tag_utils.split(joined)))
     return df
 
 

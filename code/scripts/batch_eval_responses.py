@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Step B.1-2: read the raw LLM responses and tag every response (multi-label; rules in libs/responses/taxonomy.py):
-correct / python_literal / embedded / fixed, plus wrapped / extra_incomplete / toy, or one of
+correct / python_literal / embedded / truncated, plus wrapped / toy, or one of
 empty / empty_list / refused / invalid.
 
 Writes one file per model:  <output_dir>/<model>.parquet   (default results/responses_metadata/)
@@ -9,7 +9,7 @@ Each row is one response, identified by
     model, date, language, role, location, k, seniority, field, subfield, run_id
 
 Usage (from any folder; paths default to the project folders):
-    python batch_responses_summary.py --models gpt-4_1-nano-2025-04-14 --limit_prompts 5 --output_dir /tmp/smoke
+    python batch_eval_responses.py --models gpt-4_1-nano-2025-04-14 --limit_prompts 5 --output_dir /tmp/smoke
     bash run_responses_pipeline.sh    # all steps, all models (GNU parallel, timestamped joblogs)
 """
 

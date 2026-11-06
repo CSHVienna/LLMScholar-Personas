@@ -8,6 +8,7 @@ from utils import constants as cons
 _FIRSTNAME_KEYS = frozenset(cons.PERSON_FIRSTNAME_KEYS)
 _LASTNAME_KEYS = frozenset(cons.PERSON_LASTNAME_KEYS)
 _MISSING_VALUES = frozenset(cons.NAME_MISSING_VALUES)
+_MISSING_VALUES_EXACT = frozenset(cons.NAME_MISSING_VALUES_EXACT)
 _TEMPLATE_VALUES = frozenset(cons.NAME_TEMPLATE_VALUES)
 _TEMPLATE_PATTERNS = [re.compile(pattern) for pattern in cons.NAME_TEMPLATE_PATTERNS]
 
@@ -52,8 +53,11 @@ def clean_name_value(value) -> Optional[str]:
 
 
 def is_missing(value: Optional[str]) -> bool:
-    """True for None and 'no value' strings ('', 'N/A', 'none', ...)."""
-    return value is None or ' '.join(value.split()).lower() in _MISSING_VALUES
+    """True for None and 'no value' strings ('', 'N/A', 'none', 'NA', ...; but 'Na' and 'Nan' are names)."""
+    if value is None:
+        return True
+    value = ' '.join(value.split())
+    return value.lower() in _MISSING_VALUES or value in _MISSING_VALUES_EXACT
 
 
 def is_template(value: Optional[str]) -> bool:
@@ -68,20 +72,10 @@ def is_template(value: Optional[str]) -> bool:
 # Required fields
 # -----------------------------------------------------------------------------
 def missing_fields(person: dict) -> List[str]:
-    """Requested non-name fields (in prompt order) that are absent or not populated in ``person``.
+    """Requested non-name keys (in prompt order) that are absent from ``person``.
 
-    Names are assessed by the recommendation tags, not here. Keys are compared lower-cased;
-    values must be non-empty, and 'N/A' is accepted only where the prompt allows it (``source``).
+    Names are assessed by the recommendation tags, not here. Keys are compared lower-cased and stripped;
+    a present key counts whatever its value (also '', [], null or 'N/A').
     """
-    lowered = {str(key).strip().lower(): value for key, value in person.items()}
-    return [field for field in cons.COMPLETENESS_FIELDS if not _is_populated(field, lowered.get(field))]
-
-
-def _is_populated(field: str, value) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, str):
-        return bool(value.strip()) and (field in cons.FIELDS_ALLOWING_NA or not is_missing(value))
-    if isinstance(value, (list, dict)):
-        return len(value) > 0
-    return True
+    keys = {str(key).strip().lower() for key in person}
+    return [field for field in cons.COMPLETENESS_FIELDS if field not in keys]

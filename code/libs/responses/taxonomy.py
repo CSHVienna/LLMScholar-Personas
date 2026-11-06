@@ -5,13 +5,12 @@ A response with >= 1 named recommendation (a name that is neither missing nor a 
 every issue tag that applies:
         python_literal  python syntax instead of JSON (single quotes, True/None, trailing commas)
         embedded        JSON surrounded by prose
-        fixed           truncated: parsed up to the last complete record, trailing partial entry discarded
+        truncated       cut off: parsed up to the last complete record, trailing partial entry discarded
         wrapped         the JSON root is an object (e.g. {"candidates": [...]}), not the requested array
-        extra_incomplete      some recommendation lacks a requested non-name field
-                        (current_affiliations, areas_of_research_or_work, reason, source)
         toy             the names are disclaimed as illustrative / fictional ("plausible example")
 and is tagged ``correct`` (alone) iff none of them applies, i.e. a strict JSON array (after cosmetic
-cleaning: <think> traces, markdown code fences) of complete recommendations without a disclaimer.
+cleaning: <think> traces, markdown code fences) without a disclaimer. Completeness (requested keys
+absent from a person's object) is a per-recommendation attribute, not a response tag.
 
 A response without any named recommendation gets exactly one failure tag, checked in order:
     refused     the API signalled a refusal (GPT `refusal` field, Gemini block/safety)
@@ -33,7 +32,7 @@ from typing import List, Optional
 from utils import constants as cons
 from responses import tags as tag_utils
 from responses.content_parser import ParsedContent
-from responses.persons import has_name, missing_fields
+from responses.persons import has_name
 from responses.sources import RawResponse
 from responses.text_signals import contains_refusal, find_toy_disclaimer
 
@@ -76,8 +75,6 @@ def _issue_tags(raw: RawResponse, parsed: ParsedContent) -> List[str]:
     tags = [cons.RESPONSE_TAG_BY_PARSE_METHOD[parsed.method]] if parsed.method != cons.PARSE_STRICT else []
     if parsed.root == cons.JSON_ROOT_OBJECT:
         tags.append(cons.RESPONSE_WRAPPED)
-    if any(missing_fields(person) for person in parsed.persons):
-        tags.append(cons.RESPONSE_EXTRA_INCOMPLETE)
     if find_toy_disclaimer(raw.text):
         tags.append(cons.RESPONSE_TOY)
     return tags

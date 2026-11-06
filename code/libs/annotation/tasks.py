@@ -33,8 +33,9 @@ def codebook(task: str) -> dict:
                 'labels': [_label(tag, cons.RESPONSE_TAG_DEFINITIONS) for tag in cons.RESPONSE_TAGS],
                 'rules': ['"correct" applies only if no other tag applies.',
                           'empty, empty_list, refused and invalid are used alone (no named recommendation).',
-                          'Every other response gets all its issue tags (e.g. wrapped + extra_incomplete).',
+                          'Every other response gets all its issue tags (e.g. embedded + wrapped).',
                           'Count every person the response lists, also those without a usable name.'],
+                'aliases': cons.ANNOTATION_TAG_ALIASES[task],
                 'fields': [{'id': 'n_recommendations', 'type': 'number',
                             'label': 'Number of recommended people (all person entries; 0 if none)'}]}
     if task == cons.ANNOTATION_TASK_RECOMMENDATIONS:
@@ -46,6 +47,7 @@ def codebook(task: str) -> dict:
                 'labels': [_label(tag, cons.REC_TAG_DEFINITIONS) for tag in cons.REC_TAGS],
                 'rules': ['"correct" applies only if no other tag applies.',
                           '"placeholder" is used alone.'],
+                'aliases': cons.ANNOTATION_TAG_ALIASES[task],
                 'fields': [{'id': 'first_name', 'label': 'First name (as you would record it)'},
                            {'id': 'last_name', 'label': 'Last name (as you would record it)'}]}
     raise ValueError(f"Unknown annotation task {task!r} (expected one of {cons.ANNOTATION_TASKS})")

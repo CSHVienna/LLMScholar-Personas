@@ -10,6 +10,7 @@ import textwrap
 from typing import Dict, Iterable, List
 
 from utils import constants as cons
+from viz import constants as viscons
 from responses.tag_stats import CombinationCategories
 from viz.labels import tag_label
 
@@ -25,7 +26,7 @@ def tags_figure_caption(unit: str, categories: CombinationCategories, valid_tags
     title = ('Output format of the LLM responses.' if is_responses
              else 'Name quality of the recommended scholars.')
     # Sample sizes with the symbols annotated in the figure (matplotlib mathtext = LaTeX, ready to paste)
-    n_m, n_r, n_rec = cons.SYMBOL_N_MODELS, cons.SYMBOL_N_RESPONSES, cons.SYMBOL_N_RECOMMENDATIONS
+    n_m, n_r, n_rec = viscons.SYMBOL_N_MODELS, viscons.SYMBOL_N_RESPONSES, viscons.SYMBOL_N_RECOMMENDATIONS
     sample = (f'{n_r} = {n_responses:,} responses from {n_m} = {n_models} models' if is_responses
               else f'{n_rec} = {n_units:,} recommendations in the {n_r} = {n_responses:,} responses that contain '
                    f'recommendations, from {n_m} = {n_models} models')
@@ -49,7 +50,7 @@ def tags_figure_caption(unit: str, categories: CombinationCategories, valid_tags
     return ' '.join(sentences)
 
 
-def print_caption(caption: str, width: int = cons.CAPTION_PRINT_WIDTH) -> None:
+def print_caption(caption: str, width: int = viscons.CAPTION_PRINT_WIDTH) -> None:
     """Print a caption wrapped at ``width`` characters."""
     print(textwrap.fill(caption, width=width))
 

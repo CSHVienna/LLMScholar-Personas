@@ -1,11 +1,11 @@
 """
 One plotting style for all figures (scientific-paper conventions).
 
-* seaborn ``ticks`` style + ``paper`` context, scaled by ``cons.PLOT_FONT_SCALE``. Figures are drawn
+* seaborn ``ticks`` style + ``paper`` context, scaled by ``viscons.PLOT_FONT_SCALE``. Figures are drawn
   at their final printed size, so fonts are set in print points: with the defaults, tick labels are
   ~6.6 pt and axis labels / legends ~7 pt (venues usually ask for >= 6-7 pt).
-* A Helvetica-like sans-serif TrueType font (first one installed from ``cons.PLOT_FONTS``), also for
-  math text ($N_m$), so labels and symbols match.
+* A serif TrueType font (``viscons.PLOT_FONT_FAMILY``; first one installed from ``viscons.PLOT_FONTS``), also
+  for math text ($N_m$), so labels and symbols match.
 * Fonts embedded as TrueType (Type 42) in PDF/PS: Type 3 fonts (matplotlib's default) are rejected
   by several submission checkers (e.g. ACM, IEEE PDF eXpress).
 * Recessive axes: no top/right spines, thin lines, no legend frame.
@@ -17,17 +17,17 @@ import matplotlib as mpl
 import seaborn as sns
 from matplotlib import font_manager
 
-from utils import constants as cons
+from viz import constants as viscons
 
 
-def apply_style(context: str = cons.PLOT_CONTEXT, style: str = cons.PLOT_STYLE,
-                font_scale: float = cons.PLOT_FONT_SCALE) -> str:
+def apply_style(context: str = viscons.PLOT_CONTEXT, style: str = viscons.PLOT_STYLE,
+                font_scale: float = viscons.PLOT_FONT_SCALE) -> str:
     """Apply the paper style to matplotlib (globally). Returns the font family used."""
-    font = first_installed_font(cons.PLOT_FONTS)
+    font = first_installed_font(viscons.PLOT_FONTS)
     sns.set_theme(context=context, style=style, font_scale=font_scale, rc={
         # fonts
-        'font.family': 'sans-serif',
-        'font.sans-serif': [font],
+        'font.family': viscons.PLOT_FONT_FAMILY,
+        f'font.{viscons.PLOT_FONT_FAMILY}': [font],
         'mathtext.fontset': 'custom',
         'mathtext.rm': font, 'mathtext.it': f'{font}:italic', 'mathtext.bf': f'{font}:bold',
         'mathtext.sf': font, 'mathtext.cal': font, 'mathtext.tt': font,
@@ -39,7 +39,7 @@ def apply_style(context: str = cons.PLOT_CONTEXT, style: str = cons.PLOT_STYLE,
         'grid.linewidth': 0.5, 'hatch.linewidth': 0.6,
         'legend.frameon': False,
         # export
-        'savefig.dpi': cons.FIGURE_DPI, 'savefig.bbox': 'tight', 'savefig.pad_inches': 0.02,
+        'savefig.dpi': viscons.FIGURE_DPI, 'savefig.bbox': 'tight', 'savefig.pad_inches': 0.02,
     })
     return font
 
