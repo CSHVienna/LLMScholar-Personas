@@ -80,10 +80,18 @@ METRICS['locality'] = Metric('locality', 'Locality', NEUTRAL, 'social', 'localit
 # Size-adjusted social metrics (metrics/expected.py): <key>_adj = observed - expected under a random recommender;
 # group <group>_adj (so 'parity' still selects the raw ones); differences, so scaled to the data
 ADJ_SUFFIX = '_adj'
+
+
+def adjusted_label(label: str) -> str:
+    """Header of a size-adjusted metric: 'Par.$_{gender}$' -> 'Par.$^{adj}_{gender}$', 'Loc.' -> 'Loc.$^{adj}$'."""
+    return label.replace('$_{', '$^{adj}_{') if '$_{' in label else label + '$^{adj}$'
+
+
 for _key in [k for k, m in METRICS.items() if m.family == 'social']:
     _m = METRICS[_key]
-    METRICS[_key + ADJ_SUFFIX] = Metric(_key + ADJ_SUFFIX, _m.label.replace('$_{', '$^{adj}_{'), _m.direction, 'social',
-                                        _m.group + ADJ_SUFFIX, _m.decimals, None, _m.short, _m.narrow)
+    METRICS[_key + ADJ_SUFFIX] = Metric(_key + ADJ_SUFFIX, adjusted_label(_m.label), _m.direction, 'social',
+                                        _m.group + ADJ_SUFFIX, _m.decimals, None, _m.short,
+                                        adjusted_label(_m.narrow) if _m.narrow else '')
 # Default columns of each family (the figures of the paper); social metrics are added with step 9
 COLUMN_SETS = cons.METRIC_COLUMN_SETS          # named column sets: all, technical, factuality, technical_factuality, ...
 FAMILY_DEFAULTS = COLUMN_SETS                    # (old name)

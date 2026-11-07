@@ -74,6 +74,12 @@ class TestSelectionAndTable(unittest.TestCase):
         with self.assertRaises(ValueError):
             s.select_metrics(['nonsense'])
 
+    def test_adjusted_labels(self):
+        self.assertEqual(s.METRICS['parity_gender_adj'].label, 'Par.$^{adj}_{gender}$')
+        self.assertEqual(s.METRICS['locality_adj'].label, 'Locality$^{adj}$')     # no subscript: still marked
+        self.assertEqual(s.METRICS['locality_adj'].narrow, 'Loc.$^{adj}$')
+        self.assertEqual(s.METRICS['similarity_adj'].narrow, '')
+
     def test_configuration_table_averages_responses(self):
         key = {c: 'x' for c in tm.CONFIG_KEY}
         with tempfile.TemporaryDirectory() as tmp:
