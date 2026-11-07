@@ -156,7 +156,7 @@ HEATMAP_MIN_CELL_W_IN = 0.2             # never narrower (values switch to the c
 HEATMAP_BORDER = 1.0                    # white border between cells (points)
 HEATMAP_RESIDUAL_HEIGHT = 0.62          # residual boxes: share of a cell height
 HEATMAP_RESIDUAL_EDGE = '#c9c9c9'
-HEATMAP_BRACKET_IN = 0.17               # below the column labels: subgroup brackets + their names
+HEATMAP_BRACKET_IN = 0.19               # below the column labels: subgroup brackets + their names
 HEATMAP_BAND_IN = 0.19                  # TECHNICAL / SOCIAL band height
 HEATMAP_TITLE_GAP_IN = 0.05             # band -> x-axis title
 
@@ -166,11 +166,20 @@ RQ3_FIGURE_IN = (PAPER_TEXT_WIDTH_IN, 3.4)   # width, height
 RQ3_MARKER_SIZE = 34
 RQ3_SPLIT_LINE = {'color': '#b5b3ae', 'linestyle': (0, (3, 2)), 'linewidth': 0.6}   # thin and light
 RQ3_LABEL_SIZE = 'xx-small'             # model names (quadrant colour): 4.2 pt, below MIN_FONT_SIZE on purpose (43 names; at 5 pt they overlap)
-RQ3_LABEL_EXPAND = (1.15, 1.35)         # adjustText: room kept around each label (x, y); larger = fewer overlaps
-RQ3_LABEL_FORCE_TEXT = (0.3, 0.5)       # adjustText: label-label repulsion
-RQ3_LABEL_FORCE_STATIC = (0.25, 0.4)    # adjustText: label-point repulsion
-RQ3_LABEL_TIME_LIM = 1                  # adjustText: seconds of label placement (more = fewer overlaps)
-RQ3_CONNECT_FROM_IN = 0.06              # a curved connector only when the label is this far from its point
+RQ3_LABELS_IN_QUADRANT = True           # a label stays in its point's quadrant when it fits (else anywhere)
+RQ3_LABEL_GAP_PX = 2.5                  # free space kept around every label and point (pixels at 100 dpi)
+RQ3_LEADER_CURVE = 0.2                  # bend of the leader lines (arc3 rad; 0 = straight), the same for all
+RQ3_LEADER_WIDTH = 0.4                  # leader line width (pt)
+RQ3_PAD_X = (0.06, 0.10)                # relative mode: room left / right of the data (share of its range) for labels
+RQ3_PAD_Y = (0.08, 0.10)                # ... below / above
+RQ3_INSET_FIGURE_IN = (PAPER_TEXT_WIDTH_IN, 4.6)   # plot_rq3_inset: taller, for the labelled inset
+RQ3_INSET_BOUNDS = (0.05, 0.30, 0.49, 0.69)          # inset in axes fractions (x0, y0, width, height): the empty top left,
+                                                     # clear of the main y axis (its tick labels must not look like the inset's)
+RQ3_INSET_OVERVIEW_MARKER_SIZE = 14                 # points of the overview (no labels)
+RQ3_INSET_FRAME_COLOR = '#9a9893'                   # inset frame and the frame of the zoomed area
+RQ3_INSET_SHADE_ALPHA = 0.10                        # light fill of the zoomed area
+RQ3_INSET_PALETTE = ['#7b5ea7', '#c2378b', '#c9a227', '#2b2b2b', '#8a5a2b']   # color_by levels: purple, magenta, gold,
+                                                     # near-black, brown: none of the quadrant hues (green, blue, grey, orange)
 RQ3_PARETO_LINE = {'color': '#1f1f1f', 'linestyle': ':', 'linewidth': 0.8}
 
 # RQ2 heatmap (viz/rq_plots.plot_rq2_heatmap): deviation from the grand mean, oriented by the metric's direction

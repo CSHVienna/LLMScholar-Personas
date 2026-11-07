@@ -83,6 +83,13 @@ def is_person_sql(name_column: str = 'display_name', orcid_column: str = 'orcid'
     return f"({orcid_column} IS NOT NULL OR NOT regexp_matches(coalesce({name_column}, ''), '{pattern}'))"
 
 
+def shared_gt_dir(gt_dir: Path | str) -> Path:
+    """GT root with the shared tables (authors/, coauthor_edges/, ...) for a folder of A.4 outputs:
+    <root>/population/<variant>/ -> <root>; any other folder is its own root (older layout, tests)."""
+    gt_dir = Path(gt_dir)
+    return gt_dir.parent.parent if gt_dir.parent.name == 'population' else gt_dir
+
+
 def sql_path(path: Path | str) -> str:
     """Path as a single-quoted SQL literal."""
     return "'" + str(path).replace("'", "''") + "'"

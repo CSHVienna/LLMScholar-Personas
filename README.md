@@ -91,6 +91,13 @@ bash code/scripts/run_matching_pipeline.sh      # match recommended names to Ope
 bash code/scripts/run_metrics_pipeline.sh       # metrics, flows, RQ1, RQ2
 ```
 
+**Variants**: the same pipeline with other settings (e.g. Jaro-Winkler 0.97), in folders named after the variant:
+
+```bash
+python code/scripts/configure_variant.py create jw097 --set matching.jw_full=0.97
+bash code/scripts/run_metrics_pipeline.sh -v jw097          # configure_variant.py show jw097 lists every step
+```
+
 Notebooks (`code/notebooks/`): `0_gt`, `1_responses_tags`, `2_matching_stats`, `3_metrics`,
 `4_research_questions`, `5_flows`.
 

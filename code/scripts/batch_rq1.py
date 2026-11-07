@@ -42,7 +42,7 @@ def run_metric(metric: str, args: argparse.Namespace) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--metrics_dir', default=cons.DEFAULT_METRICS_DIR, help='Output of the metrics (a variant folder)')
-    parser.add_argument('--metrics', nargs='+', default=['all'],
+    parser.add_argument('--metrics', nargs='+', default=['all', 'social_adj'],
                         help="Metric keys, or a family / subgroup ('all', 'technical', 'factuality', 'consistency')")
     parser.add_argument('--variables', nargs='+', default=inf.DEFAULT_FACTORS,
                         help='Factors of the model (model + configuration variables); subfield is coded nested in field')

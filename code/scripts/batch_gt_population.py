@@ -29,7 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
     db.add_resource_arguments(parser)
     parser.add_argument('--authors_dir', default=cons.DEFAULT_GT_AUTHORS_DIR, help='Output of step A.1')
     parser.add_argument('--demographics_dir', default=cons.DEFAULT_GT_DEMOGRAPHICS_DIR, help='Output of step A.3')
-    parser.add_argument('--gt_dir', default=cons.DEFAULT_GT_DIR, help='Where to write gt_*.parquet')
+    parser.add_argument('--gt_dir', default=cons.DEFAULT_GT_POPULATION_DIR, help='Where to write gt_*.parquet (population/<variant>/)')
     parser.add_argument('--field_mapping_file', default=cons.DEFAULT_FIELD_MAPPING_FILE)
     parser.add_argument('--min_field_share', type=float, default=cons.DEFAULT_GT_MIN_FIELD_SHARE,
                         help='Minimum share of a scholar\'s works in a field to belong to it (default 0: any work)')

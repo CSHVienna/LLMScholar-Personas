@@ -8,12 +8,14 @@ response. Needs B.1-B.3, B.6 and the GT (A.1, A.1a edges, A.4).
 Writes, under --output_dir (default results/metrics/main/; robustness: results/metrics/robustness/<check>/):
     social/<model>.parquet       one row per response: n_people + the metrics
     social_gaps/<model>.parquet  one row per response x attribute x class: p, q (GT target), gap = p - q
+Every social metric also as <metric>_adj = observed - expected under a random recommender (needs step 9a,
+batch_social_expected.py, in the same --output_dir).
 The parameters (valid tags, include_unknown, parity_target, ...) are recorded in <output_dir>/social/_params.json.
 
 Usage (from any folder; run_metrics_pipeline.sh -s social runs one process per model):
     python batch_social_metrics.py --models deepseek-r1-8b-0528-qwen3-q4_K_M --config config/analysis_smoke.yaml \\
         --responses_metadata_dir <smoke>/responses_metadata --recommendations_metadata_dir <smoke>/recommendations_metadata \\
-        --matching_dir <smoke>/matching/authors/main --gt_dir <smoke>/groundtruth --output_dir <smoke>/metrics/main
+        --matching_dir <smoke>/matching/authors/main --gt_dir <smoke>/groundtruth/population/main --output_dir <smoke>/metrics/main
 """
 
 import _bootstrap  # noqa: F401  (adds code/libs to sys.path)
@@ -21,6 +23,7 @@ import argparse
 from pathlib import Path
 
 from groundtruth.authorships import check_params
+from metrics import expected as ex
 from metrics import social as so
 from metrics import technical as tm
 from utils import analysis_config as ac
@@ -58,7 +61,7 @@ def run_model(model: str, args: argparse.Namespace) -> str:
     people = so.response_people(responses, recs, matches, args.valid_response_tags, args.valid_rec_tags,
                                 args.order_sensitive_keys)
     metrics, gaps = so.social_metrics(responses, people, args.gt, args.include_unknown, args.parity_target,
-                                      args.top_country_share)
+                                      args.top_country_share, expectations=args.expected)
     out.parent.mkdir(parents=True, exist_ok=True)
     gaps_file.parent.mkdir(parents=True, exist_ok=True)
     write_atomic(metrics, out)
@@ -74,7 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--responses_metadata_dir', default=cons.DEFAULT_RESPONSES_METADATA_DIR, help='Output of B.1-B.2')
     parser.add_argument('--recommendations_metadata_dir', default=cons.DEFAULT_RECOMMENDATIONS_METADATA_DIR, help='Output of B.3')
     parser.add_argument('--matching_dir', default=cons.DEFAULT_MATCH_AUTHORS_DIR, help='Output of B.6b (a variant folder)')
-    parser.add_argument('--gt_dir', default=cons.DEFAULT_GT_DIR, help='GT folder (gt_members, gt_shares, gt_authors, coauthor_edges)')
+    parser.add_argument('--gt_dir', default=cons.DEFAULT_GT_POPULATION_DIR, help='A.4 outputs of the variant (gt_members, gt_shares, gt_authors); coauthor_edges from the GT root')
     parser.add_argument('--output_dir', default=cons.DEFAULT_METRICS_DIR)
     parser.add_argument('--valid_response_tags', nargs='+', default=cons.DEFAULT_VALID_RESPONSE_TAGS, choices=cons.RESPONSE_TAGS)
     parser.add_argument('--valid_rec_tags', nargs='+', default=cons.DEFAULT_VALID_REC_TAGS, choices=cons.REC_TAGS)
@@ -102,6 +105,7 @@ def main() -> None:
                   'order_sensitive_keys': args.order_sensitive_keys, 'languages': args.languages,
                   'matching_dir': str(Path(args.matching_dir).resolve()), 'gt_dir': str(Path(args.gt_dir).resolve())})
     args.gt = so.GroundTruth(args.gt_dir)
+    args.expected = ex.load(args.output_dir, args.gt_dir, args.include_unknown, args.parity_target)
     batch.run_per_model('social_metrics', run_model, args)
 
 

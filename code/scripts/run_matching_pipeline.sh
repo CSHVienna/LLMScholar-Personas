@@ -31,6 +31,8 @@
 #   -f X      override the config: fuzzy floor (pairs with jw_full >= X are stored)
 #   -F        override the config: fuzzy rule for ALL recommended names
 #   -V NAME   variant of B.6b: output DIR/matching/authors/NAME (default main)
+#   -v NAME   analysis variant (configure_variant.py): sets -y and -V (B.6b skipped if the variant changes no
+#             B.6b setting: it reads main's matching); the candidates are shared by every variant
 #   -M FILE   models file (default data/models/models.txt)
 #   -r DIR    results root (default <project>/results)
 #   -p ENV    python executable (default: python of the active environment)
@@ -49,7 +51,8 @@ TEMP_DIR="${PROJECT_ROOT}/tmp/duckdb"
 
 STEP="all"; JOBS=4; PY_THREADS=3; DUCK_JOBS=1; THREADS=12; MEMORY="40GB"; N_BUCKETS=64; N_SHARDS=64; FLOOR=""
 FUZZY_ALL=""; CONFIG="${PROJECT_ROOT}/config/analysis.yaml"; VARIANT="main"; EXTRA_ARGS=""; SINGLE_ARGS=""; PYTHON="python"
-while getopts "s:j:c:d:t:m:T:n:S:f:FV:M:r:p:l:x:a:y:h" option; do
+VARIANT_NAME=""; CONFIG_GIVEN=""
+while getopts "s:j:c:d:t:m:T:n:S:f:FV:M:r:p:l:x:a:y:v:h" option; do
     case "${option}" in
         s) STEP="${OPTARG}" ;;
         j) JOBS="${OPTARG}" ;;
@@ -62,7 +65,8 @@ while getopts "s:j:c:d:t:m:T:n:S:f:FV:M:r:p:l:x:a:y:h" option; do
         S) N_SHARDS="${OPTARG}" ;;
         f) FLOOR="${OPTARG}" ;;
         F) FUZZY_ALL="--fuzzy_all" ;;
-        y) CONFIG="${OPTARG}" ;;
+        y) CONFIG="${OPTARG}"; CONFIG_GIVEN=1 ;;
+        v) VARIANT_NAME="${OPTARG}" ;;
         V) VARIANT="${OPTARG}" ;;
         M) MODELS_FILE="${OPTARG}" ;;
         r) RESULTS_DIR="${OPTARG}" ;;
@@ -70,9 +74,19 @@ while getopts "s:j:c:d:t:m:T:n:S:f:FV:M:r:p:l:x:a:y:h" option; do
         l) LOGS_DIR="${OPTARG}" ;;
         x) EXTRA_ARGS="${OPTARG}" ;;
         a) SINGLE_ARGS="${OPTARG}" ;;
-        h|*) sed -n '2,40p' "$0"; exit 0 ;;
+        h|*) sed -n '2,42p' "$0"; exit 0 ;;
     esac
 done
+# -v NAME: analysis variant (configure_variant.py): its config, and the variants whose GT population / author
+# matching it reads (its own if it changes their settings, else main's)
+VARIANT_POPULATION="main"; VARIANT_AUTHORS="main"; VARIANT_METRICS="main"
+if [[ -n "${VARIANT_NAME}" ]]; then
+    variant_lines="$("${PYTHON}" "${SCRIPTS_DIR}/configure_variant.py" paths "${VARIANT_NAME}" --results_dir "${RESULTS_DIR}" ${CONFIG_GIVEN:+--config "${CONFIG}"})" || exit 1
+    eval "${variant_lines}"
+    CONFIG="${VARIANT_CONFIG}"
+    echo "[$(date +%H:%M:%S)] variant ${VARIANT_NAME}: config ${CONFIG} | GT population: ${VARIANT_POPULATION} | author matching: ${VARIANT_AUTHORS}"
+fi
+[[ -n "${VARIANT_NAME}" ]] && VARIANT="${VARIANT_AUTHORS}"
 GT_DIR="${RESULTS_DIR}/groundtruth"
 RECS_DIR="${RESULTS_DIR}/recommendations_metadata"
 CAND_DIR="${RESULTS_DIR}/matching/candidates"
@@ -137,7 +151,9 @@ if selected candidates; then
     parallel_stage "matching_fuzzy" "${DUCK_JOBS}" shards "${N_SHARDS}" "${CAND} --stage fuzzy ${BIG}"
     parallel_stage "matching_merge" "${JOBS}" buckets "${N_BUCKETS}" "${CAND} --stage merge ${SMALL}"
 fi
-if selected authors; then
+if selected authors && [[ -n "${VARIANT_NAME}" && "${VARIANT_AUTHORS}" != "${VARIANT_NAME}" ]]; then
+    echo "[$(date +%H:%M:%S)] match_authors: skipped, variant ${VARIANT_NAME} changes no B.6b setting (reads ${AUTHORS_DIR})"
+elif selected authors; then
     joblog="${LOGS_DIR}/$(date +%Y-%m-%d-%H:%M)_match_authors_models.joblog"
     echo "[$(date +%H:%M:%S)] match_authors (${VARIANT}): models of ${MODELS_FILE}, ${JOBS} job(s) at a time, -> ${AUTHORS_DIR}, joblog ${joblog}"
     if ! parallel -j "${JOBS}" --nice 10 --joblog "${joblog}" \

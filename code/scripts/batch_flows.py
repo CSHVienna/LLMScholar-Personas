@@ -11,7 +11,7 @@ Writes <output_dir>/flows/<model>.parquet (default results/metrics/main/); param
 Usage (from any folder; run_metrics_pipeline.sh -s flows runs one process per model):
     python batch_flows.py --models deepseek-r1-8b-0528-qwen3-q4_K_M --config config/analysis_smoke.yaml \\
         --responses_metadata_dir <smoke>/responses_metadata --recommendations_metadata_dir <smoke>/recommendations_metadata \\
-        --matching_dir <smoke>/matching/authors/main --gt_dir <smoke>/groundtruth --output_dir <smoke>/metrics/main
+        --matching_dir <smoke>/matching/authors/main --gt_dir <smoke>/groundtruth/population/main --output_dir <smoke>/metrics/main
 """
 
 import _bootstrap  # noqa: F401  (adds code/libs to sys.path)
@@ -63,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--responses_metadata_dir', default=cons.DEFAULT_RESPONSES_METADATA_DIR, help='Output of B.1-B.2')
     parser.add_argument('--recommendations_metadata_dir', default=cons.DEFAULT_RECOMMENDATIONS_METADATA_DIR, help='Output of B.3')
     parser.add_argument('--matching_dir', default=cons.DEFAULT_MATCH_AUTHORS_DIR, help='Output of B.6b (a variant folder)')
-    parser.add_argument('--gt_dir', default=cons.DEFAULT_GT_DIR, help='GT folder (gt_members)')
+    parser.add_argument('--gt_dir', default=cons.DEFAULT_GT_POPULATION_DIR, help='A.4 outputs of the variant (gt_members)')
     parser.add_argument('--output_dir', default=cons.DEFAULT_METRICS_DIR)
     parser.add_argument('--valid_response_tags', nargs='+', default=cons.DEFAULT_VALID_RESPONSE_TAGS, choices=cons.RESPONSE_TAGS)
     parser.add_argument('--valid_rec_tags', nargs='+', default=cons.DEFAULT_VALID_REC_TAGS, choices=cons.REC_TAGS)

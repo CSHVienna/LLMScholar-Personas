@@ -5,7 +5,7 @@ Evaluate the inferred tags against the manual annotations of one task.
 Reads   <annotations_dir>/annotation_<task>_key.parquet       (inferred tags, from batch_annotation_sample.py)
         <annotations_dir>/annotation_<task>_<annotator>.csv   (exports of code/tools/annotation_tool.html)
 Writes  <annotations_dir>/annotation_<task>_eval_<table>.csv  for the tables
-        summary         sample sizes, exact-match rate, valid-decision accuracy (+ name / count match)
+        summary         sample sizes, exact-match rate, valid-decision accuracy (+ name / count / extra_missing match)
         tags            per tag: support, predicted, TP/FP/FN, precision, recall, F1
         agreement       per tag: Krippendorff's alpha between annotators (if >= 2 annotators)
         disagreements   items whose inferred tags differ from the adjudicated ones (to inspect)
@@ -54,6 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--annotations_dir', default=cons.DEFAULT_ANNOTATIONS_DIR)
     parser.add_argument('--responses_metadata_dir', default=cons.DEFAULT_RESPONSES_METADATA_DIR,
                         help='Responses metadata (for the pipeline count of person records)')
+    parser.add_argument('--recommendations_metadata_dir', default=cons.DEFAULT_RECOMMENDATIONS_METADATA_DIR,
+                        help='Recommendations metadata (for the pipeline missing_fields, vs extra_missing)')
     logs.add_log_arguments(parser)
     return parser
 
@@ -106,6 +108,8 @@ def main() -> None:
     key = ios.load_parquet(folder / f"{prefix}_key.parquet")
     if args.task == cons.ANNOTATION_TASK_RESPONSES:   # pipeline count of person records (k_returned), for the count check
         key = evaluation.add_person_counts(key, args.responses_metadata_dir)
+    if args.task == cons.ANNOTATION_TASK_RECOMMENDATIONS:   # pipeline missing_fields, for the extra_missing check
+        key = evaluation.add_missing_fields(key, args.recommendations_metadata_dir)
     annotations = evaluation.load_annotations(folder, args.task)
     ios.printf(f"{len(annotations)} annotations by {annotations['annotator'].nunique()} annotator(s) "
                f"on {annotations['item_id'].nunique()} of {len(key)} items")

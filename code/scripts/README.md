@@ -32,6 +32,33 @@ flowchart TD
 `configure_analysis.py` sets the analysis config (early settings after the GT bibliometrics, late settings
 after the first metrics); the annotation scripts validate the tags and the matching (see below).
 
+## Variants
+
+A variant = a name you choose + a full analysis config. `main` is `config/analysis.yaml`; every other variant is
+`config/variants/<name>.yaml` (header: `base`, `differs` = the settings changed, e.g. `jwfull=0.97, dup=yes`).
+Its outputs go to folders named after it. A stage whose settings it does not change is skipped: the variant reads
+main's GT population or author matching.
+
+```bash
+python code/scripts/configure_variant.py create jw097 --set matching.jw_full=0.97     # or a code: jwfull=0.97
+python code/scripts/configure_variant.py create pf02 --set pf=0.2,0.8
+python code/scripts/configure_variant.py list
+python code/scripts/configure_variant.py show jw097          # settings, folders, commands to run
+bash code/scripts/run_matching_pipeline.sh -s authors -v jw097
+bash code/scripts/run_metrics_pipeline.sh -v jw097
+```
+
+| Stage | Folder | Own folder if the variant changes |
+|---|---|---|
+| GT population (A.4) | `groundtruth/population/<name>/` | seniority, field share, gender, ethnicity, prominence |
+| author matching (B.6b) | `matching/authors/<name>/` | seniority, field share, Jaro-Winkler, seed |
+| metrics, RQs | `metrics/<name>/` | always |
+| plots (notebooks) | `plots/<name>/` | always (`VARIANT = '<name>'`) |
+
+Shared by every variant: the GT tables of A.0–A.3 (`groundtruth/authorships, coauthor_*, authors, names,
+demographics`) and the matching candidates (B.6a; `candidates_floor` and `fuzzy_all` cannot change).
+Edit a variant with `configure_analysis.py --config config/variants/<name>.yaml` (its header is kept).
+
 ## Inputs
 
 | Script | Writes |
@@ -297,10 +324,12 @@ CSV into `results/annotations/`. The server binds to 127.0.0.1 only and never se
   the root (array / object), the number of person records vs k, and the missing requested fields per record.
   Report it in the paper as "annotators were assisted by a JSON syntax check".
   Responses also ask for the **number of recommended people** (compared with the pipeline's count of person records,
-  i.e. `k_returned` of `k_ratio`). To add new codebook fields to an existing sample without changing its items:
+  i.e. `k_returned` of `k_ratio`). Recommendations have an **extra_missing** checkbox (key `m`): a requested
+  non-name key is absent (compared with the pipeline's `missing_fields`). Answers saved before a checkbox existed keep
+  it empty (= not answered, never "no"); "Next unannotated" also visits them. To add new codebook fields to an existing sample without changing its items:
   `python code/scripts/batch_annotation_sample.py --task responses --refresh_codebook`.
 - Evaluation (`results/annotations/annotation_<task>_eval_<table>.csv`): `summary` (exact match of tag sets,
-  accuracy of the valid / not valid decision, name match), `tags` (precision / recall / F1 per tag), `agreement`
+  accuracy of the valid / not valid decision, name match, extra_missing match), `tags` (precision / recall / F1 per tag), `agreement`
   (Krippendorff's alpha per tag, >= 2 annotators), `disagreements` (items to inspect). Gold = majority of
   non-unsure annotators; tied items are excluded and counted.
 - Verification tasks (`--task matching`, `--task authors`; `libs/annotation/verification.py`): the pipeline's
@@ -349,7 +378,7 @@ Smoke test without touching the full database: build a mini copy (a few thousand
 
 No script: the notebook aggregates the A.1 / A.4 outputs in DuckDB (`libs/groundtruth/stats.py`; 4 threads / 16 GB,
 `cons.GT_STATS_*`; the big tables are never loaded into pandas) and plots with `libs/viz/gt_plots.py`. Aggregated
-tables are cached in `groundtruth/descriptives/` and recomputed when an A.4 file is newer. Sections: population (funnel,
+tables are cached in `groundtruth/population/<variant>/descriptives/` and recomputed when an A.4 file is newer. Sections: population (funnel,
 scholars per field x seniority, field overlap), academic age with the seniority cut-offs, bibliometrics (per field x
 seniority, by perceived gender, by perceived ethnicity), perceived gender / ethnicity (unknown reasons, p_female and
 each raceBERT probability with the config thresholds, composition = the parity targets), countries (+ the prompt
@@ -405,6 +434,20 @@ the GT target, `config: social.parity_target`), diversity (normalised entropy) a
 ethnicity, location, productivity, influence, collaboration; popularity (top group by works / citations);
 connectedness (coauthorship components); similarity (PCA cosine). `social.include_unknown` (config) decides whether
 'unknown' is a class. Outputs `metrics/<variant>/social/<model>.parquet` and `social_gaps/<model>.parquet`.
+
+**Size-adjusted** (every social metric): `<metric>_adj = observed − expected`, expected = the mean for a random list
+of the same size n from the GT of the requested field × seniority (0 = like random). Expected values: step
+`expected` (`batch_social_expected.py`, `libs/metrics/expected.py`, ~4 min) → `metrics/<variant>/social_expected/`;
+the social step needs it. RQ1 / RQ2 run on raw and adjusted metrics (`--metrics all social_adj`); notebooks 3 and 4:
+`ADJUSTED = True` plots the adjusted ones (set names → `<name>_adj`, e.g. `paper_adj`); their files end in `_adj`,
+next to the raw ones: `rq1_omega2_paper_bar.pdf` / `rq1_omega2_paper_bar_adj.pdf`, `metrics_paper_models_adj.pdf`.
+
+| Metric | Expected value |
+|---|---|
+| parity, diversity | random labels with the GT class shares (10,000 lists per n) |
+| popularity | the target's top share (no simulation) |
+| connectedness | 1,000 random lists of real members + their coauthor edges |
+| similarity | mean pairwise cosine of 5,000 random members (same for every n) |
 
 ### Metric figures — `code/notebooks/3_metrics.ipynb`
 

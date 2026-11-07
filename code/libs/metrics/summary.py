@@ -76,6 +76,13 @@ for _attribute in ('productivity', 'influence', 'location'):
                                                  NEUTRAL, 'social', 'popularity', short=_SOCIAL_SHORT[_attribute])
 METRICS['connectedness'] = Metric('connectedness', 'Coh.$_{conn}$', NEUTRAL, 'social', 'cohesion', short='Connect.')
 METRICS['similarity'] = Metric('similarity', 'Coh.$_{sim}$', NEUTRAL, 'social', 'cohesion', short='Sim.')
+# Size-adjusted social metrics (metrics/expected.py): <key>_adj = observed - expected under a random recommender;
+# group <group>_adj (so 'parity' still selects the raw ones); differences, so scaled to the data
+ADJ_SUFFIX = '_adj'
+for _key in [k for k, m in METRICS.items() if m.family == 'social']:
+    _m = METRICS[_key]
+    METRICS[_key + ADJ_SUFFIX] = Metric(_key + ADJ_SUFFIX, _m.label.replace('$_{', '$^{adj}_{'), _m.direction, 'social',
+                                        _m.group + ADJ_SUFFIX, _m.decimals, None, _m.short, _m.narrow)
 # Default columns of each family (the figures of the paper); social metrics are added with step 9
 COLUMN_SETS = cons.METRIC_COLUMN_SETS          # named column sets: all, technical, factuality, technical_factuality, ...
 FAMILY_DEFAULTS = COLUMN_SETS                    # (old name)
@@ -87,9 +94,43 @@ RESPONSE_METRICS = ['duplicates', 'k_ratio'] + [f"factuality_{level}" for level 
 SOCIAL_METRICS = [k for k, m in METRICS.items() if m.family == 'social']
 
 
-def select_metrics(selection: str | Sequence[str]) -> List[Metric]:
+def adjusted_keys(keys: Sequence[str]) -> List[str]:
+    """The keys with every social metric replaced by its size-adjusted version (<key>_adj); others unchanged."""
+    return [k + ADJ_SUFFIX if k in METRICS and METRICS[k].family == 'social' and not k.endswith(ADJ_SUFFIX)
+            and k + ADJ_SUFFIX in METRICS else k for k in keys]
+
+
+def adjusted_selection(selection, adjusted: bool):
+    """A column selection with its social metrics size-adjusted if ``adjusted``: a set name -> '<name>_adj' (if it has
+    one; None = all -> 'all_adj'), a list of keys -> adjusted_keys; unchanged if not adjusted (notebooks: ADJUSTED)."""
+    if not adjusted:
+        return selection
+    if selection is None:
+        return 'all_adj'
+    if isinstance(selection, str):
+        return selection + ADJ_SUFFIX if selection + ADJ_SUFFIX in COLUMN_SETS else adjusted_keys([selection])[0]
+    return adjusted_keys(selection)
+
+
+def selection_name(selection) -> str:
+    """File-name part of a column selection, with '_adj' moved to the END so a figure and its size-adjusted twin sort
+    together: 'paper' -> 'paper', 'paper_adj' -> 'paper' + '_adj' (the caller appends the rest before it)."""
+    base, adjusted = split_adjusted(selection)
+    return base + (ADJ_SUFFIX if adjusted else '')
+
+
+def split_adjusted(selection) -> tuple:
+    """(name without _adj, adjusted?) of a selection: None = 'all', a set name, or a list of keys (joined by '-')."""
+    if selection is None:
+        return 'all', False
+    keys = [selection] if isinstance(selection, str) else list(selection)
+    adjusted = any(k.endswith(ADJ_SUFFIX) for k in keys)
+    return '-'.join(k.removesuffix(ADJ_SUFFIX) for k in keys), adjusted
+
+
+def select_metrics(selection: str | Sequence[str], adjusted: bool = False) -> List[Metric]:
     """A named column set (cons.METRIC_COLUMN_SETS: 'all', 'technical', 'technical_factuality', 'social', 'parity',
-    ...), a subgroup, one metric key, or a list of metric keys."""
+    ...), a subgroup, one metric key, or a list of metric keys. adjusted: the social metrics as <key>_adj."""
     if isinstance(selection, str):
         if selection in COLUMN_SETS:
             keys = COLUMN_SETS[selection]
@@ -97,6 +138,8 @@ def select_metrics(selection: str | Sequence[str]) -> List[Metric]:
             keys = [m.key for m in METRICS.values() if m.group == selection] or [selection]
     else:
         keys = list(selection)
+    if adjusted:
+        keys = adjusted_keys(keys)
     unknown = [k for k in keys if k not in METRICS]
     if unknown:
         raise ValueError(f"Unknown metrics {unknown}; known: {list(METRICS)}")

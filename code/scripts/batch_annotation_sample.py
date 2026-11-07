@@ -162,8 +162,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--matching_dir', default=cons.DEFAULT_MATCH_AUTHORS_DIR,
                         help='matching / demographics: B.6b output (a variant)')
     parser.add_argument('--candidates_dir', default=cons.DEFAULT_MATCH_CANDIDATES_DIR, help='matching: B.6a candidates')
-    parser.add_argument('--gt_dir', default=cons.DEFAULT_GT_DIR,
-                        help='authors / demographics: ground truth (gt_members / gt_authors.parquet)')
+    parser.add_argument('--gt_dir', default=cons.DEFAULT_GT_POPULATION_DIR,
+                        help='authors / demographics: A.4 outputs of a variant (gt_members / gt_authors.parquet)')
     parser.add_argument('--authors_dir', default=cons.DEFAULT_GT_AUTHORS_DIR, help='matching / authors: A.1 profiles')
     parser.add_argument('--output_dir', default=cons.DEFAULT_ANNOTATIONS_DIR)
     parser.add_argument('--overwrite', action='store_true', help='Replace an existing sample (invalidates its annotations)')

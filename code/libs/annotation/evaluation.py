@@ -9,7 +9,9 @@ Evaluation of inferred tags against manual annotations (one or more annotators).
 3. Inferred vs gold: per tag precision, recall, F1 (support = gold positives); exact-match rate of the tag
    sets; accuracy of the derived valid / not valid decision (valid = all tags in the valid set);
    for recommendations, agreement of the cleaned first / last name with the annotators' names; for
-   responses, agreement of the number of person records (k_returned) with the annotators' count.
+   responses, agreement of the number of person records (k_returned) with the annotators' count;
+   for recommendations, agreement of extra_missing (a requested non-name key absent) with the pipeline's
+   missing_fields (items without an extra_missing answer, e.g. annotated before it existed, are left out).
 """
 
 from pathlib import Path
@@ -21,12 +23,12 @@ import pandas as pd
 
 from utils import constants as cons
 from utils import ios
-from annotation.tasks import ITEM_ID, vocabulary
+from annotation.tasks import EXTRA_MISSING, ITEM_ID, vocabulary
 from responses import tags as tag_utils
 from responses.recommendations import normalize_tokens
 from responses.tag_stats import is_valid
 
-ANSWER_FIELDS = ['first_name', 'last_name', 'n_recommendations']   # free-text / number answers of the codebooks
+ANSWER_FIELDS = ['first_name', 'last_name', 'n_recommendations', EXTRA_MISSING]   # free-text / number answers of the codebooks
 
 
 # -----------------------------------------------------------------------------
@@ -148,7 +150,20 @@ def summary(compared: pd.DataFrame, valid_tags: Iterable[str], annotations: pd.D
         gold_n = pd.to_numeric(counted['gold_n_recommendations'], errors='coerce')
         row['count_match'] = float((gold_n == counted['n_persons']).mean()) if len(counted) else np.nan
         row['count_mean_abs_diff'] = float((gold_n - counted['n_persons']).abs().mean()) if len(counted) else np.nan
+    if f'gold_{EXTRA_MISSING}' in compared.columns and 'missing_fields' in compared.columns:
+        row.update(completeness_agreement(compared))
     return pd.DataFrame([row])
+
+
+def completeness_agreement(compared: pd.DataFrame) -> dict:
+    """extra_missing (gold) vs the pipeline's missing_fields, on the items with a gold extra_missing answer."""
+    answered = compared[compared[f'gold_{EXTRA_MISSING}'].isin(['0', '1'])]
+    gold = answered[f'gold_{EXTRA_MISSING}'] == '1'
+    inferred = answered['missing_fields'].fillna('').astype(str) != ''
+    return {'n_items_extra_missing': len(answered),
+            'extra_missing_match': float((gold == inferred).mean()) if len(answered) else np.nan,
+            'extra_missing_false_positives': int((inferred & ~gold).sum()),    # pipeline: missing; annotators: not
+            'extra_missing_false_negatives': int((~inferred & gold).sum())}    # pipeline: complete; annotators: missing
 
 
 def disagreements(compared: pd.DataFrame) -> pd.DataFrame:
@@ -171,6 +186,16 @@ def _same_name(df: pd.DataFrame) -> pd.Series:
 
 
 RESPONSE_MATCH = [cons.COL_MODEL, cons.VAR_LANGUAGE, cons.COL_PROMPT_ID, cons.COL_RUN_ID]
+
+
+def add_missing_fields(key: pd.DataFrame, recommendations_metadata_dir: Path | str) -> pd.DataFrame:
+    """``key`` with the pipeline's ``missing_fields`` of each recommendation (None / '' = complete)."""
+    match = RESPONSE_MATCH + [cons.COL_REC_INDEX]
+    models = list(key[cons.COL_MODEL].astype(str).unique())
+    recs = ios.load_parquet_folder(recommendations_metadata_dir, match + ['missing_fields'], models)
+    as_text = lambda df: df.assign(**{c: df[c].astype(str) for c in match})
+    merged = as_text(key).merge(as_text(recs).drop_duplicates(match), on=match, how='left')
+    return merged.assign(**{c: key[c].values for c in match})
 
 
 def add_person_counts(key: pd.DataFrame, responses_metadata_dir: Path | str) -> pd.DataFrame:

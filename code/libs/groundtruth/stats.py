@@ -29,7 +29,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 
-from groundtruth.db import sql_path
+from groundtruth.db import shared_gt_dir, sql_path
 from groundtruth.population import SCOPE_FIELD_SENIORITY, SCOPE_SENIORITY, UNKNOWN
 from utils import constants as cons
 
@@ -101,7 +101,7 @@ def _sort_cells(df: pd.DataFrame) -> pd.DataFrame:
 # --- population --------------------------------------------------------------------------------------------------
 def funnel(con: duckdb.DuckDBPyConnection, gt_dir: Path | str, authors_dir: Path | str = None) -> pd.DataFrame:
     """Steps from the A.1 authors to the GT memberships: n and share of the previous step."""
-    authors_dir = Path(authors_dir or Path(gt_dir) / 'authors')
+    authors_dir = Path(authors_dir or shared_gt_dir(gt_dir) / 'authors')
     rows = []
     files = sorted(authors_dir.glob('bucket-*.parquet'))
     if files:

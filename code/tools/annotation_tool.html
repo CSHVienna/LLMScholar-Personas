@@ -138,11 +138,11 @@
     <div class="nav">
       <button id="prev" title="Previous (←)">← Previous</button>
       <button id="next" class="primary" title="Save and next (Enter or →)">Save &amp; next →</button>
-      <button id="jump" title="First item without an annotation">Next unannotated</button>
+      <button id="jump" title="First item without an annotation (or without an answer for a newer checkbox, e.g. extra_missing)">Next unannotated</button>
     </div>
     <details style="margin-top:12px"><summary>Instructions, codebook and rules</summary>
       <p id="instructions" class="muted"></p><div id="codebook"></div></details>
-    <p class="muted" style="margin-top:12px"><small>Keys: 1–9, 0, -, =, q–y toggle tags · u unsure · Enter/→ next · ← previous ·
+    <p class="muted" style="margin-top:12px"><small>Keys: 1–9, 0, -, =, q–y toggle tags · m extra_missing (recommendations) · u unsure · Enter/→ next · ← previous ·
       Ctrl+S export. In a field, shortcuts are off and Enter goes to the next item.</small></p>
   </aside>
 </main>
@@ -153,7 +153,10 @@
 // State
 // ---------------------------------------------------------------------------
 const state = { task: null, codebook: null, items: [], order: [], position: 0, annotator: '', answers: {},
-                separator: '|', shownAt: 0, served: false };
+                separator: '|', shownAt: 0, served: false, touched: new Set() };
+const checkboxFields = () => state.codebook.fields.filter((f) => f.type === 'checkbox');
+// An annotation made before a checkbox field existed has no value for it ('' = not answered)
+const unansweredFields = (answer) => checkboxFields().filter((f) => !['0', '1'].includes((answer.fields || {})[f.id]));
 // Short descriptions shown next to each tag (full definition: hover, and in the codebook below)
 const SHORT = {
   responses: {
@@ -301,9 +304,16 @@ function buildCodebook() {
     $('labels').appendChild(row);
   });
   $('fields').innerHTML = cb.fields.map((f) => {
+    if (f.type === 'checkbox') {   // yes / no answer, shown like a tag ('1' / '0'; '' = not answered)
+      return `<label class="label" id="field-row-${f.id}" title="${f.label}"><input type="checkbox" id="field-${f.id}">
+              <kbd>${f.key || ''}</kbd><span><b>${f.id}</b><small>${f.short || f.label}</small></span></label>`;
+    }
     const input = f.type === 'number' ? `type="number" min="0" step="1" inputmode="numeric"` : 'type="text"';
     return `<div class="field"><label for="field-${f.id}" class="muted">${f.label}</label><input ${input} id="field-${f.id}" autocomplete="off"></div>`;
-  }).join('');
+  }).join('') + '<div id="field-warning" class="warn hidden" role="status"></div>';
+  checkboxFields().forEach((f) => $(`field-${f.id}`).addEventListener('change', () => {
+    state.touched.add(f.id); $(`field-row-${f.id}`).classList.toggle('checked', $(`field-${f.id}`).checked); fieldWarning();
+  }));
   $('unsure').addEventListener('change', () => $('unsure-label').classList.toggle('checked', $('unsure').checked));
   $('codebook').innerHTML = `<ul>${cb.labels.map((l) => `<li><b>${l.id}</b>: ${l.definition}</li>`).join('')}</ul>
                              <p><b>Rules</b></p><ul>${cb.rules.map((r) => `<li>${r}</li>`).join('')}</ul>`;
@@ -534,7 +544,14 @@ function render() {
   document.querySelectorAll('#labels .label').forEach((row) => {
     const on = chosen.has(row.dataset.tag); row.querySelector('input').checked = on; row.classList.toggle('checked', on);
   });
-  state.codebook.fields.forEach((f) => { $(`field-${f.id}`).value = (answer.fields || {})[f.id] || ''; });
+  state.touched = new Set();
+  state.codebook.fields.forEach((f) => {
+    const value = (answer.fields || {})[f.id] || '';
+    if (f.type === 'checkbox') {
+      $(`field-${f.id}`).checked = value === '1'; $(`field-row-${f.id}`).classList.toggle('checked', value === '1');
+    } else $(`field-${f.id}`).value = value;
+  });
+  fieldWarning();
   // Responses: pre-fill the number of recommendations with the person records listed in the checks
   // (only when nothing is saved yet; the annotator corrects it if the list misses or over-counts people)
   const countField = $('field-n_recommendations');
@@ -550,12 +567,28 @@ function render() {
 
 function selectedTags() { return [...document.querySelectorAll('#labels input:checked')].map((i) => i.value); }
 
-function store() {
+function fieldWarning() {   // an earlier annotation without an answer for a checkbox field
+  const box = $('field-warning'); if (!box) return;
+  const answer = state.answers[currentItem().item_id];
+  const open = answer ? unansweredFields(answer).filter((f) => !state.touched.has(f.id)) : [];
+  box.textContent = open.length ? `${open.map((f) => f.id).join(', ')}: not answered yet (annotated before this ` +
+                                  'checkbox existed). Tick it if it applies; Save & next records your answer.' : '';
+  box.classList.toggle('hidden', open.length === 0);
+}
+
+function store(onUnload = false) {
   const item = currentItem(); const previous = state.answers[item.item_id] || {};
   const seconds = (previous.seconds || 0) + (performance.now() - state.shownAt) / 1000;
-  const fields = Object.fromEntries(state.codebook.fields.map((f) => [f.id, $(`field-${f.id}`).value.trim()]));
+  const fields = Object.fromEntries(state.codebook.fields.map((f) => {
+    if (f.type !== 'checkbox') return [f.id, $(`field-${f.id}`).value.trim()];
+    const checked = $(`field-${f.id}`).checked;
+    // Closing / reloading the page is not an answer: an unanswered field stays unanswered unless ticked / changed
+    const keep = onUnload && previous.tags && !state.touched.has(f.id) && !checked;
+    return [f.id, keep ? ((previous.fields || {})[f.id] || '') : (checked ? '1' : '0')];
+  }));
   const tags = selectedTags();
-  if (tags.length === 0 && !$('unsure').checked && !$('notes').value.trim()) return;   // nothing entered: keep unannotated
+  const anyChecked = checkboxFields().some((f) => $(`field-${f.id}`).checked);
+  if (tags.length === 0 && !anyChecked && !$('unsure').checked && !$('notes').value.trim()) return;   // nothing entered: keep unannotated
   state.answers[item.item_id] = { tags, fields, unsure: $('unsure').checked, notes: $('notes').value.trim(),
                                   seconds: Math.round(seconds), saved_at: new Date().toISOString() };
   save();
@@ -581,7 +614,10 @@ function checkRules() {
 function updateProgress() {
   const done = state.items.filter((it) => state.answers[it.item_id]).length;
   $('bar').style.width = `${(100 * done) / state.items.length}%`;
-  $('counter').textContent = `${done} / ${state.items.length} annotated`;
+  const open = checkboxFields().length
+    ? state.items.filter((it) => state.answers[it.item_id] && unansweredFields(state.answers[it.item_id]).length).length : 0;
+  $('counter').textContent = `${done} / ${state.items.length} annotated` +
+                             (open ? ` · ${open} without ${checkboxFields().map((f) => f.id).join(' / ')}` : '');
   const saved = !!state.answers[currentItem().item_id];
   $('position').textContent = `#${state.position + 1} of ${state.items.length} · ${saved ? 'saved ✓' : 'not saved'}`;
   $('position').classList.toggle('done', saved);
@@ -633,7 +669,9 @@ $('next').addEventListener('click', () => go(1));
 $('prev').addEventListener('click', () => go(-1));
 $('export').addEventListener('click', exportCsv);
 $('jump').addEventListener('click', () => {
-  store(); const idx = state.order.findIndex((i) => !state.answers[state.items[i].item_id]);
+  store();   // also earlier annotations without an answer for a checkbox field (e.g. extra_missing)
+  const idx = state.order.findIndex((i) => { const a = state.answers[state.items[i].item_id];
+                                             return !a || unansweredFields(a).length > 0; });
   if (idx >= 0) { state.position = idx; save(); render(); } else { $('status').textContent = 'All items are annotated.'; }
 });
 document.addEventListener('keydown', (e) => {
@@ -649,11 +687,14 @@ document.addEventListener('keydown', (e) => {
   if (index >= 0) {
     const input = document.querySelectorAll('#labels input')[index];
     if (input) { input.checked = !input.checked; input.dispatchEvent(new Event('change')); }
+  } else if (checkboxFields().some((f) => f.key === e.key)) {
+    const input = $(`field-${checkboxFields().find((f) => f.key === e.key).id}`);
+    input.checked = !input.checked; input.dispatchEvent(new Event('change'));
   } else if (e.key === 'u') { $('unsure').checked = !$('unsure').checked; $('unsure').dispatchEvent(new Event('change')); }
   else if (e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); go(1); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1); }
 });
-window.addEventListener('beforeunload', () => { if (state.task) store(); });
+window.addEventListener('beforeunload', () => { if (state.task) store(true); });
 
 // Served mode: list the tasks whose items exist on the server
 (async () => {

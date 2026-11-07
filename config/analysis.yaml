@@ -1,4 +1,4 @@
-# Analysis config, written by configure_analysis.py on 2026-11-06 14:07.
+# Analysis config, written by configure_analysis.py on 2026-11-06 21:32.
 # Edit with:  python code/scripts/configure_analysis.py --config <this file> [--phase early|late]
 
 # late settings (marked [late]) reviewed after the metrics? (no = provisional defaults; RQs refuse to run)
@@ -50,3 +50,9 @@ matching:
   seed: 42    # seed of the random pick among homonyms
   candidates_floor: 0.8    # fuzzy pairs stored by the candidate step if jw_full >= this
   fuzzy_all: false    # score every name by the fuzzy rule (not only names without a stricter match)
+
+# Robustness switches of the metrics (main: all off)
+robustness:
+  keep_duplicates: false    # factuality on all names of a response, duplicates kept
+  order_sensitive_keys: false    # names compared in written order (duplicates, consistency, flows)
+  consistency_all_runs: false    # recommendation consistency over all runs (invalid response = empty set)

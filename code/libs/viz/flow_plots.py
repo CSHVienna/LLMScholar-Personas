@@ -283,14 +283,17 @@ def plot_flows(people: pd.DataFrame, pairs: Sequence[Tuple[str, str]], include_u
 
 
 def plot_drift(people: pd.DataFrame, drift: pd.DataFrame, top: int = viscons.FLOW_TOP_COUNTRIES,
-               width: float = viscons.PAPER_TEXT_WIDTH_IN, title: Optional[str] = None) -> plt.Figure:
-    """Location drift (see module docstring)."""
+               width: float = viscons.PAPER_TEXT_WIDTH_IN, title: Optional[str] = None,
+               include: Sequence[str] = ()) -> plt.Figure:
+    """Location drift (see module docstring). include: countries shown as their own column in any case (after the
+    top ones, e.g. MX), not pooled into Other."""
     known = people[people['country'].astype(str) != fl.UNKNOWN].copy()
     known[cons.VAR_LOCATION] = known[cons.VAR_LOCATION].astype(str)
     locations, _ = source_order(cons.VAR_LOCATION, known[cons.VAR_LOCATION].unique())
     codes = fl.location_codes(locations)
     others = [c for c in fl.top_classes(known['country'], top + len(codes)) if c not in codes.values()]
     columns = [codes[l] for l in locations] + others[:max(top - len(codes), 0)]
+    columns += [c for c in include if c not in columns]
     known['col'] = known['country'].where(known['country'].isin(columns), fl.OTHER)
     columns += [fl.OTHER]
     shares = pd.crosstab(known[cons.VAR_LOCATION], known['col'], normalize='index').reindex(

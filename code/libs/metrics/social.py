@@ -23,6 +23,8 @@ top groups by works / citations.
     similarity        mean pairwise cosine of the people in a PCA space (>= 90 % of the variance) of log1p-standardised
                       bibliometrics, fitted on the GT population; undefined for fewer than 2 people
 The signed gaps p - q per class are returned as a long table (gaps).
+Size-adjusted versions <metric>_adj = observed - expected under a random recommender (metrics/expected.py):
+popularity from its expected share (here), the others from an expected-values table (Expected, optional).
 """
 
 from itertools import combinations
@@ -33,7 +35,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 
-from groundtruth.db import sql_path
+from groundtruth.db import shared_gt_dir, sql_path
 from metrics import technical as tm
 from utils import constants as cons
 
@@ -47,6 +49,7 @@ PCA_VARIANCE = 0.90
 SCOPES = ['field_x_seniority', 'field', 'seniority', 'all']
 METRIC_KEYS = ([f"parity_{a}" for a in ATTRIBUTES] + [f"diversity_{a}" for a in ATTRIBUTES]
                + [f"popularity_{m}" for m in POPULARITY] + ['popularity_location', 'connectedness', 'similarity'])
+ADJUSTED_KEYS = [f"{key}_adj" for key in METRIC_KEYS]                                  # metrics/expected.py
 DEFAULT_TOP_COUNTRY_SHARE = 0.5
 
 
@@ -71,7 +74,8 @@ def response_people(responses: pd.DataFrame, recs: pd.DataFrame, matches: pd.Dat
 
 # --- GT reference ------------------------------------------------------------------------------------------------
 class GroundTruth:
-    """The GT tables the social metrics need (A.1 / A.1a / A.4 outputs in gt_dir)."""
+    """The GT tables the social metrics need: A.4 outputs in gt_dir (population/<variant>/), the shared
+    coauthorship edges (A.1a) in the GT root."""
 
     def __init__(self, gt_dir: Path | str, con: Optional[duckdb.DuckDBPyConnection] = None):
         self.dir = Path(gt_dir)
@@ -88,7 +92,7 @@ class GroundTruth:
 
     def edges(self, author_ids: Sequence[int]) -> pd.DataFrame:
         """Coauthorship edges (undirected, a < b) with both ends among the given authors."""
-        files = sorted((self.dir / 'coauthor_edges').glob('bucket-*.parquet'))
+        files = sorted((shared_gt_dir(self.dir) / 'coauthor_edges').glob('bucket-*.parquet'))
         if not files or not len(author_ids):
             return pd.DataFrame({'a': pd.Series(dtype='int64'), 'b': pd.Series(dtype='int64')})
         self.con.register('wanted_ids', pd.DataFrame({'author_id': pd.Series(list(set(author_ids)), dtype='int64')}))
@@ -209,9 +213,10 @@ def similarity(vectors: np.ndarray) -> float:
 
 # --- per response ------------------------------------------------------------------------------------------------
 def social_metrics(responses: pd.DataFrame, people: pd.DataFrame, gt: GroundTruth, include_unknown: bool = False,
-                   scope: str = 'field_x_seniority', top_country_share: float = DEFAULT_TOP_COUNTRY_SHARE
-                   ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """(metrics: one row per response, gaps: one row per response x attribute x class)."""
+                   scope: str = 'field_x_seniority', top_country_share: float = DEFAULT_TOP_COUNTRY_SHARE,
+                   expectations=None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """(metrics: one row per response, gaps: one row per response x attribute x class). ``expectations``
+    (metrics.expected.Expected) adds <metric>_adj of the simulated metrics; popularity_*_adj is always added."""
     if scope not in SCOPES:
         raise ValueError(f"scope must be one of {SCOPES}")
     ids = people['author_id'].unique()
@@ -255,6 +260,7 @@ def social_metrics(responses: pd.DataFrame, people: pd.DataFrame, gt: GroundTrut
             observed = float(rows_r[f"is_top_{name}"].astype(float).mean()) if len(rows_r) else np.nan
             row[f"popularity_{name}"] = observed
             row[f"popularity_ratio_{name}"] = observed / expected if expected and np.isfinite(expected) else np.nan
+            row[f"popularity_{name}_adj"] = observed - expected
         key = (scope, field, seniority, ATTRIBUTES['location'])
         if key not in targets:
             targets[key] = gt.target(scope, field, seniority, ATTRIBUTES['location'])
@@ -266,8 +272,13 @@ def social_metrics(responses: pd.DataFrame, people: pd.DataFrame, gt: GroundTrut
         expected = float(countries[countries.index.isin(top)].sum()) if len(top) else np.nan
         row['popularity_location'] = observed
         row['popularity_ratio_location'] = observed / expected if expected and np.isfinite(expected) else np.nan
+        row['popularity_location_adj'] = observed - expected
         present = [a for a, _ in rows_r.index] if len(rows_r) else []
         row['connectedness'] = connectedness(present, edge_list)
         row['similarity'] = similarity(vectors.reindex(present).dropna().to_numpy()) if len(present) else np.nan
         rows.append(row)
-    return pd.DataFrame(rows), pd.DataFrame(gaps)
+    metrics = pd.DataFrame(rows)
+    if expectations is not None and len(metrics):
+        metrics = expectations.adjust(metrics.assign(field=responses[cons.VAR_FIELD].to_numpy(),
+                                                 seniority=responses[cons.VAR_SENIORITY].to_numpy()))
+    return metrics, pd.DataFrame(gaps)

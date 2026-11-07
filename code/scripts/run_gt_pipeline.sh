@@ -49,6 +49,8 @@
 #   -a ARGS   extra arguments for population (e.g. "--overwrite"; thresholds come from the config, -y)
 #   -y FILE   analysis config (default config/analysis.yaml; smoke: config/analysis_smoke.yaml); population reads it.
 #             Missing: in a terminal the wizard (configure_analysis.py --phase early) creates it, otherwise the pipeline stops
+#   -v NAME   analysis variant (configure_variant.py): its config; population -> DIR/groundtruth/population/NAME
+#             (skipped if the variant changes no A.4 setting). Default: main -> population/main
 # =============================================================================
 set -euo pipefail
 
@@ -61,7 +63,8 @@ TEMP_DIR="${PROJECT_ROOT}/tmp/duckdb"
 
 N_SHARDS=64; STEP="all"; DUCK_JOBS=1; THREADS=12; MEMORY="40GB"; JOBS=4; PY_THREADS=3; N_BUCKETS=64; CHUNK_SIZE=2000000
 PYTHON="python"; EXTRA_ARGS=""; SINGLE_ARGS=""; CACHE_ARGS=""; CONFIG="${PROJECT_ROOT}/config/analysis.yaml"
-while getopts "s:d:t:m:j:S:C:c:T:n:k:o:p:r:l:x:a:y:h" option; do
+VARIANT_NAME=""; CONFIG_GIVEN=""
+while getopts "s:d:t:m:j:S:C:c:T:n:k:o:p:r:l:x:a:y:v:h" option; do
     case "${option}" in
         s) STEP="${OPTARG}" ;;
         d) DUCK_JOBS="${OPTARG}" ;;
@@ -80,11 +83,22 @@ while getopts "s:d:t:m:j:S:C:c:T:n:k:o:p:r:l:x:a:y:h" option; do
         l) LOGS_DIR="${OPTARG}" ;;
         x) EXTRA_ARGS="${OPTARG}" ;;
         a) SINGLE_ARGS="${OPTARG}" ;;
-        y) CONFIG="${OPTARG}" ;;
-        h|*) sed -n '2,53p' "$0"; exit 0 ;;
+        y) CONFIG="${OPTARG}"; CONFIG_GIVEN=1 ;;
+        v) VARIANT_NAME="${OPTARG}" ;;
+        h|*) sed -n '2,54p' "$0"; exit 0 ;;
     esac
 done
+# -v NAME: analysis variant (configure_variant.py): its config, and the variants whose GT population / author
+# matching it reads (its own if it changes their settings, else main's)
+VARIANT_POPULATION="main"; VARIANT_AUTHORS="main"; VARIANT_METRICS="main"
+if [[ -n "${VARIANT_NAME}" ]]; then
+    variant_lines="$("${PYTHON}" "${SCRIPTS_DIR}/configure_variant.py" paths "${VARIANT_NAME}" --results_dir "${RESULTS_DIR}" ${CONFIG_GIVEN:+--config "${CONFIG}"})" || exit 1
+    eval "${variant_lines}"
+    CONFIG="${VARIANT_CONFIG}"
+    echo "[$(date +%H:%M:%S)] variant ${VARIANT_NAME}: config ${CONFIG} | GT population: ${VARIANT_POPULATION} | author matching: ${VARIANT_AUTHORS}"
+fi
 GT_DIR="${RESULTS_DIR}/groundtruth"
+POPULATION_DIR="${GT_DIR}/population/${VARIANT_POPULATION}"
 ALL_STEPS="authorships pairs edges bibliometrics names demographics population"
 for s in ${STEP//,/ }; do
     if [[ "${s}" != "all" && " ${ALL_STEPS} " != *" ${s} "* ]]; then
@@ -164,11 +178,13 @@ if selected demographics; then
         "--stage ethnicity --n_buckets ${N_BUCKETS} --torch_threads ${PY_THREADS} ${CACHE_ARGS} ${DEMO} ${EXTRA_ARGS}"
     per_bucket "gt_demographics_merge" "${JOBS}" "batch_gt_demographics.py" "--stage merge ${DEMO}"
 fi
-if selected population; then
+if selected population && [[ -n "${VARIANT_NAME}" && "${VARIANT_POPULATION}" != "${VARIANT_NAME}" ]]; then
+    echo "[$(date +%H:%M:%S)] gt_population: skipped, variant ${VARIANT_NAME} changes no A.4 setting (reads ${POPULATION_DIR})"
+elif selected population; then
     ensure_config
     echo "[$(date +%H:%M:%S)] gt_population: start"
     "${PYTHON}" "${SCRIPTS_DIR}/batch_gt_population.py" ${DUCK_RES} --config "${CONFIG}" \
-        --authors_dir "${GT_DIR}/authors" --demographics_dir "${GT_DIR}/demographics" --gt_dir "${GT_DIR}" \
+        --authors_dir "${GT_DIR}/authors" --demographics_dir "${GT_DIR}/demographics" --gt_dir "${POPULATION_DIR}" \
         --log_dir "${LOGS_DIR}" ${SINGLE_ARGS}
     echo "[$(date +%H:%M:%S)] gt_population: done"
 fi

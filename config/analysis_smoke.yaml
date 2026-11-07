@@ -1,17 +1,20 @@
-# Analysis config, written by configure_analysis.py on 2026-11-06 03:59.
-# Edit with:  python code/scripts/configure_analysis.py --config <this file>
+# Analysis config, written by configure_analysis.py on 2026-11-06 21:32.
+# Edit with:  python code/scripts/configure_analysis.py --config <this file> [--phase early|late]
+
+# late settings (marked [late]) reviewed after the metrics? (no = provisional defaults; RQs refuse to run)
+late_reviewed: true
 
 # Valid responses and recommendations
 validity:
-  valid_response_tags: [correct, wrapped, python_literal, embedded]    # a response is valid if ALL its tags are in this set
-  valid_rec_tags: [correct, title_removed, repetition_removed, split]    # a recommendation is valid if ALL its tags are in this set
+  valid_response_tags: [correct, wrapped, python_literal, embedded]    # [late] a response is valid if ALL its tags are in this set
+  valid_rec_tags: [correct, title_removed, repetition_removed, split]    # [late] a recommendation is valid if ALL its tags are in this set
 
 # Seniority (academic age = reference year - first publication year)
 seniority:
   reference_year: 2025    # year academic age is measured at
   junior_max: 10    # junior: academic age <= this
   senior_min: 20    # senior: academic age >= this (between: mid)
-  single_cutoff: 15    # two-class variant: junior <= this < senior
+  single_cutoff: 15    # two-class definition (single): junior <= this < senior; independent of junior_max / senior_min
   matching_definition: three    # which definition author matching uses for the requested seniority
 
 # Field membership
@@ -20,12 +23,12 @@ field:
 
 # Perceived gender (from p_female of the first name)
 gender:
-  p_female_edges: [0.1, 0.9]    # cut points on p_female, increasing, in (0, 1)
-  labels: [male, neutral, female]    # one label per interval, from p_female = 0 to 1
+  p_female_edges: [0.1, 0.9]    # [late] cut points on p_female, increasing, in (0, 1)
+  labels: [male, neutral, female]    # [late] one label per interval, from p_female = 0 to 1
 
 # Perceived ethnicity (raceBERT on the full name)
 ethnicity:
-  min_prob: 0.5    # label = top class if its probability >= this, else 'unknown'
+  min_prob: 0.5    # [late] label = top class if its probability >= this, else 'unknown'
 
 # Prominence classes: productivity, influence, collaboration (within field x seniority)
 prominence:
@@ -35,15 +38,21 @@ prominence:
 
 # Social metrics (on the matched authors of the valid responses)
 social:
-  include_unknown: true    # count 'unknown' (no usable name / country) as a class in parity and diversity
-  parity_target: field_x_seniority    # GT target of parity (scope of the GT shares)
-  top_country_share: 0.5    # popularity by country: top countries = the fewest that together hold this share of the GT scholars
+  include_unknown: true    # [late] count 'unknown' (no usable name / country) as a class in parity and diversity
+  parity_target: field_x_seniority    # [late] GT target of parity (scope of the GT shares)
+  top_country_share: 0.5    # [late] popularity by country: top countries = the fewest that together hold this share of the GT scholars
 
 # Author matching (recommended name -> OpenAlex person)
 matching:
-  jw_first: 0.9    # fuzzy rule: minimum Jaro-Winkler of the first names
-  jw_last: 0.9    # fuzzy rule: minimum Jaro-Winkler of the last names
-  jw_full: 0.9    # fuzzy rule: minimum Jaro-Winkler of the full names
+  jw_first: 0.9    # [late] fuzzy rule: minimum Jaro-Winkler of the first names
+  jw_last: 0.9    # [late] fuzzy rule: minimum Jaro-Winkler of the last names
+  jw_full: 0.9    # [late] fuzzy rule: minimum Jaro-Winkler of the full names
   seed: 42    # seed of the random pick among homonyms
   candidates_floor: 0.9    # fuzzy pairs stored by the candidate step if jw_full >= this
   fuzzy_all: false    # score every name by the fuzzy rule (not only names without a stricter match)
+
+# Robustness switches of the metrics (main: all off)
+robustness:
+  keep_duplicates: false    # factuality on all names of a response, duplicates kept
+  order_sensitive_keys: false    # names compared in written order (duplicates, consistency, flows)
+  consistency_all_runs: false    # recommendation consistency over all runs (invalid response = empty set)

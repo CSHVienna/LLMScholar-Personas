@@ -18,6 +18,7 @@ import pandas as pd
 from utils import constants as cons
 
 ITEM_ID = 'item_id'
+EXTRA_MISSING = 'extra_missing'   # recommendations: checkbox answer ('1' / '0'; '' = not answered, e.g. older answers)
 
 
 # -----------------------------------------------------------------------------
@@ -46,10 +47,16 @@ def codebook(task: str) -> dict:
                                 '(leave empty if there is no usable name).',
                 'labels': [_label(tag, cons.REC_TAG_DEFINITIONS) for tag in cons.REC_TAGS],
                 'rules': ['"correct" applies only if no other tag applies.',
-                          '"placeholder" is used alone.'],
+                          '"placeholder" is used alone.',
+                          'extra_missing is independent of the tags: tick it if a requested non-name key ('
+                          + ', '.join(cons.COMPLETENESS_FIELDS) + ') is absent from the record (a present key '
+                          'counts, even if its value is empty).'],
                 'aliases': cons.ANNOTATION_TAG_ALIASES[task],
                 'fields': [{'id': 'first_name', 'label': 'First name (as you would record it)'},
-                           {'id': 'last_name', 'label': 'Last name (as you would record it)'}]}
+                           {'id': 'last_name', 'label': 'Last name (as you would record it)'},
+                           {'id': EXTRA_MISSING, 'type': 'checkbox', 'key': 'm',
+                            'label': 'extra_missing: a requested non-name field is missing',
+                            'short': 'a key other than name / lastname is absent'}]}
     raise ValueError(f"Unknown annotation task {task!r} (expected one of {cons.ANNOTATION_TASKS})")
 
 

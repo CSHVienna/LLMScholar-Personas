@@ -198,8 +198,32 @@ SCHEMA: List[Section] = [
         Setting('fuzzy_all', 'bool', False, 'score every name by the fuzzy rule (not only names without a stricter match)',
                 used_by=[STEP_CANDIDATES]),
     ], _check_matching),
+    Section('robustness', 'Robustness switches of the metrics (main: all off)', [
+        Setting('keep_duplicates', 'bool', False, 'factuality on all names of a response, duplicates kept',
+                used_by=[STEP_METRICS]),
+        Setting('order_sensitive_keys', 'bool', False, 'names compared in written order (duplicates, consistency, flows)',
+                used_by=[STEP_METRICS]),
+        Setting('consistency_all_runs', 'bool', False, 'recommendation consistency over all runs (invalid response = empty set)',
+                used_by=[STEP_METRICS]),
+    ]),
 ]
 SETTINGS = {(section.key, s.key): s for section in SCHEMA for s in section.settings}
+
+# Short code of every setting, for the readable summary of a variant ("jwfull=0.97, pf=0.2-0.8")
+CODES = {
+    ('validity', 'valid_response_tags'): 'rtags', ('validity', 'valid_rec_tags'): 'ctags',
+    ('seniority', 'reference_year'): 'year', ('seniority', 'junior_max'): 'jmax', ('seniority', 'senior_min'): 'smin',
+    ('seniority', 'single_cutoff'): 'scut', ('seniority', 'matching_definition'): 'sdef',
+    ('field', 'min_field_share'): 'fshare',
+    ('gender', 'p_female_edges'): 'pf', ('gender', 'labels'): 'glabels',
+    ('ethnicity', 'min_prob'): 'eprob',
+    ('prominence', 'bin_edges'): 'bins', ('prominence', 'bin_labels'): 'blabels', ('prominence', 'top_percentile'): 'top',
+    ('social', 'include_unknown'): 'unknown', ('social', 'parity_target'): 'target', ('social', 'top_country_share'): 'tcountry',
+    ('matching', 'jw_first'): 'jwfirst', ('matching', 'jw_last'): 'jwlast', ('matching', 'jw_full'): 'jwfull',
+    ('matching', 'seed'): 'seed', ('matching', 'candidates_floor'): 'floor', ('matching', 'fuzzy_all'): 'fuzzyall',
+    ('robustness', 'keep_duplicates'): 'dup', ('robustness', 'order_sensitive_keys'): 'order',
+    ('robustness', 'consistency_all_runs'): 'allruns',
+}
 
 
 # --- values ------------------------------------------------------------------------------------------------------
@@ -354,15 +378,33 @@ def require_late_reviewed(path: Path | str) -> None:
                          f"{path} --phase late  (and re-run the steps it lists) before the research questions.")
 
 
-def save(path: Path | str, values: Dict[str, Dict[str, Any]], reviewed: bool = True) -> None:
-    """YAML with the help text of every setting as a comment (late settings marked while provisional); atomic."""
+def save(path: Path | str, values: Dict[str, Dict[str, Any]], reviewed: bool = True,
+         variant: Optional[Dict[str, str]] = None) -> None:
+    """YAML with the help text of every setting as a comment (late settings marked while provisional); atomic.
+
+    ``variant`` = {'name', 'base'} writes the variant header (name, base config, the settings that differ from it).
+    A file that already is a variant keeps its header (the differences are recomputed), e.g. when the wizard edits it.
+    """
     problems = validate(values)
     if problems:
         raise ValueError('\n'.join(problems))
+    path = Path(path)
+    if variant is None and path.exists():
+        raw = yaml.safe_load(path.read_text()) or {}
+        if raw.get('variant'):
+            variant = {'name': raw['variant'], 'base': raw.get('base', MAIN_CONFIG_REL)}
     lines = [f"# Analysis config, written by configure_analysis.py on {datetime.datetime.now():%Y-%m-%d %H:%M}.",
-             "# Edit with:  python code/scripts/configure_analysis.py --config <this file> [--phase early|late]", "",
-             "# late settings (marked [late]) reviewed after the metrics? (no = provisional defaults; RQs refuse to run)",
-             f"late_reviewed: {'true' if reviewed else 'false'}", ""]
+             "# Edit with:  python code/scripts/configure_analysis.py --config <this file> [--phase early|late]", ""]
+    if variant:
+        base_values = load(resolve_project_path(variant['base']))
+        changes = differences(base_values, values)
+        lines += ["# Variant: the base config with the settings below changed (configure_variant.py)",
+                  f"variant: {variant['name']}",
+                  f"base: {variant['base']}",
+                  f"differs: {yaml.safe_dump(summary(changes) or 'nothing', default_flow_style=True).strip().removesuffix('...').strip()}"]
+        lines += [f"#   {key}: {format_value(old)} -> {format_value(new)}" for key, old, new in changes] + [""]
+    lines += ["# late settings (marked [late]) reviewed after the metrics? (no = provisional defaults; RQs refuse to run)",
+              f"late_reviewed: {'true' if reviewed else 'false'}", ""]
     for section in SCHEMA:
         lines.append(f"# {section.title}")
         lines.append(f"{section.key}:")
@@ -372,7 +414,6 @@ def save(path: Path | str, values: Dict[str, Dict[str, Any]], reviewed: bool = T
             tag = ('[late, PROVISIONAL] ' if not reviewed else '[late] ') if s.phase == LATE else ''
             lines.append(f"  {s.key}: {dumped}    # {tag}{s.help}")
         lines.append("")
-    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + '.tmp')
     tmp.write_text('\n'.join(lines))
@@ -398,3 +439,99 @@ def parse_with_config(parser: argparse.ArgumentParser, argv: Optional[Sequence[s
         parser.set_defaults(**{s.option: values[section][key] for (section, key), s in SETTINGS.items()
                                if s.option in options})
     return parser.parse_args(argv)
+
+
+# --- variants ----------------------------------------------------------------------------------------------------
+# A variant = a name you choose + a full config: config/variants/<name>.yaml (main = config/analysis.yaml). Its
+# outputs go to folders named after it; a stage whose settings equal the base's reads the base outputs instead of
+# re-running (the GT population if no A.4 setting changed, the author matching if no B.6b setting changed).
+MAIN = 'main'
+MAIN_CONFIG_REL = 'config/analysis.yaml'
+VARIANTS_DIR = cons.PROJECT_ROOT / 'config' / 'variants'
+GT_POPULATION_SUBDIR = 'population'                        # <gt root>/population/<variant>/gt_*.parquet (A.4)
+SHARED_STEPS = (STEP_CANDIDATES,)                          # settings every variant must keep (heavy, shared outputs)
+_NAME_CHARS = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-./')
+
+
+def resolve_project_path(path: Path | str) -> Path:
+    """Relative paths are relative to the project root."""
+    path = Path(path)
+    return path if path.is_absolute() else cons.PROJECT_ROOT / path
+
+
+def check_variant_name(name: str) -> str:
+    if not name or set(name) - _NAME_CHARS or '..' in name or name.startswith('/') or name.endswith('/'):
+        raise ValueError(f"Variant name {name!r}: use letters, digits, '_', '-', '.' (and '/' for sub-folders)")
+    return name
+
+
+def variant_file(name: str) -> Path:
+    """config/analysis.yaml for main, else config/variants/<name>.yaml."""
+    check_variant_name(name)
+    return resolve_project_path(MAIN_CONFIG_REL) if name == MAIN else VARIANTS_DIR / f"{name}.yaml"
+
+
+def list_variants() -> List[str]:
+    files = sorted(VARIANTS_DIR.rglob('*.yaml')) if VARIANTS_DIR.exists() else []
+    return [MAIN] + [str(f.relative_to(VARIANTS_DIR).with_suffix('')) for f in files]
+
+
+def differences(base: Dict[str, Dict[str, Any]], values: Dict[str, Dict[str, Any]]) -> List[tuple]:
+    """[('section.key', base value, value)] of the settings that differ, in schema order."""
+    return [(f"{section}.{key}", base[section][key], values[section][key])
+            for (section, key) in SETTINGS if base[section][key] != values[section][key]]
+
+
+def _short(value: Any) -> str:
+    if isinstance(value, bool):
+        return 'yes' if value else 'no'
+    if isinstance(value, list):
+        return ('+' if value and isinstance(value[0], str) else '-').join(str(v) for v in value)
+    return str(value)
+
+
+def summary(changes: List[tuple]) -> str:
+    """Readable id of the differences, e.g. 'jwfull=0.97, pf=0.2-0.8' ('' = none)."""
+    return ', '.join(f"{CODES[tuple(key.split('.'))]}={_short(new)}" for key, _, new in changes)
+
+
+def variant_info(name: str, results_dir: Path | str = cons.DEFAULT_RESULTS_DIR,
+                 config: Optional[Path | str] = None) -> Dict[str, Any]:
+    """Everything a runner or notebook needs for a variant:
+
+    config, base, differs (summary), changes, population / authors (variant whose GT population / author matching
+    it reads: its own name if it changes their settings, else the base's 'main'), and the folders gt_dir (A.4 outputs),
+    matching_dir, metrics_dir, plots_dir. ``config`` replaces the file of main (e.g. the smoke config).
+    """
+    path = Path(config) if config else variant_file(name)
+    if not path.exists() and name != MAIN:
+        raise FileNotFoundError(f"No variant {name!r} ({path}): create it with  python code/scripts/configure_variant.py "
+                                f"create {name} --set ...  (existing: {', '.join(list_variants())})")
+    values = load(path)
+    raw = yaml.safe_load(path.read_text()) or {}
+    if name != MAIN and raw.get('variant') not in (None, name):
+        raise ValueError(f"{path} is variant {raw.get('variant')!r}, not {name!r}")
+    base_rel = raw.get('base') if name != MAIN else None
+    if name != MAIN and not base_rel:
+        raise ValueError(f"{path} has no 'base:' header: create variants with  python code/scripts/configure_variant.py "
+                         f"create {name} --set ...")
+    changes = differences(load(resolve_project_path(base_rel)), values) if base_rel else []
+    steps = changed_steps(load(resolve_project_path(base_rel)), values) if base_rel else {}
+    shared = {step: keys for step, keys in steps.items() if step in SHARED_STEPS}
+    if shared:
+        raise ValueError(f"Variant {name}: {sorted(k for keys in shared.values() for k in keys)} must equal the base "
+                         f"(the candidate step is shared by every variant)")
+    population = name if STEP_POPULATION in steps or name == MAIN else MAIN
+    authors = name if STEP_AUTHORS in steps or name == MAIN else MAIN
+    results = Path(results_dir)
+    return {'name': name, 'config': str(path), 'base': base_rel, 'differs': summary(changes), 'changes': changes,
+            'population': population, 'authors': authors,
+            'gt_dir': str(results / 'groundtruth' / GT_POPULATION_SUBDIR / population),
+            'matching_dir': str(results / 'matching' / 'authors' / authors),
+            'metrics_dir': str(results / 'metrics' / name), 'plots_dir': str(results / 'plots' / name)}
+
+
+def notebook_variant(name: str, smoke: bool = False) -> Dict[str, Any]:
+    """:func:`variant_info` for the notebooks: results in tmp/smoke/ (main: the smoke config) or results/."""
+    results_dir = cons.PROJECT_ROOT / 'tmp' / 'smoke' if smoke else Path(cons.DEFAULT_RESULTS_DIR)
+    return variant_info(name, results_dir, SMOKE_CONFIG_FILE if smoke and name == MAIN else None)

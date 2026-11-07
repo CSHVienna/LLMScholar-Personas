@@ -120,8 +120,10 @@ class TestWizard(unittest.TestCase):
 
     def test_editing_lists_the_steps_to_rerun(self):
         ac.save(self.path, ac.defaults())
-        n_before = sum(len(s.settings) for s in ac.SCHEMA[:-1])                     # everything before 'matching'
-        ask, say, said = scripted([''] * n_before + ['0.95'] + [''] * (len(ac.SCHEMA[-1].settings) - 1) + ['s'])
+        i = [s.key for s in ac.SCHEMA].index('matching')
+        n_before = sum(len(s.settings) for s in ac.SCHEMA[:i])                      # everything before 'matching'
+        n_after = sum(len(s.settings) for s in ac.SCHEMA[i:]) - 1                   # jw_first is matching's first
+        ask, say, said = scripted([''] * n_before + ['0.95'] + [''] * n_after + ['s'])
         values = wiz.wizard(self.path, ask, say)
         self.assertEqual(values['matching']['jw_first'], 0.95)
         self.assertTrue(any(ac.STEP_AUTHORS in line for line in said))
@@ -197,6 +199,103 @@ class TestPhases(unittest.TestCase):
     def test_defaults_are_provisional(self):
         ac.save(self.path, ac.defaults(), reviewed=False)
         self.assertFalse(ac.late_reviewed(self.path))
+
+
+class TestVariants(unittest.TestCase):
+    """Variants: config/variants/<name>.yaml (here in a temporary folder), reuse of the base stages, the header."""
+
+    def setUp(self):
+        import configure_variant as cv
+        self.cv = cv
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.base = root / 'analysis.yaml'
+        ac.save(self.base, ac.defaults())
+        self.saved_dir, ac.VARIANTS_DIR = ac.VARIANTS_DIR, root / 'variants'
+        self.results = root / 'results'
+
+    def tearDown(self):
+        ac.VARIANTS_DIR = self.saved_dir
+        self.tmp.cleanup()
+
+    def create(self, name, *settings, overwrite=False):
+        self.cv.create(argparse.Namespace(name=name, set=list(settings), base=str(self.base), overwrite=overwrite))
+        return ac.variant_info(name, self.results)
+
+    def test_codes(self):
+        self.assertEqual(set(ac.CODES), set(ac.SETTINGS))
+        self.assertEqual(len(set(ac.CODES.values())), len(ac.CODES))
+
+    def test_stages_reused_or_own(self):
+        tags = self.create('tags', 'validity.valid_rec_tags=correct')
+        self.assertEqual((tags['population'], tags['authors']), ('main', 'main'))       # only the metrics change
+        self.assertEqual(tags['differs'], 'ctags=correct')
+        self.assertEqual(tags['gt_dir'], str(self.results / 'groundtruth' / 'population' / 'main'))
+        self.assertEqual(tags['metrics_dir'], str(self.results / 'metrics' / 'tags'))
+        gender = self.create('pf02', 'pf=0.2,0.8')                                        # code instead of section.key
+        self.assertEqual((gender['population'], gender['authors']), ('pf02', 'main'))
+        self.assertEqual(gender['gt_dir'], str(self.results / 'groundtruth' / 'population' / 'pf02'))
+        jw = self.create('jw097', 'matching.jw_full=0.97', 'dup=yes')
+        self.assertEqual((jw['population'], jw['authors']), ('main', 'jw097'))
+        self.assertEqual(jw['differs'], 'jwfull=0.97, dup=yes')
+        senior = self.create('single', 'seniority.matching_definition=single')
+        self.assertEqual(senior['authors'], 'single')
+        self.assertEqual(sorted(ac.list_variants()), ['jw097', 'main', 'pf02', 'single', 'tags'])
+
+    def test_refusals(self):
+        with self.assertRaises(SystemExit):                                               # shared candidate step
+            self.create('floor', 'matching.candidates_floor=0.85')
+        with self.assertRaises(SystemExit):                                               # nothing differs
+            self.create('same', 'matching.seed=42')
+        with self.assertRaises(SystemExit):
+            self.create('main', 'dup=yes')
+        with self.assertRaises(SystemExit):
+            self.create('bad', 'nosuch=1')
+        with self.assertRaises(ValueError):
+            ac.check_variant_name('../x')
+        self.create('v', 'dup=yes')
+        self.create('v', 'dup=yes')                                                       # same settings: kept
+        with self.assertRaises(SystemExit):                                               # same name, other settings
+            self.create('v', 'order=yes')
+        info = self.create('v', 'order=yes', overwrite=True)
+        self.assertEqual(info['differs'], 'order=yes')
+
+    def test_header_survives_edits_and_is_needed(self):
+        self.create('pf', 'pf=0.3,0.7')
+        path = ac.variant_file('pf')
+        values = ac.load(path)
+        values['ethnicity']['min_prob'] = 0.6                                             # e.g. the wizard edits it
+        ac.save(path, values)
+        info = ac.variant_info('pf', self.results)
+        self.assertEqual(info['differs'], 'pf=0.3-0.7, eprob=0.6')
+        self.assertIn('variant: pf', path.read_text())
+        bare = ac.VARIANTS_DIR / 'bare.yaml'
+        ac.save(bare, ac.defaults())                                                     # no header: refused
+        with self.assertRaises(ValueError):
+            ac.variant_info('bare', self.results)
+
+    def test_paths_for_the_runners(self):
+        import contextlib
+        import io
+        self.create('tags', 'ctags=correct')
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.cv.paths(argparse.Namespace(name='tags', results_dir=str(self.results), config=None))
+        lines = dict(line.split('=', 1) for line in out.getvalue().split())
+        self.assertEqual((lines['VARIANT_POPULATION'], lines['VARIANT_AUTHORS'], lines['VARIANT_METRICS']),
+                         ('main', 'main', 'tags'))
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            self.cv.paths(argparse.Namespace(name='nosuch', results_dir=str(self.results), config=None))
+
+    def test_shared_gt_dir(self):
+        from groundtruth.db import shared_gt_dir
+        self.assertEqual(shared_gt_dir('/r/groundtruth/population/main'), Path('/r/groundtruth'))
+        self.assertEqual(shared_gt_dir('/r/groundtruth'), Path('/r/groundtruth'))
+
+    def test_project_configs_are_complete(self):
+        for path in (ac.DEFAULT_CONFIG_FILE, ac.SMOKE_CONFIG_FILE):
+            ac.load(path)
+            self.assertEqual(ac.variant_info('main', self.results, path)['population'], 'main')
 
 
 if __name__ == '__main__':

@@ -34,7 +34,7 @@ python code/scripts/configure_analysis.py --config config/analysis_smoke.yaml
 ```
 
 ``` bash
-rm -r tmp/smoke/groundtruth/gt_*.parquet tmp/smoke/matching tmp/smoke/metrics
+rm -r tmp/smoke/groundtruth/population tmp/smoke/matching tmp/smoke/metrics
 ```
 
 ``` bash
@@ -87,27 +87,46 @@ bash code/scripts/run_metrics_pipeline.sh -s flows -r tmp/smoke -M tmp/smoke/mod
 ```
 
 
+## Variant (smoke: p_female 0.2 / 0.8 -> own GT population, main's matching)
+
+``` bash
+python code/scripts/configure_variant.py create smoke_pf02 --base config/analysis_smoke.yaml --set pf=0.2,0.8
+```
+
+``` bash
+bash code/scripts/run_gt_pipeline.sh -s population -v smoke_pf02 -r tmp/smoke -l tmp/smoke/logs
+```
+
+``` bash
+bash code/scripts/run_matching_pipeline.sh -s authors -v smoke_pf02 -r tmp/smoke -M tmp/smoke/models.txt -l tmp/smoke/logs
+```
+
+``` bash
+bash code/scripts/run_metrics_pipeline.sh -v smoke_pf02 -r tmp/smoke -M tmp/smoke/models.txt -l tmp/smoke/logs
+```
+
+
 # Inputs and LLM responses
 
-## 1. Prompt parameters (only for NEW parameters: re-translating changes the German / Spanish prompts of the existing responses)
+## 1. Prompt parameters 
 - [ ] done | date:
 ``` bash
 python code/scripts/batch_input_params.py -l english
 ```
 
-## 2. Prompts of all languages (writes all_params_and_prompts.json; keeps existing files)
+## 2. Prompts of all languages
 - [ ] done | date:
 ``` bash
 python code/scripts/batch_input_prompts.py
 ```
 
-## 3. Model list from metadata.json (checks api / api_name; keeps models.txt if the models are the same)
+## 3. Model list from metadata.json
 - [ ] done | date:
 ``` bash
 python code/scripts/batch_input_models.py
 ```
 
-## 4. Collect GPT / Gemini (prepare, submit, then retrieve until nothing is open; prepare again if prompts are missing)
+## 4. Collect GPT / Gemini 
 - [ ] done | date:
 ``` bash
 python code/scripts/batch_collect_cloud_prepare.py --models gpt-4_1-nano-2025-04-14 gpt-4_1-mini-2025-04-14 gpt-4_1-2025-04-14 gemini-2_5-flash-lite gemini-2_5-flash gemini-2_5-pro
@@ -121,7 +140,7 @@ python code/scripts/batch_collect_cloud_submit.py --models gpt-4_1-nano-2025-04-
 python code/scripts/batch_collect_cloud_retrieve.py --models gpt-4_1-nano-2025-04-14 gpt-4_1-mini-2025-04-14 gpt-4_1-2025-04-14 gemini-2_5-flash-lite gemini-2_5-flash gemini-2_5-pro
 ```
 
-## 5. Collect Ollama (servers on ports 11434.. running; one model per process)
+## 5. Collect Ollama 
 - [ ] done | date:
 ``` bash
 python code/scripts/batch_input_models.py --apis ollama --output tmp/models_ollama.txt
@@ -291,6 +310,16 @@ python code/scripts/configure_analysis.py --config config/analysis.yaml --phase 
 
 ## 5. Research questions (RQ1, RQ2; RQ3 in the notebook)
 - [x] done | date: 2026-11-06
+``` bash
+bash code/scripts/run_metrics_pipeline.sh -s rq1,rq2
+```
+
+## 6. Size-adjusted social metrics (expected values, then the social metrics again with the _adj columns)
+- [ ] done | date:
+``` bash
+bash code/scripts/run_metrics_pipeline.sh -s expected,social -x "--overwrite"
+```
+
 ``` bash
 bash code/scripts/run_metrics_pipeline.sh -s rq1,rq2
 ```

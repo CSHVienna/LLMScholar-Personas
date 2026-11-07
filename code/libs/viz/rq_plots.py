@@ -73,10 +73,11 @@ def rq1_rows(variables: Sequence[str], order: Sequence[str] = RQ1_ROW_ORDER) -> 
 
 
 def rq1_metric_keys(results: pd.DataFrame, metrics: Optional[str | Sequence[str]] = None) -> List[str]:
-    """Metric keys with results: all (None), a family / subgroup ('technical', 'factuality', ...) or a list of keys."""
+    """Metric keys with results: all raw ones (None; the size-adjusted <key>_adj only when asked for, e.g. 'all_adj'),
+    a family / subgroup ('technical', 'factuality', ...) or a list of keys."""
     available = [k for k in summary.METRICS if k in set(results['metric'])]
     if metrics is None:
-        return available
+        return [k for k in available if not k.endswith(summary.ADJ_SUFFIX)]
     wanted = [m.key for m in summary.select_metrics(metrics)]
     return [k for k in wanted if k in available]
 
@@ -276,7 +277,9 @@ class HeatmapFrame:
             bx = [xx for m, xx in zip(self.columns, self.xs) if m.band == band]
             ax.add_patch(Rectangle((bx[0], y), bx[-1] + 1 - bx[0], band_h * uy, facecolor=viscons.RQ1_HEATMAP_BAND,
                                    edgecolor='none', clip_on=False))
-            ax.text((bx[0] + bx[-1] + 1) / 2, y + band_h / 2 * uy, band.upper(), ha='center', va='center_baseline',
+            adjusted = any(m.key.endswith(summary.ADJ_SUFFIX) for m in self.columns if m.band == band)
+            title = band.upper() + (' (Adj.)' if adjusted else '')        # size-adjusted: on the band, not subgroups
+            ax.text((bx[0] + bx[-1] + 1) / 2, y + band_h / 2 * uy, title, ha='center', va='center_baseline',
                     fontweight='bold', fontsize='x-small', clip_on=False)
         self._x_title_y = y + (band_h + viscons.HEATMAP_TITLE_GAP_IN) * uy
 
@@ -311,7 +314,7 @@ def _brackets(ax: plt.Axes, columns: Sequence[summary.Metric], xs: Sequence[floa
             x0, x1 = xs[i] + 0.08, xs[j] + 0.92
             ax.plot([x0, x0, x1, x1], [y, y + 0.12, y + 0.12, y], color=viscons.COLOR_TEXT_SECONDARY, linewidth=0.6,
                     clip_on=False)
-            ax.text((x0 + x1) / 2, y + 0.18, columns[i].group.capitalize(), ha='center', va='top', fontsize='x-small',
+            ax.text((x0 + x1) / 2, y + 0.28, columns[i].group.removesuffix(summary.ADJ_SUFFIX).capitalize(), ha='center', va='top', fontsize='x-small',
                     color=viscons.COLOR_TEXT_SECONDARY, clip_on=False)
         i = j + 1
 
@@ -336,11 +339,12 @@ def _colorbars(frame: 'HeatmapFrame', cmaps, norm: Normalize, rows: Sequence[sum
 
 
 def rq_figure_name(rq: int, kind: str, measure: str, metrics: Optional[str | Sequence[str]] = None) -> str:
-    """File name of an RQ figure: rq<rq>_<measure>_<metrics>_<kind>, metrics = 'all' / a column set / keys joined by
-    '-', kind = 'heatmap' | 'bar' ('bars' accepted) | 'forest' (e.g. rq1_omega2_paper_bar, rq2_deviation_all_heatmap)."""
-    selection = 'all' if metrics is None else metrics if isinstance(metrics, str) else '-'.join(metrics)
+    """File name of an RQ figure: rq<rq>_<measure>_<metrics>_<kind>[_adj], metrics = 'all' / a column set / keys joined
+    by '-', kind = 'heatmap' | 'bar' ('bars' accepted) | 'forest'; size-adjusted metrics: _adj at the end (e.g.
+    rq1_omega2_paper_bar and rq1_omega2_paper_bar_adj, rq2_deviation_all_heatmap)."""
+    selection, adjusted = summary.split_adjusted(metrics)
     kind = 'bar' if kind == 'bars' else kind
-    return f"rq{rq}_{measure}_{selection}_{kind}"
+    return f"rq{rq}_{measure}_{selection}_{kind}" + (summary.ADJ_SUFFIX if adjusted else '')
 
 
 def rq1_figure_name(kind: str, measure: str, metrics: Optional[str | Sequence[str]] = None) -> str:
@@ -352,20 +356,22 @@ def rq1_figure_name(kind: str, measure: str, metrics: Optional[str | Sequence[st
 def plot_rq3(scores: pd.DataFrame, mode: str = 'relative', pareto: bool = False,
              technical: Sequence[str] = tuple(cons.RQ3_TECHNICAL_METRICS),
              social: Sequence[str] = tuple(cons.RQ3_SOCIAL_METRICS), title: Optional[str] = None,
-             grid: bool = False) -> plt.Figure:
+             grid: bool = False, labels_in_quadrant: bool = viscons.RQ3_LABELS_IN_QUADRANT) -> plt.Figure:
     """Scatter of tradeoff.model_scores: x = technical score, y = social score, one labelled point per model coloured
     by its quadrant (its name too); Pearson correlation of the two scores in the corner. mode 'relative': split at the
     medians of the models, axes zoomed on the data; 'absolute': split at half of each axis maximum, axes from 0 to the
-    maximum. pareto: dotted line through the Pareto front; grid: background grid (default off: only the split lines). Labels are placed by adjustText (away from the points and
-    each other) and joined to their point by a curved line only when they had to move."""
-    from adjustText import adjust_text
+    maximum. pareto: dotted line through the Pareto front; grid: background grid (default off: only the split lines).
+
+    Labels: deterministic greedy placement in pixels (_place_labels): each label takes the nearest free spot around
+    its point, clear of every point, every placed label and the correlation box; labels_in_quadrant keeps it inside
+    its point's quadrant when it fits. A label away from its point gets a thin, gently curved leader line."""
     from scipy.stats import pearsonr
     from analysis import tradeoff
     from viz.labels import model_labels
 
     split_x, split_y = tradeoff.splits(scores, mode)
     quadrant = tradeoff.quadrants(scores, mode)
-    colors = quadrant.map(viscons.RQ3_QUADRANT_COLORS)
+    colors = list(quadrant.map(viscons.RQ3_QUADRANT_COLORS))
     fig, ax = plt.subplots(figsize=viscons.RQ3_FIGURE_IN)
     for q, description in tradeoff.QUADRANTS.items():
         chosen = quadrant == q
@@ -381,25 +387,19 @@ def plot_rq3(scores: pd.DataFrame, mode: str = 'relative', pareto: bool = False,
     if mode == 'absolute':
         ax.set_xlim(0, float(scores['technical_max'].iloc[0]))
         ax.set_ylim(0, float(scores['social_max'].iloc[0]))
-    else:
-        for axis, column in ((ax.set_xlim, 'technical'), (ax.set_ylim, 'social')):
+    else:   # room around the data for the labels of the outer points (labels stay inside the axes)
+        for axis, column, (low_pad, high_pad) in ((ax.set_xlim, 'technical', viscons.RQ3_PAD_X),
+                                                  (ax.set_ylim, 'social', viscons.RQ3_PAD_Y)):
             low, high = scores[column].min(), scores[column].max()
-            pad = 0.08 * (high - low) if high > low else 0.1
-            axis(low - pad, high + pad)
-    labels = model_labels(scores[cons.COL_MODEL])
-    xs, ys = scores['technical'].to_numpy(), scores['social'].to_numpy()
-    texts = [ax.text(x, y, labels[m], fontsize=viscons.RQ3_LABEL_SIZE, color=c, zorder=4, ha='center', va='center')
-             for m, x, y, c in zip(scores[cons.COL_MODEL], xs, ys, colors)]
-    if texts:
-        adjust_text(texts, x=xs, y=ys, ax=ax, expand=viscons.RQ3_LABEL_EXPAND, force_text=viscons.RQ3_LABEL_FORCE_TEXT,
-                    force_static=viscons.RQ3_LABEL_FORCE_STATIC, max_move=None, ensure_inside_axes=True,
-                    time_lim=viscons.RQ3_LABEL_TIME_LIM)
-        _connectors(ax, texts, xs, ys, colors)
+            span = high - low if high > low else 1.0
+            axis(low - low_pad * span, high + high_pad * span)
+    corr = None
+    xs, ys = scores['technical'].to_numpy(dtype=float), scores['social'].to_numpy(dtype=float)
     if len(scores) >= 3:
         r, p = pearsonr(xs, ys)
-        ax.text(0.012, 0.975, f"Pearson $\\rho$ = {r:.2f} ({_stars(p)})", transform=ax.transAxes, ha='left',
-                va='top', fontsize='x-small', color=viscons.METRIC_ROW_LABEL_COLOR, zorder=5,
-                bbox={'facecolor': 'white', 'edgecolor': 'none', 'alpha': 0.8, 'pad': 1.2})
+        corr = ax.text(0.012, 0.975, f"Pearson $\\rho$ = {r:.2f} ({_stars(p)})", transform=ax.transAxes, ha='left',
+                       va='top', fontsize='x-small', color=viscons.METRIC_ROW_LABEL_COLOR, zorder=5,
+                       bbox={'facecolor': 'white', 'edgecolor': 'none', 'alpha': 0.8, 'pad': 1.2})
 
     ax.set_xlabel(f"Technical: {tradeoff.axis_label(technical)}", fontsize='small')
     ax.set_ylabel(f"Social: {tradeoff.axis_label(social)}", fontsize='small')
@@ -414,7 +414,116 @@ def plot_rq3(scores: pd.DataFrame, mode: str = 'relative', pareto: bool = False,
               handletextpad=0.1, columnspacing=1.2, borderaxespad=0.2)
     split = 'medians of the models' if mode == 'relative' else 'half of the maximum'
     ax.set_title(title or f"RQ3: socio-technical trade-off (split: {split})", pad=16)   # PNG only (save_figure)
+    fig.tight_layout()   # final layout BEFORE placing: a later re-layout would move points under fixed-size labels
+    labels = model_labels(scores[cons.COL_MODEL])
+    _label_points(ax, [labels[m] for m in scores[cons.COL_MODEL]], xs, ys, colors, (split_x, split_y),
+                  [corr] if corr is not None else [], labels_in_quadrant)
+    return fig
+
+
+def plot_rq3_inset(scores: pd.DataFrame, pareto: bool = False,
+                   technical: Sequence[str] = tuple(cons.RQ3_TECHNICAL_METRICS),
+                   social: Sequence[str] = tuple(cons.RQ3_SOCIAL_METRICS), title: Optional[str] = None,
+                   grid: bool = False, color_by: Optional[str] = None) -> plt.Figure:
+    """The absolute view (axes from 0 to the maximum, quadrants split at half of each axis maximum; points without
+    labels) with a zoomed inset on the models, where the labels are (placed as in plot_rq3). The inset sits in the
+    empty part of the axes (viscons.RQ3_INSET_BOUNDS); a light shaded frame in the inset's colour marks the zoomed
+    area, joined to the inset by two thin connectors, with the legend of the quadrants that occur under it. color_by: a model characteristic (summary.MODEL_ATTRIBUTES: 'access', 'reasoning', 'size', 'origin') for the
+    points and labels of the inset, with their own legend (the overview keeps the quadrant colours); None: quadrants."""
+    from scipy.stats import pearsonr
+    from analysis import tradeoff
+    from viz.labels import model_labels
+
+    split_x, split_y = tradeoff.splits(scores, 'absolute')
+    quadrant = tradeoff.quadrants(scores, 'absolute')
+    colors = list(quadrant.map(viscons.RQ3_QUADRANT_COLORS))
+    xs, ys = scores['technical'].to_numpy(dtype=float), scores['social'].to_numpy(dtype=float)
+    fig, ax = plt.subplots(figsize=viscons.RQ3_INSET_FIGURE_IN)
+
+    def draw(axes, size, legend):
+        for q, description in tradeoff.QUADRANTS.items():
+            chosen = (quadrant == q).to_numpy()
+            axes.scatter(xs[chosen], ys[chosen], s=size, color=viscons.RQ3_QUADRANT_COLORS[q], edgecolor='white',
+                         linewidth=0.4, zorder=3, label=f"{q} · {description}" if legend else None)
+        axes.axvline(split_x, zorder=1, **viscons.RQ3_SPLIT_LINE)
+        axes.axhline(split_y, zorder=1, **viscons.RQ3_SPLIT_LINE)
+        if pareto:
+            front = scores[tradeoff.pareto_front(scores)].sort_values('technical')
+            axes.plot(front['technical'], front['social'], zorder=2, **viscons.RQ3_PARETO_LINE)
+        if grid:
+            axes.grid(color=viscons.COLOR_GRID, linewidth=0.5, zorder=0)
+        else:
+            axes.grid(False)
+        axes.set_axisbelow(True)
+
+    draw(ax, viscons.RQ3_INSET_OVERVIEW_MARKER_SIZE, legend=True)
+    ax.set_xlim(0, float(scores['technical_max'].iloc[0]))
+    ax.set_ylim(0, float(scores['social_max'].iloc[0]))
+    ax.set_xlabel(f"Technical: {tradeoff.axis_label(technical)}", fontsize='small')
+    ax.set_ylabel(f"Social: {tradeoff.axis_label(social)}", fontsize='small')
+    for side in ('top', 'right'):
+        ax.spines[side].set_visible(False)
+    if len(scores) >= 3:    # bottom left: the inset takes the top left
+        r, p = pearsonr(xs, ys)
+        ax.text(0.012, 0.02, f"Pearson $\\rho$ = {r:.2f} ({_stars(p)})", transform=ax.transAxes, ha='left',
+                va='bottom', fontsize='x-small', color=viscons.METRIC_ROW_LABEL_COLOR, zorder=5,
+                bbox={'facecolor': 'white', 'edgecolor': 'none', 'alpha': 0.8, 'pad': 1.2})
+    ax.set_title(title or "RQ3: socio-technical trade-off (split: half of the maximum; inset: zoom on the models)",
+                 pad=16)   # PNG only (save_figure)
     fig.tight_layout()
+
+    inset = ax.inset_axes(viscons.RQ3_INSET_BOUNDS)
+    inset_colors = colors
+    if color_by:
+        if color_by not in summary.MODEL_ATTRIBUTES:
+            raise ValueError(f"color_by must be one of {list(summary.MODEL_ATTRIBUTES)}, got {color_by!r}")
+        name, levels, level_labels = summary.MODEL_ATTRIBUTES[color_by]
+        palette = dict(zip(levels, viscons.RQ3_INSET_PALETTE))
+        value_of = summary.load_model_metadata().set_index(cons.COL_MODEL)[color_by]
+        inset_colors = [palette.get(value_of.get(m), viscons.COLOR_TEXT_SECONDARY) for m in scores[cons.COL_MODEL]]
+        draw(inset, 0, legend=False)                                   # split lines etc.; the points below
+        inset.scatter(xs, ys, s=viscons.RQ3_MARKER_SIZE, color=inset_colors, edgecolor='white', linewidth=0.4, zorder=3)
+        from matplotlib.lines import Line2D
+        handles = [Line2D([0], [0], marker='o', linestyle='', color=palette[v], markeredgecolor='white', markersize=4,
+                          label=l) for v, l in zip(levels, level_labels) if v in palette]
+        inset.legend(handles=handles, title=name, loc='lower right', fontsize='xx-small', title_fontsize='xx-small',
+                     frameon=True, framealpha=0.9, edgecolor='none', handletextpad=0.1, borderpad=0.4)
+    else:
+        draw(inset, viscons.RQ3_MARKER_SIZE, legend=False)
+    for axis, values, (low_pad, high_pad) in ((inset.set_xlim, xs, viscons.RQ3_PAD_X),
+                                              (inset.set_ylim, ys, viscons.RQ3_PAD_Y)):
+        low, high = float(np.nanmin(values)), float(np.nanmax(values))
+        span = high - low if high > low else 1.0
+        axis(low - low_pad * span, high + high_pad * span)
+    inset.set_facecolor('white')                 # opaque, in front: the overview's split lines must not show through
+    inset.set_zorder(5)
+    inset.tick_params(labelsize='xx-small', length=2, pad=1)
+    for side in inset.spines.values():           # a full frame (the style hides the top / right spines)
+        side.set_visible(True)
+        side.set_edgecolor(viscons.RQ3_INSET_FRAME_COLOR)
+        side.set_linewidth(0.6)
+    from matplotlib.patches import ConnectionPatch, Rectangle   # the zoomed area: a light shaded frame
+    (x0, x1), (y0, y1) = inset.get_xlim(), inset.get_ylim()
+    ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, facecolor=viscons.RQ3_INSET_FRAME_COLOR,
+                           alpha=viscons.RQ3_INSET_SHADE_ALPHA, edgecolor='none', zorder=1))
+    ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, fill=False, edgecolor=viscons.RQ3_INSET_FRAME_COLOR,
+                           linewidth=0.6, zorder=2))
+    labels = model_labels(scores[cons.COL_MODEL])
+    for corner_y, box_y in ((1.0, y1), (0.0, y0)):  # connectors: right corners of the inset -> left corners of the frame
+        ax.add_artist(ConnectionPatch(xyA=(1.0, corner_y), coordsA=inset.transAxes, xyB=(x0, box_y),
+                                      coordsB=ax.transData, color=viscons.RQ3_INSET_FRAME_COLOR, linewidth=0.5,
+                                      zorder=1))
+    # quadrant legend under the frame, only the quadrants that occur (the absolute split: usually one)
+    present = [q for q in tradeoff.QUADRANTS if (quadrant == q).any()]
+    from matplotlib.lines import Line2D
+    handles = [Line2D([0], [0], marker='o', linestyle='', color=viscons.RQ3_QUADRANT_COLORS[q], markeredgecolor='white',
+                      markersize=4.5, label=f"{q} · {tradeoff.QUADRANTS[q]}") for q in present]
+    ax.legend(handles=handles, loc='upper center', bbox_to_anchor=((x0 + x1) / 2, y0), bbox_transform=ax.transData,
+              ncol=len(handles), frameon=False, fontsize='x-small', handletextpad=0.1, columnspacing=1.0,
+              borderaxespad=0.3)
+    legends = [inset.get_legend()] if inset.get_legend() is not None else []
+    _label_points(inset, [labels[m] for m in scores[cons.COL_MODEL]], xs, ys, inset_colors, (split_x, split_y),
+                  legends, in_quadrant=False)
     return fig
 
 
@@ -422,24 +531,120 @@ def _stars(p: float) -> str:
     return 'ns' if not np.isfinite(p) or p >= 0.05 else '***' if p < 0.001 else '**' if p < 0.01 else '*'
 
 
-def _connectors(ax: plt.Axes, texts, xs: np.ndarray, ys: np.ndarray, colors) -> None:
-    """A thin curved line from each point to the nearest edge of its label, in the label's colour, when the label is
-    farther than viscons.RQ3_CONNECT_FROM_IN from its point (labels next to their point need none)."""
-    from matplotlib.patches import FancyArrowPatch
+def _label_points(ax: plt.Axes, labels: Sequence[str], xs: np.ndarray, ys: np.ndarray, colors: Sequence[str],
+                  split: Tuple[float, float], obstacles: Sequence, in_quadrant: bool) -> None:
+    """Place the labels (_place_labels) and draw them, with a leader line for the ones away from their point."""
     fig = ax.figure
-    fig.canvas.draw()
+    fig.canvas.draw()                                         # final extents of the texts, the axes, the obstacles
     renderer = fig.canvas.get_renderer()
-    to_display, to_data = ax.transData.transform, ax.transData.inverted().transform
-    for text, x, y, color in zip(texts, xs, ys, colors):
-        box = text.get_window_extent(renderer).expanded(1.04, 1.15)
-        px, py = to_display((x, y))
-        nx, ny = min(max(px, box.x0), box.x1), min(max(py, box.y0), box.y1)     # nearest point of the label box
-        if np.hypot(nx - px, ny - py) / fig.dpi < viscons.RQ3_CONNECT_FROM_IN:
-            continue
-        end = to_data((nx, ny))
-        rad = 0.25 if (nx - px) * (ny - py) >= 0 else -0.25                    # bend the same way on each side
-        ax.add_patch(FancyArrowPatch((x, y), tuple(end), arrowstyle='-', connectionstyle=f"arc3,rad={rad}",
-                                     color=color, alpha=0.7, linewidth=0.5, shrinkA=2.5, shrinkB=0.5, zorder=2))
+    points = ax.transData.transform(np.column_stack([xs, ys]))
+    dot = np.sqrt(viscons.RQ3_MARKER_SIZE) / 2 * fig.dpi / 72                   # marker radius in pixels
+    probes = [ax.text(0, 0, label, fontsize=viscons.RQ3_LABEL_SIZE) for label in labels]
+    sizes = [(b.width, b.height) for b in (t.get_window_extent(renderer) for t in probes)]
+    for t in probes:
+        t.remove()
+    box = ax.get_window_extent(renderer)
+    blocked = [tuple(o.get_window_extent(renderer).extents) for o in obstacles]
+    regions = None
+    if in_quadrant:            # quadrant boxes in pixels (a point on a split line belongs to the >= side)
+        mx, my = ax.transData.transform(split)
+        mx, my = min(max(mx, box.x0), box.x1), min(max(my, box.y0), box.y1)   # split outside the axes (zoomed inset)
+        regions = [(mx if px >= mx else box.x0, my if py >= my else box.y0,
+                    box.x1 if px >= mx else mx, box.y1 if py >= my else my) for px, py in points]
+    centres = _place_labels(sizes, points, tuple(box.extents), blocked, dot, regions,
+                            gap=viscons.RQ3_LABEL_GAP_PX * fig.dpi / 100)
+    text_xy = ax.transData.inverted().transform(centres)
+    for label, color, x, y, (tx, ty), (w, h), (cx, cy), (px, py) in zip(labels, colors, xs, ys, text_xy, sizes,
+                                                                        centres, points):
+        near = abs(cx - px) < w / 2 + 2.5 * dot and abs(cy - py) < h / 2 + 2.5 * dot   # touching its point
+        ax.annotate(label, xy=(x, y), xytext=(tx, ty), fontsize=viscons.RQ3_LABEL_SIZE, color=color, ha='center',
+                    va='center', zorder=4, annotation_clip=False,
+                    arrowprops=None if near else dict(arrowstyle='-', color=color, alpha=0.6,
+                                                      lw=viscons.RQ3_LEADER_WIDTH, shrinkA=1,
+                                                      shrinkB=dot * 72 / fig.dpi + 0.5,
+                                                      connectionstyle=f"arc3,rad={viscons.RQ3_LEADER_CURVE}"))
+
+
+def _place_labels(sizes, points, axes_box, obstacles, dot_r, regions=None, gap=3.5, step=4.0, max_dist=400.0):
+    """Greedy, deterministic label placement in pixel space (from the Submission2027 quadrant_scatter.py).
+
+    Each label tries rings of growing distance around its point (16 directions, right / left / up / down first) and
+    takes the first spot inside its region that clears every placed label, every point and the obstacles; crowded
+    points go first so they get the spots closest to them. If the rings find nothing, the region is scanned on a grid
+    (nearest first); a label that fits nowhere in its region tries the whole axes, else it stays on its point.
+    Returns the label centres (n, 2) in pixels."""
+    points = np.asarray(points, float)
+    dots = [(x - dot_r, y - dot_r, x + dot_r, y + dot_r) for x, y in points]
+    placed = list(obstacles)
+
+    def hits(box, boxes):
+        x0, y0, x1, y1 = box
+        return any(x0 < b[2] + gap and b[0] - gap < x1 and y0 < b[3] + gap and b[1] - gap < y1 for b in boxes)
+
+    def inside(box, region):
+        return box[0] >= region[0] and box[2] <= region[2] and box[1] >= region[1] and box[3] <= region[3]
+
+    angles = np.deg2rad([0, 180, 90, 270, 45, 135, 315, 225, 22.5, 157.5, 337.5, 202.5, 67.5, 112.5, 292.5, 247.5])
+    directions = np.column_stack([np.cos(angles), np.sin(angles)])
+
+    def find_spot(i, region):
+        (w, h), (px, py) = sizes[i], points[i]
+        others = dots[:i] + dots[i + 1:]
+        for dist in np.arange(0, max_dist, step):
+            for ux, uy in directions:      # the box EDGE (not its centre) sits `dist` beyond the point
+                cx, cy = px + ux * (w / 2 + dot_r + gap + dist), py + uy * (h / 2 + dot_r + gap + dist)
+                box = (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+                if inside(box, region) and not hits(box, placed) and not hits(box, others):
+                    return (cx, cy), box
+        gx = np.arange(region[0] + w / 2, region[2] - w / 2 + 1e-9, step)
+        gy = np.arange(region[1] + h / 2, region[3] - h / 2 + 1e-9, step)
+        if len(gx) and len(gy):
+            candidates = np.array(np.meshgrid(gx, gy)).reshape(2, -1).T
+            for cx, cy in candidates[np.argsort(((candidates - (px, py)) ** 2).sum(1))]:
+                box = (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+                if not hits(box, placed) and not hits(box, others):
+                    return (cx, cy), box
+        return None
+
+    crowding = (((points[:, None, :] - points[None, :, :]) ** 2).sum(-1) < (8 * dot_r) ** 2).sum(1)
+    centres, boxes = points.copy(), [None] * len(points)
+    for i in np.argsort(-crowding, kind='stable'):
+        spot = find_spot(i, regions[i]) if regions is not None else None
+        if spot is None:
+            spot = find_spot(i, axes_box)
+        if spot is not None:
+            centres[i], boxes[i] = spot
+            placed.append(boxes[i])
+
+    # untangle: two leader lines that cross swap their label spots (centre on centre) when both labels still fit
+    def box_at(i, c):
+        (w, h) = sizes[i]
+        return (c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2)
+
+    def crosses(p1, p2, q1, q2):
+        d = lambda a, b, c: (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+        return d(p1, p2, q1) * d(p1, p2, q2) < 0 and d(q1, q2, p1) * d(q1, q2, p2) < 0
+
+    def fits(i, box, skip):
+        region = regions[i] if regions is not None else axes_box
+        rest = [b for k, b in enumerate(boxes) if b is not None and k not in skip] + list(obstacles)
+        return (inside(box, region) or inside(box, axes_box)) and not hits(box, rest) \
+            and not hits(box, [d for k, d in enumerate(dots) if k != i])
+
+    for _ in range(3):
+        swapped = False
+        for i in range(len(points)):
+            for j in range(i + 1, len(points)):
+                if boxes[i] is None or boxes[j] is None or not crosses(points[i], centres[i], points[j], centres[j]):
+                    continue
+                bi, bj = box_at(i, centres[j]), box_at(j, centres[i])
+                if fits(i, bi, {i, j}) and fits(j, bj, {i, j}) and not hits(bi, [bj]):
+                    centres[[i, j]] = centres[[j, i]]
+                    boxes[i], boxes[j] = bi, bj
+                    swapped = True
+        if not swapped:
+            break
+    return centres
 
 
 def rq3_figure_name(mode: str, technical: Optional[Sequence[str]] = None, social: Optional[Sequence[str]] = None) -> str:
@@ -682,7 +887,8 @@ def plot_rq2_forest(results: pd.DataFrame, value: str = 'contrast', metrics: Opt
         if kind == 'header':
             tick.set_fontweight('bold')
     fig.supxlabel('Difference from the reference value' if value == 'contrast' else 'Deviation from the grand mean',
-                  fontsize='x-small', color=viscons.COLOR_TEXT_SECONDARY, y=0.004)
+                  fontsize='x-small', color=viscons.COLOR_TEXT_SECONDARY, y=0.004,
+                  x=(fig.subplotpars.left + fig.subplotpars.right) / 2)     # centred over the panels, not the figure
     handles = [Line2D([], [], marker='o', linestyle='', color=viscons.FAMILY_COLORS[f], label=f.capitalize())
                for f in (summary.PERSONA, summary.CONTEXT) if any(line[2] == f for line in lines)]
     fig.legend(handles=handles, loc='lower left', ncol=len(handles), frameon=False, fontsize='x-small',

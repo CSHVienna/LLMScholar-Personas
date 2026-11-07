@@ -442,7 +442,8 @@ ANNOTATION_TOOL_FILE = str(PROJECT_ROOT / 'code' / 'tools' / 'annotation_tool.ht
 # GROUND TRUTH (step A; OpenAlex, read-only). Code in libs/groundtruth/ and libs/demographics/.
 ###############################################################################
 DEFAULT_OPENALEX_DB = f'{DEFAULT_DATA_DIR}/openalex_20260923.duckdb'
-DEFAULT_GT_DIR = f'{DEFAULT_RESULTS_DIR}/groundtruth'
+DEFAULT_GT_DIR = f'{DEFAULT_RESULTS_DIR}/groundtruth'                 # shared tables (A.0-A.3), every variant
+DEFAULT_GT_POPULATION_DIR = f'{DEFAULT_GT_DIR}/population/main'      # A.4 gt_*.parquet of a variant: population/<variant>/
 DEFAULT_GT_AUTHORSHIPS_DIR = f'{DEFAULT_GT_DIR}/authorships'      # bucket=<b>/*.parquet (hive)
 DEFAULT_GT_AUTHORS_DIR = f'{DEFAULT_GT_DIR}/authors'              # bucket-<bb>.parquet
 DEFAULT_GT_PAIRS_DIR = f'{DEFAULT_GT_DIR}/coauthor_pairs'         # chunk=<c>/bucket=<b>/*.parquet (A.0b, intermediate)
@@ -592,6 +593,13 @@ METRIC_COLUMN_SETS['all'] = METRIC_COLUMN_SETS['technical_factuality'] + METRIC_
 METRIC_COLUMN_SETS['paper'] = ['refusals', 'validity', 'recommendation_consistency', 'factuality_author',
                                'parity_gender', 'diversity_gender', 'popularity_influence', 'popularity_location',
                                'similarity']
+# Size-adjusted social metrics (<key>_adj = observed - expected under a random recommender, metrics/expected.py):
+# '<set>_adj' = the set with its social metrics adjusted, e.g. 'parity_adj', 'social_adj', 'paper_adj'
+for _name in list(METRIC_COLUMN_SETS):
+    _keys = METRIC_COLUMN_SETS[_name]
+    if any(k.startswith(('parity_', 'diversity_', 'popularity_')) or k in ('connectedness', 'similarity') for k in _keys):
+        METRIC_COLUMN_SETS[_name + '_adj'] = [k + '_adj' if k.startswith(('parity_', 'diversity_', 'popularity_'))
+                                              or k in ('connectedness', 'similarity') else k for k in _keys]
 
 # RQ3: socio-technical trade-off (analysis/tradeoff.py). Per model, the sum of the metrics of each axis; metrics where
 # lower is better (refusals, duplicates) enter as complements (1 - x), so larger is better on both axes.
