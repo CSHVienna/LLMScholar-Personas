@@ -501,7 +501,8 @@ def variant_info(name: str, results_dir: Path | str = cons.DEFAULT_RESULTS_DIR,
 
     config, base, differs (summary), changes, population / authors (variant whose GT population / author matching
     it reads: its own name if it changes their settings, else the base's 'main'), and the folders gt_dir (A.4 outputs),
-    matching_dir, metrics_dir, plots_dir. ``config`` replaces the file of main (e.g. the smoke config).
+    matching_dir, metrics_dir, plots_dir (<project>/plots/<name>, or <results_dir>/plots/<name> for a non-default
+    results_dir such as the smoke one). ``config`` replaces the file of main (e.g. the smoke config).
     """
     path = Path(config) if config else variant_file(name)
     if not path.exists() and name != MAIN:
@@ -524,11 +525,14 @@ def variant_info(name: str, results_dir: Path | str = cons.DEFAULT_RESULTS_DIR,
     population = name if STEP_POPULATION in steps or name == MAIN else MAIN
     authors = name if STEP_AUTHORS in steps or name == MAIN else MAIN
     results = Path(results_dir)
+    # plots: <project>/plots/ for the real results; next to any other results_dir (smoke, tests) so they stay apart
+    is_default = results.resolve() == Path(cons.DEFAULT_RESULTS_DIR).resolve()
+    plots = Path(cons.DEFAULT_PLOTS_DIR) if is_default else results / 'plots'
     return {'name': name, 'config': str(path), 'base': base_rel, 'differs': summary(changes), 'changes': changes,
             'population': population, 'authors': authors,
             'gt_dir': str(results / 'groundtruth' / GT_POPULATION_SUBDIR / population),
             'matching_dir': str(results / 'matching' / 'authors' / authors),
-            'metrics_dir': str(results / 'metrics' / name), 'plots_dir': str(results / 'plots' / name)}
+            'metrics_dir': str(results / 'metrics' / name), 'plots_dir': str(plots / name)}
 
 
 def notebook_variant(name: str, smoke: bool = False) -> Dict[str, Any]:

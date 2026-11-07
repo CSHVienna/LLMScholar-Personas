@@ -128,7 +128,8 @@ Notebooks (`code/notebooks/`): `0_gt`, `1_responses_tags`, `2_matching_stats`, `
 │   ├── responses/       raw LLM responses
 │   ├── mappings/
 │   └── openalex_*.duckdb
-├── results/             groundtruth, matching, metrics, plots, ...
+├── results/             groundtruth, matching, metrics, ...
+├── plots/               a folder per variant
 ├── logs/                one log per script run
 └── tmp/                 scratch and smoke tests (git-ignored)
 ```

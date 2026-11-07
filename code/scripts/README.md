@@ -283,7 +283,7 @@ all models (mean of the model shares, every model weighs equally, with a 95% hie
 then configurations within models; `tag_stats.model_mean_shares`, constants `DEFAULT_BOOTSTRAP_SAMPLES`,
 `DEFAULT_CONFIDENCE`, `DEFAULT_SEED`). Valid combinations
 (all tags in the valid set; defaults `DEFAULT_VALID_RESPONSE_TAGS` / `DEFAULT_VALID_REC_TAGS` in `constants.py`,
-overridable in the notebook) are green, the others red and hatched. Plots: `results/plots/<variant>/tags_*.{png,pdf}`.
+overridable in the notebook) are green, the others red and hatched. Plots: `plots/<variant>/tags_*.{png,pdf}`.
 Paper figures (`tags_responses_paper`, `tags_recommendations_paper`): per-model panel (4/5) + overall panel (1/5),
 both vertical with a shared 0–100 axis, A4 width × 2.9 in; models sorted by valid share (desc.); short model labels
 (`viz/labels.py`, rules in `viz/constants.MODEL_LABEL_RULES`, checked to be unique) and short tag labels
@@ -453,7 +453,7 @@ next to the raw ones: `rq1_omega2_paper_bar.pdf` / `rq1_omega2_paper_bar_adj.pdf
 
 ### Metric figures — `code/notebooks/3_metrics.ipynb`
 
-All notebook plots go to `results/plots/<VARIANT>/` (set `VARIANT` in the notebook, as for `metrics/<VARIANT>/`).
+All notebook plots go to `plots/<VARIANT>/` (smoke: `tmp/smoke/plots/<VARIANT>/`) (set `VARIANT` in the notebook, as for `metrics/<VARIANT>/`).
 
 One function for every bar figure: `viz/metric_plots.plot_metric_bars(summary.estimate(configs, rows, metrics), rows,
 metrics)` (`libs/metrics/summary.py`). Rows: `model_rows(models)`, `attribute_rows(['access', 'size', 'reasoning',

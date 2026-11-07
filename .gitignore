@@ -214,12 +214,11 @@ __marimo__/
 *.api
 
 # own
-results/*
-!results/plots/
-tmp/
+_old/
+cache
+logs
+results
+tmp
 plan*
 data/responses
 data/*.duckdb
-_old/
-logs/
-cache/

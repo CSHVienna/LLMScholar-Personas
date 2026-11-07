@@ -16,6 +16,7 @@ sys.path.insert(0, str(PROJECT_ROOT / 'code' / 'libs'))
 sys.path.insert(0, str(PROJECT_ROOT / 'code' / 'scripts'))
 
 from utils import analysis_config as ac                                  # noqa: E402
+from utils import constants as cons                                       # noqa: E402
 import configure_analysis as wiz                                         # noqa: E402
 
 N_SETTINGS = sum(len(section.settings) for section in ac.SCHEMA)
@@ -291,6 +292,11 @@ class TestVariants(unittest.TestCase):
         from groundtruth.db import shared_gt_dir
         self.assertEqual(shared_gt_dir('/r/groundtruth/population/main'), Path('/r/groundtruth'))
         self.assertEqual(shared_gt_dir('/r/groundtruth'), Path('/r/groundtruth'))
+
+    def test_plots_dir(self):
+        path = ac.DEFAULT_CONFIG_FILE
+        self.assertEqual(ac.variant_info('main', self.results, path)['plots_dir'], str(self.results / 'plots' / 'main'))
+        self.assertEqual(ac.variant_info('main', config=path)['plots_dir'], str(cons.PROJECT_ROOT / 'plots' / 'main'))
 
     def test_project_configs_are_complete(self):
         for path in (ac.DEFAULT_CONFIG_FILE, ac.SMOKE_CONFIG_FILE):
