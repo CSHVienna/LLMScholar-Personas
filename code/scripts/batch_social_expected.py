@@ -38,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--n_max', type=int, default=ex.N_MAX, help='Longest list simulated (longer: the value at n_max)')
     parser.add_argument('--seed', type=int, default=cons.DEFAULT_SEED)
     parser.add_argument('--overwrite', action='store_true', help='Recompute an existing table')
-    for option in ('--valid_response_tags', '--valid_rec_tags', '--top_country_share'):   # config options, no effect here
+    for option in ('--valid_response_tags', '--valid_rec_tags', '--top_countries'):   # config options, no effect here
         parser.add_argument(option, nargs='*', default=None, help=argparse.SUPPRESS)
     for flag in ('--keep_duplicates', '--order_sensitive_keys', '--consistency_all_runs'):
         parser.add_argument(flag, action='store_true', help=argparse.SUPPRESS)

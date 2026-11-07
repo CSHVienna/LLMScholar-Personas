@@ -15,6 +15,9 @@ resources and never loaded into pandas; gt_shares / gt_cutoffs are small and rea
     histogram(con, gt_dir, column)    counts in equal-width bins of a gt_authors column (optionally per field)
     gender_coverage(con, gt_dir)      perceived gender label by why it is unknown (no first name / no p_female)
     composition(shares, attribute)    class shares per field x seniority from gt_shares (countries pooled to the top)
+    country_ranking(con, gt_dir)      per field x country: scholars, works, citations (sums) and h-index (mean,
+                                      median) of the GT scholars of that country (latest or last known affiliation)
+    country_top(ranking, measures)    the top countries by each measure, side by side (rank, code, % / value)
     shares_by_prominence(...)         perceived gender / ethnicity inside each L / M / H class and the top x % group
     cutoffs_table(cutoffs)            L / M / H value ranges per field x seniority (gt_cutoffs)
 
@@ -255,6 +258,70 @@ def composition(shares: pd.DataFrame, attribute: str, include_unknown: bool = Tr
     table.columns.name = attribute
     order = _sort_cells(table.reset_index()[['field', 'seniority']])
     return table.reindex(pd.MultiIndex.from_frame(order))
+
+
+COUNTRY_MEASURES = {'n_scholars': 'scholars', 'n_works': 'works', 'n_citations': 'citations',
+                    'h_index_mean': 'mean h-index', 'h_index_median': 'median h-index'}
+COUNTRY_SUM_MEASURES = ('n_scholars', 'n_works', 'n_citations')     # additive: shares of the field total, 'other' pool
+COUNTRY_COLUMNS = ('country', 'last_known_country')                 # A.2: latest affiliation (fallback last known)
+
+
+def country_ranking(con: duckdb.DuckDBPyConnection, gt_dir: Path | str, column: str = 'country') -> pd.DataFrame:
+    """Per field x country (+ 'All fields' = each scholar ONCE, not per membership, so works / citations are not
+    double counted): n_scholars, n_works, n_citations (sums over the scholars, career totals in all fields: a
+    scholar's papers go to their one country), h_index_mean / _median (approximate), and share_<m> = m / field total
+    for the additive measures (unknown included in the total). column: 'country' (latest affiliation, fallback last
+    known institution; the GT's country) or 'last_known_country' (OpenAlex last known institution only)."""
+    if column not in COUNTRY_COLUMNS:
+        raise ValueError(f"column must be one of {COUNTRY_COLUMNS}: {column}")
+    measures = f"""count(*) AS n_scholars, sum(n_works) AS n_works, sum(n_citations) AS n_citations,
+                   avg(h_index) AS h_index_mean, approx_quantile(h_index, 0.5) AS h_index_median"""
+    df = con.execute(f"""
+        WITH a AS (SELECT coalesce({column}, '{UNKNOWN}') AS country, fields, n_works, n_citations, h_index
+                   FROM {_src(gt_dir, 'gt_authors')})
+        SELECT '{ALL_FIELDS}' AS field, country, {measures} FROM a GROUP BY country
+        UNION ALL
+        SELECT field, country, {measures}
+        FROM (SELECT unnest(fields) AS field, country, n_works, n_citations, h_index FROM a)
+        GROUP BY field, country""").df()
+    for m in COUNTRY_SUM_MEASURES:
+        df[m] = df[m].astype('int64')
+        df[f"share_{m}"] = df[m] / df.groupby('field')[m].transform('sum')
+    order = {f: i for i, f in enumerate(field_order(df['field'].unique()))}
+    df = df.sort_values(['n_scholars'], ascending=False, kind='stable')
+    return df.sort_values('field', key=lambda c: c.map(order), kind='stable').reset_index(drop=True)
+
+
+def country_order(ranking: pd.DataFrame, measure: str = 'n_scholars', field: str = ALL_FIELDS,
+                  include_unknown: bool = False, min_scholars: int = 0) -> pd.DataFrame:
+    """The countries of one field sorted by `measure` (largest first): country, value, share (additive measures: of the
+    shown total, i.e. renormalised over known countries without unknown) and cumulative share. min_scholars: leave out
+    small countries (for the h-index measures, noisy for a few scholars)."""
+    if measure not in COUNTRY_MEASURES:
+        raise ValueError(f"measure must be one of {list(COUNTRY_MEASURES)}: {measure}")
+    d = ranking[ranking['field'] == field]
+    if not include_unknown:
+        d = d[d['country'] != UNKNOWN]
+    d = d[d['n_scholars'] >= min_scholars]
+    d = d.assign(value=d[measure])[['country', 'n_scholars', 'value']]
+    d = d.sort_values(['value', 'country'], ascending=[False, True]).reset_index(drop=True)
+    if measure in COUNTRY_SUM_MEASURES:
+        d['share'] = d['value'] / d['value'].sum() if d['value'].sum() else np.nan
+        d['cumulative'] = d['share'].cumsum()
+    d.insert(0, 'rank', np.arange(1, len(d) + 1))
+    return d
+
+
+def country_top(ranking: pd.DataFrame, measures: Sequence[str] = tuple(COUNTRY_MEASURES), top: int = 20,
+                field: str = ALL_FIELDS, include_unknown: bool = False, min_scholars: int = 0) -> pd.DataFrame:
+    """Rows = rank 1..top, one column per measure: 'US 18.2 %' (additive: share; h-index: value). Countries that
+    change rank between measures show which choice matters."""
+    columns = {}
+    for m in measures:
+        d = country_order(ranking, m, field, include_unknown, min_scholars if m not in COUNTRY_SUM_MEASURES else 0).head(top)
+        text = (d['share'] * 100).map('{:.1f} %'.format) if m in COUNTRY_SUM_MEASURES else d['value'].map('{:.1f}'.format)
+        columns[COUNTRY_MEASURES[m]] = (d['country'] + ' ' + text).tolist() + [''] * (top - len(d))
+    return pd.DataFrame(columns, index=pd.RangeIndex(1, top + 1, name='rank'))
 
 
 def shares_by_prominence(con: duckdb.DuckDBPyConnection, gt_dir: Path | str, attribute: str,

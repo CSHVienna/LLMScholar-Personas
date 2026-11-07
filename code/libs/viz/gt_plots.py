@@ -14,6 +14,10 @@ rows, 'All fields' last), seniority junior / mid / senior inside a group.
                                           one panel per prominence attribute
     plot_gt_histogram(hist, thresholds)   distribution of one gt_authors column (bars, or one line per field), with the
                                           config thresholds as dashed lines (seniority cut-offs, gender edges, ...)
+    plot_gt_countries(ranking, measure, top)
+                                          countries sorted by a measure (scholars, works, citations, h-index), the
+                                          top ones as bars and the rest as 'other'; cumulative % line; prompt
+                                          countries highlighted
     plot_gt_composition(shares)           the GT targets: class shares per field x seniority, one panel per attribute
                                           (the flows' colours: gender diverging, ethnicity / country categorical,
                                           L / M / H sequential; 'other' / 'unknown' grey)
@@ -337,6 +341,50 @@ def plot_gt_histogram(hist: pd.DataFrame, xlabel: str, thresholds: Optional[Dict
         ax.spines[side].set_visible(False)
     if title:
         ax.set_title(title, loc='left')
+    return fig
+
+
+# --- countries ---------------------------------------------------------------------------------------------------
+def plot_gt_countries(ranking: pd.DataFrame, measure: str = 'n_scholars', top: int = 20, field: str = gs.ALL_FIELDS,
+                      include_unknown: bool = False, min_scholars: int = 1000, cumulative: bool = True,
+                      highlight: Optional[Sequence[str]] = None, ax: Optional[plt.Axes] = None,
+                      title: Optional[str] = None) -> plt.Figure:
+    """Bars of the countries sorted by `measure` (gs.country_ranking), largest first: the `top` ones, then the rest as
+    one 'other' bar (additive measures: % of the field total, with the cumulative % as a line; h-index measures: the
+    value, countries with >= min_scholars only, no 'other'). highlight: country codes in another colour (default: the
+    prompt countries)."""
+    additive = measure in gs.COUNTRY_SUM_MEASURES
+    d = gs.country_order(ranking, measure, field, include_unknown, 0 if additive else min_scholars)
+    shown = d.head(top)
+    highlight = set(prompt_countries() if highlight is None else highlight)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(viscons.PAPER_TEXT_WIDTH_IN, viscons.GT_PANEL_HEIGHT_IN), layout='constrained')
+    else:
+        fig = ax.figure
+    labels = shown['country'].tolist()
+    values = (shown['share'] * 100 if additive else shown['value']).tolist()
+    colors = [viscons.FLOW_CATEGORICAL[1] if c in highlight else viscons.FLOW_SEQUENTIAL[-1] for c in labels]
+    if additive and len(d) > top:
+        labels.append(f"{gs.OTHER} ({len(d) - top})")
+        values.append(float(d['share'].iloc[top:].sum() * 100))
+        colors.append(viscons.FLOW_OTHER_COLOR)
+    x = np.arange(len(labels))
+    ax.bar(x, values, color=colors, edgecolor=viscons.COLOR_BAR_EDGE, linewidth=0.2, width=0.8)
+    if additive and cumulative and len(shown):
+        ax.plot(x[:len(shown)], shown['cumulative'] * 100, color=viscons.COLOR_TEXT_SECONDARY, linewidth=0.8,
+                marker='o', markersize=1.8, label='cumulative %')
+        ax.set_ylim(0, 100)
+        ax.legend(loc='center right', fontsize=viscons.MIN_FONT_SIZE, frameon=False)
+    ax.set_xticks(x, labels, rotation=90, fontsize=viscons.MIN_FONT_SIZE)
+    ax.set_xlim(-0.6, len(labels) - 0.4)
+    ylabel = f"% of {gs.COUNTRY_MEASURES[measure]}" if additive else gs.COUNTRY_MEASURES[measure]
+    ax.set_ylabel(ylabel)
+    ax.grid(axis='y', color=viscons.COLOR_GRID)
+    ax.set_axisbelow(True)
+    for side in ('top', 'right'):
+        ax.spines[side].set_visible(False)
+    if title is not None:
+        ax.set_title(title, loc='left', fontsize='small')
     return fig
 
 

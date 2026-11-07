@@ -40,7 +40,7 @@ prominence:
 social:
   include_unknown: true    # [late] count 'unknown' (no usable name / country) as a class in parity and diversity
   parity_target: field_x_seniority    # [late] GT target of parity (scope of the GT shares)
-  top_country_share: 0.5    # [late] popularity by country: top countries = the fewest that together hold this share of the GT scholars
+  top_countries: 2    # [late] popularity by country: top countries = the k countries with the most GT scholars
 
 # Author matching (recommended name -> OpenAlex person)
 matching:

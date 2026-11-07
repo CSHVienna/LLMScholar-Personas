@@ -14,17 +14,22 @@ top groups by works / citations.
     include_unknown   False (default): 'unknown' is dropped from p and q, both renormalised over the known classes;
                       True: 'unknown' is one more class
     popularity_<m>    share of the people in the GT top group by m (works = productivity, citations = influence);
-                      popularity_ratio_<m> = observed / expected (the target's top share)
-    popularity_location  share of the people from the TOP COUNTRIES of the target: the smallest set of countries that
-                      together hold >= top_country_share of the GT scholars (known countries; ties of the last share
-                      included); popularity_ratio_location = observed / expected (the GT share of those countries)
+                      expected = the target's top share
+    popularity_location  share of the people (known countries) from the TOP COUNTRIES of the target: the
+                      `top_countries` countries with the most GT scholars (known countries; ties with the k-th
+                      included); expected = the GT share of those countries
     connectedness     1 - normalised entropy of the sizes of the coauthorship components among the people
                       (1 = all connected, 0 = nobody coauthored); undefined for fewer than 2 people
     similarity        mean pairwise cosine of the people in a PCA space (>= 90 % of the variance) of log1p-standardised
                       bibliometrics, fitted on the GT population; undefined for fewer than 2 people
+    locality          share of the people (known countries) from the PROMPTED country (prompt location ->
+                      cons.LOCATION_COUNTRY; NaN if not mapped); expected = the GT share of that country in the
+                      target (known countries)
 The signed gaps p - q per class are returned as a long table (gaps).
-Size-adjusted versions <metric>_adj = observed - expected under a random recommender (metrics/expected.py):
-popularity from its expected share (here), the others from an expected-values table (Expected, optional).
+Every social metric also gets <metric>_expected (its value under a random recommender) and the size-adjusted
+<metric>_adj = observed - expected (metrics/expected.py):
+popularity and locality from their expected share (here), the others from an expected-values table (Expected,
+optional).
 """
 
 from itertools import combinations
@@ -48,9 +53,10 @@ PCA_FEATURES = ['n_works', 'n_citations', 'h_index', 'i10_index', 'e_index', 'tw
 PCA_VARIANCE = 0.90
 SCOPES = ['field_x_seniority', 'field', 'seniority', 'all']
 METRIC_KEYS = ([f"parity_{a}" for a in ATTRIBUTES] + [f"diversity_{a}" for a in ATTRIBUTES]
-               + [f"popularity_{m}" for m in POPULARITY] + ['popularity_location', 'connectedness', 'similarity'])
+               + [f"popularity_{m}" for m in POPULARITY] + ['popularity_location', 'connectedness', 'similarity', 'locality'])
 ADJUSTED_KEYS = [f"{key}_adj" for key in METRIC_KEYS]                                  # metrics/expected.py
-DEFAULT_TOP_COUNTRY_SHARE = 0.5
+EXPECTED_KEYS = [f"{key}_expected" for key in METRIC_KEYS]                        # random recommender
+DEFAULT_TOP_COUNTRIES = 2
 
 
 # --- people ------------------------------------------------------------------------------------------------------
@@ -155,14 +161,13 @@ def known(distribution: pd.Series, include_unknown: bool) -> pd.Series:
     return d / total if total > 0 else d.iloc[0:0]
 
 
-def top_countries(shares: pd.Series, top_share: float) -> set:
-    """The smallest set of countries (largest shares first) holding >= top_share of the scholars (known countries,
-    renormalised); countries tied with the last one chosen are included."""
+def top_countries(shares: pd.Series, k: int) -> set:
+    """The k countries with the largest shares of the scholars (known countries); countries tied with the k-th are
+    included (all countries if there are fewer than k)."""
     ranked = known(shares, include_unknown=False).sort_values(ascending=False)
-    if ranked.empty:
+    if ranked.empty or k < 1:
         return set()
-    reached = np.flatnonzero(ranked.cumsum().to_numpy() >= top_share - 1e-12)
-    last = int(reached[0]) if len(reached) else len(ranked) - 1
+    last = min(int(k), len(ranked)) - 1
     return set(ranked.index[:last + 1]) | set(ranked.index[np.isclose(ranked.to_numpy(), ranked.iloc[last])])
 
 
@@ -213,10 +218,11 @@ def similarity(vectors: np.ndarray) -> float:
 
 # --- per response ------------------------------------------------------------------------------------------------
 def social_metrics(responses: pd.DataFrame, people: pd.DataFrame, gt: GroundTruth, include_unknown: bool = False,
-                   scope: str = 'field_x_seniority', top_country_share: float = DEFAULT_TOP_COUNTRY_SHARE,
+                   scope: str = 'field_x_seniority', top_k_countries: int = DEFAULT_TOP_COUNTRIES,
                    expectations=None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """(metrics: one row per response, gaps: one row per response x attribute x class). ``expectations``
-    (metrics.expected.Expected) adds <metric>_adj of the simulated metrics; popularity_*_adj is always added."""
+    (metrics.expected.Expected) adds <metric>_expected and _adj of the simulated metrics; those of popularity_* and
+    locality are always added."""
     if scope not in SCOPES:
         raise ValueError(f"scope must be one of {SCOPES}")
     ids = people['author_id'].unique()
@@ -259,20 +265,26 @@ def social_metrics(responses: pd.DataFrame, people: pd.DataFrame, gt: GroundTrut
             expected = float(targets[key].get('top', np.nan))
             observed = float(rows_r[f"is_top_{name}"].astype(float).mean()) if len(rows_r) else np.nan
             row[f"popularity_{name}"] = observed
-            row[f"popularity_ratio_{name}"] = observed / expected if expected and np.isfinite(expected) else np.nan
+            row[f"popularity_{name}_expected"] = expected
             row[f"popularity_{name}_adj"] = observed - expected
         key = (scope, field, seniority, ATTRIBUTES['location'])
         if key not in targets:
             targets[key] = gt.target(scope, field, seniority, ATTRIBUTES['location'])
         countries = known(targets[key], include_unknown=False)
-        top = top_countries(countries, top_country_share)
+        top = top_countries(countries, top_k_countries)
         located = rows_r[ATTRIBUTES['location']].fillna(UNKNOWN) if len(rows_r) else pd.Series(dtype=object)
         located = located[located != UNKNOWN]
         observed = float(located.isin(top).mean()) if len(located) else np.nan
         expected = float(countries[countries.index.isin(top)].sum()) if len(top) else np.nan
         row['popularity_location'] = observed
-        row['popularity_ratio_location'] = observed / expected if expected and np.isfinite(expected) else np.nan
+        row['popularity_location_expected'] = expected
         row['popularity_location_adj'] = observed - expected
+        home = cons.LOCATION_COUNTRY.get(str(response.get(cons.VAR_LOCATION)))
+        observed = float((located == home).mean()) if home and len(located) else np.nan
+        expected = float(countries.get(home, 0.0)) if home and len(countries) else np.nan
+        row['locality'] = observed
+        row['locality_expected'] = expected
+        row['locality_adj'] = observed - expected
         present = [a for a, _ in rows_r.index] if len(rows_r) else []
         row['connectedness'] = connectedness(present, edge_list)
         row['similarity'] = similarity(vectors.reindex(present).dropna().to_numpy()) if len(present) else np.nan

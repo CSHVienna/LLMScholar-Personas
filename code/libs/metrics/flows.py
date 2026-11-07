@@ -31,10 +31,7 @@ PERSON_ATTRIBUTES = ['gender', 'ethnicity', 'country', AUTHOR_SENIORITY, 'produc
 CLASS_ATTRIBUTES = ['gender', 'ethnicity', 'country', AUTHOR_SENIORITY, 'productivity', 'influence', 'collaboration']
 TARGETS = ['gender', 'ethnicity', 'country', AUTHOR_SENIORITY, 'productivity', 'influence']   # default panels
 OTHER = 'other'
-# prompt location -> ISO 3166-1 alpha-2 (OpenAlex country codes)
-LOCATION_COUNTRY = {'South Africa': 'ZA', 'Germany': 'DE', 'Canada': 'CA', 'Ecuador': 'EC', 'Japan': 'JP',
-                    'United States': 'US', 'USA': 'US', 'United Kingdom': 'GB', 'China': 'CN', 'India': 'IN',
-                    'Brazil': 'BR', 'Mexico': 'MX', 'France': 'FR', 'Spain': 'ES', 'Nigeria': 'NG', 'Kenya': 'KE'}
+LOCATION_COUNTRY = cons.LOCATION_COUNTRY        # prompt location -> ISO country code
 ETHNICITY_ORDER = ['asian', 'black', 'hispanic', 'white', 'other']
 
 # --- people ------------------------------------------------------------------------------------------------------
@@ -91,7 +88,7 @@ def unknown_share(people: pd.DataFrame, target: str) -> float:
 def location_codes(locations: Sequence[str]) -> Dict[str, str]:
     missing = [loc for loc in locations if loc not in LOCATION_COUNTRY]
     if missing:
-        raise ValueError(f"No country code for the prompt locations {missing}: add them to flows.LOCATION_COUNTRY")
+        raise ValueError(f"No country code for the prompt locations {missing}: add them to cons.LOCATION_COUNTRY")
     return {loc: LOCATION_COUNTRY[loc] for loc in locations}
 
 

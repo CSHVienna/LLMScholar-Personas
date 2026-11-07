@@ -208,7 +208,7 @@ parallel -j 10 nice -n 10 python code/scripts/batch_eval_recommendations.py --mo
 bash code/scripts/check_eval_runs.sh   
 ```
 
-#### Evaluate classificaiton
+### 2.2 Evaluate classificaiton
 
 ##### Draw the blind samples: responses
 - [x] done | date: 2026-11-06
@@ -248,7 +248,7 @@ Note:
 - `valid recommendations: correct, title_removed `
 
 
-### 2.2 Mathching authors
+### 2.3 Mathching authors
 - [x] done | date: 2026-11-06
 ``` bash
 systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 bash code/scripts/run_matching_pipeline.sh
@@ -296,30 +296,23 @@ python code/scripts/batch_annotation_evaluate.py --task demographics
 ```
 
 
-## 3. Metrics (technical, social, people table of the flows; with the provisional late settings)
+## 3. Metrics all (technical, expected, social, flows)
 - [x] done | date: 2026-11-06
 ``` bash
-bash code/scripts/run_metrics_pipeline.sh -s technical,social,flows
+bash code/scripts/run_metrics_pipeline.sh -s technical,expected,social,flows
 ```
 
-## 4. Analysis config, late settings (valid tags, gender / ethnicity thresholds, social, Jaro-Winkler), then re-run what it lists
+## 4. Research questions (RQ1, RQ2; RQ3 in the notebook)
+
+### Setup thresholds
 - [x] done | date: 2026-11-06
 ``` bash
 python code/scripts/configure_analysis.py --config config/analysis.yaml --phase late
 ```
 
-## 5. Research questions (RQ1, RQ2; RQ3 in the notebook)
+### Audit
 - [x] done | date: 2026-11-06
 ``` bash
 bash code/scripts/run_metrics_pipeline.sh -s rq1,rq2
 ```
 
-## 6. Size-adjusted social metrics (expected values, then the social metrics again with the _adj columns)
-- [ ] done | date:
-``` bash
-bash code/scripts/run_metrics_pipeline.sh -s expected,social -x "--overwrite"
-```
-
-``` bash
-bash code/scripts/run_metrics_pipeline.sh -s rq1,rq2
-```

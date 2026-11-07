@@ -20,7 +20,7 @@ from metrics import social as so                                         # noqa:
 from metrics import technical as tm                                      # noqa: E402
 from utils import constants as cons                                      # noqa: E402
 
-CONFIG = {cons.COL_MODEL: 'm1', cons.COL_DATE: 'd', 'language': 'english', 'role': 'x', 'location': 'y',
+CONFIG = {cons.COL_MODEL: 'm1', cons.COL_DATE: 'd', 'language': 'english', 'role': 'x', 'location': 'Germany',
           'k': 5, 'seniority': 'senior', 'field': 'Physics', 'subfield': None}
 
 
@@ -42,10 +42,12 @@ class TestMeasures(unittest.TestCase):
         self.assertTrue(np.isnan(so.diversity(pd.Series({'a': 1.0}), 3, 1)))          # k = 1: undefined
 
     def test_top_countries(self):
-        shares = pd.Series({'US': 0.3, 'CN': 0.2, 'DE': 0.1, 'FR': 0.1, 'unknown': 0.3})   # known: .43 .29 .14 .14
-        self.assertEqual(so.top_countries(shares, 0.4), {'US'})
-        self.assertEqual(so.top_countries(shares, 0.5), {'US', 'CN'})
-        self.assertEqual(so.top_countries(shares, 0.8), {'US', 'CN', 'DE', 'FR'})    # DE reaches it; FR ties
+        shares = pd.Series({'US': 0.3, 'CN': 0.2, 'DE': 0.1, 'FR': 0.1, 'unknown': 0.3})
+        self.assertEqual(so.top_countries(shares, 1), {'US'})
+        self.assertEqual(so.top_countries(shares, 2), {'US', 'CN'})
+        self.assertEqual(so.top_countries(shares, 3), {'US', 'CN', 'DE', 'FR'})      # FR ties with the 3rd
+        self.assertEqual(so.top_countries(shares, 10), {'US', 'CN', 'DE', 'FR'})     # fewer than k: all
+        self.assertNotIn('unknown', so.top_countries(shares, 5))
 
     def test_connectedness(self):
         self.assertEqual(so.connectedness([1, 2, 3], [(1, 2), (2, 3)]), 1.0)          # one component
@@ -60,7 +62,7 @@ class TestMeasures(unittest.TestCase):
 
 
 class TestPipeline(unittest.TestCase):
-    """GT: 4 Physics seniors (2 female, 1 male, 1 unknown gender); response 1 names authors 1 and 2 (+ a duplicate,
+    """GT: 4 Physics seniors (2 female, 1 male, 1 unknown gender; 3 in DE, 1 in FR); response 1 names authors 1 and 2 (+ a duplicate,
     an unmatched name); response 2 is invalid."""
 
     @classmethod
@@ -68,7 +70,7 @@ class TestPipeline(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         gt = Path(cls.tmp.name)
         members = pd.DataFrame([{'author_id': a, 'field': 'Physics', 'seniority': 'senior', 'gender': g,
-                                 'ethnicity': 'white', 'country': 'DE', 'productivity': b, 'influence': b,
+                                 'ethnicity': 'white', 'country': 'FR' if a == 3 else 'DE', 'productivity': b, 'influence': b,
                                  'collaboration': b, 'is_top_productivity': a == 1, 'is_top_influence': False}
                                 for a, g, b in [(1, 'female', 'H'), (2, 'female', 'L'), (3, 'male', 'L'), (4, 'unknown', 'M')]])
         members.to_parquet(gt / 'gt_members.parquet')
@@ -117,11 +119,21 @@ class TestPipeline(unittest.TestCase):
         self.assertAlmostEqual(m.loc[1, 'diversity_gender'], 0.0)             # both female
         self.assertAlmostEqual(m.loc[1, 'popularity_productivity'], 0.5)      # author 1 in the top group
         self.assertEqual(m.loc[1, 'connectedness'], 1.0)                      # 1 and 2 coauthored
-        self.assertEqual(m.loc[1, 'popularity_location'], 1.0)                # all in DE, the only (top) country
+        self.assertEqual(m.loc[1, 'popularity_location'], 1.0)                # both in DE, the top country (.75)
+        self.assertEqual(m.loc[1, 'locality'], 1.0)                           # both from the prompted Germany
+        self.assertAlmostEqual(m.loc[1, 'locality_expected'], 0.75)          # GT share of DE: 3 of 4
+        self.assertNotIn('locality_ratio', m.columns)
+        self.assertAlmostEqual(m.loc[1, 'locality_adj'], 0.25)
         self.assertTrue(np.isnan(m.loc[2, 'parity_gender']) and m.loc[2, 'n_people'] == 0)
         g = gaps[(gaps[cons.COL_RUN_ID] == 1) & (gaps['attribute'] == 'gender')].set_index('class')
         self.assertAlmostEqual(g.loc['female', 'gap'], 1 - 2 / 3)
         self.assertNotIn('unknown', g.index)
+
+    def test_locality_unmapped_location(self):
+        responses = self.responses.assign(location='Atlantis')
+        people = self.people().assign(location='Atlantis')
+        metrics, _ = so.social_metrics(responses, people, self.gt)
+        self.assertTrue(np.isnan(metrics.set_index(cons.COL_RUN_ID).loc[1, 'locality']))   # no country code: NaN
 
     def test_include_unknown(self):
         metrics, _ = so.social_metrics(self.responses, self.people(), self.gt, include_unknown=True)

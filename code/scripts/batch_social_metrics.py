@@ -61,7 +61,7 @@ def run_model(model: str, args: argparse.Namespace) -> str:
     people = so.response_people(responses, recs, matches, args.valid_response_tags, args.valid_rec_tags,
                                 args.order_sensitive_keys)
     metrics, gaps = so.social_metrics(responses, people, args.gt, args.include_unknown, args.parity_target,
-                                      args.top_country_share, expectations=args.expected)
+                                      args.top_countries, expectations=args.expected)
     out.parent.mkdir(parents=True, exist_ok=True)
     gaps_file.parent.mkdir(parents=True, exist_ok=True)
     write_atomic(metrics, out)
@@ -85,8 +85,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Count 'unknown' as a class in parity / diversity (default: no, renormalise over the known)")
     parser.add_argument('--parity_target', choices=so.SCOPES, default='field_x_seniority',
                         help='Scope of the GT target of parity (requested field x seniority by default)')
-    parser.add_argument('--top_country_share', type=float, default=so.DEFAULT_TOP_COUNTRY_SHARE,
-                        help='Popularity by country: the fewest countries holding this share of the GT scholars')
+    parser.add_argument('--top_countries', type=int, default=so.DEFAULT_TOP_COUNTRIES,
+                        help='Popularity by country: the k countries with the most GT scholars in the target')
     parser.add_argument('--order_sensitive_keys', action='store_true', help='Robustness: names compared in written order')
     parser.add_argument('--keep_duplicates', action='store_true',
                         help='Accepted for the runners (technical robustness flag); no effect: each person counts once')
@@ -101,7 +101,7 @@ def main() -> None:
     check_params(Path(args.output_dir) / 'social',
                  {'valid_response_tags': sorted(args.valid_response_tags), 'valid_rec_tags': sorted(args.valid_rec_tags),
                   'include_unknown': args.include_unknown, 'parity_target': args.parity_target,
-                  'top_country_share': args.top_country_share,
+                  'top_countries': args.top_countries,
                   'order_sensitive_keys': args.order_sensitive_keys, 'languages': args.languages,
                   'matching_dir': str(Path(args.matching_dir).resolve()), 'gt_dir': str(Path(args.gt_dir).resolve())})
     args.gt = so.GroundTruth(args.gt_dir)

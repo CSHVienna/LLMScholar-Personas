@@ -177,6 +177,10 @@ class TestAdjusted(unittest.TestCase):
             self.assertTrue(np.isnan(want) and np.isnan(row[key + '_adj']) or np.isclose(row[key + '_adj'], want), key)
         self.assertAlmostEqual(row['popularity_productivity_adj'], 0.5 - 0.25)  # observed 1 of 2, expected 1 of 4
         self.assertEqual(sorted(c for c in metrics if c.endswith('_adj')), sorted(so.ADJUSTED_KEYS))
+        self.assertEqual(sorted(c for c in metrics if c.endswith('_expected')), sorted(so.EXPECTED_KEYS))
+        self.assertTrue(np.allclose(metrics[so.ADJUSTED_KEYS].to_numpy(dtype=float),
+                                    (metrics[so.METRIC_KEYS].to_numpy(dtype=float)
+                                     - metrics[so.EXPECTED_KEYS].to_numpy(dtype=float)), equal_nan=True))   # adj = obs - exp
         self.assertTrue(np.isclose(expected.value('parity_gender', 'Physics', 'senior', 99),
                                    expected.value('parity_gender', 'Physics', 'senior', 4)))   # capped at n_max
         self.assertTrue(np.isnan(expected.value('parity_gender', 'Physics', 'senior', 0)))

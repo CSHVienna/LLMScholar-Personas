@@ -132,12 +132,16 @@ class TestRowsAndColors(unittest.TestCase):
         self.assertEqual(len(set(colors[6:])), 1)                            # persona: one colour
 
     def test_column_sets(self):
+        self.assertEqual([m.key for m in s.select_metrics('popularity_cohesion_locality')],
+                         ['popularity_productivity', 'popularity_influence', 'popularity_location', 'connectedness',
+                          'similarity', 'locality'])
         self.assertEqual([m.key for m in s.select_metrics('popularity_cohesion')],
                          ['popularity_productivity', 'popularity_influence', 'popularity_location', 'connectedness',
                           'similarity'])
         self.assertEqual([m.key for m in s.select_metrics('technical_factuality')],
                          cons.METRIC_COLUMN_SETS['technical'] + cons.METRIC_COLUMN_SETS['factuality'])
-        self.assertEqual(len(s.select_metrics('social')), 17)               # 6 parity, 6 diversity, 3 popularity, 2 cohesion
+        self.assertEqual(len(s.select_metrics('social')), 18)               # 6 parity, 6 diversity, 3 popularity, 2 cohesion, locality
+        self.assertEqual(s.select_metrics('social')[-1].key, 'locality')    # last, after cohesion
 
 
 if __name__ == '__main__':

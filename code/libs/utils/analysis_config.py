@@ -170,11 +170,11 @@ SCHEMA: List[Section] = [
         Setting('parity_target', 'choice', 'field_x_seniority', 'GT target of parity (scope of the GT shares)',
                 choices=['field_x_seniority', 'field', 'seniority', 'all'], used_by=[STEP_METRICS], phase=LATE,
                 details='field_x_seniority: the requested field and seniority (main); the others are robustness checks.'),
-        Setting('top_country_share', 'float', 0.5,
-                'popularity by country: top countries = the fewest that together hold this share of the GT scholars',
-                low=0.05, high=0.95, used_by=[STEP_METRICS], phase=LATE,
-                details='Countries ranked by their share of the GT scholars in the target (requested field x seniority); '
-                        'the smallest set reaching the share is the top group (known countries).'),
+        Setting('top_countries', 'int', 2,
+                'popularity by country: top countries = the k countries with the most GT scholars',
+                low=1, high=50, used_by=[STEP_METRICS], phase=LATE,
+                details='Countries ranked by their number of GT scholars in the target (requested field x seniority, '
+                        'known countries; ties with the k-th included).'),
     ]),
     Section('matching', 'Author matching (recommended name -> OpenAlex person)', [
         Setting('jw_first', 'float', cons.DEFAULT_MATCH_JW_FIRST, 'fuzzy rule: minimum Jaro-Winkler of the first names',
@@ -218,7 +218,7 @@ CODES = {
     ('gender', 'p_female_edges'): 'pf', ('gender', 'labels'): 'glabels',
     ('ethnicity', 'min_prob'): 'eprob',
     ('prominence', 'bin_edges'): 'bins', ('prominence', 'bin_labels'): 'blabels', ('prominence', 'top_percentile'): 'top',
-    ('social', 'include_unknown'): 'unknown', ('social', 'parity_target'): 'target', ('social', 'top_country_share'): 'tcountry',
+    ('social', 'include_unknown'): 'unknown', ('social', 'parity_target'): 'target', ('social', 'top_countries'): 'tcountry',
     ('matching', 'jw_first'): 'jwfirst', ('matching', 'jw_last'): 'jwlast', ('matching', 'jw_full'): 'jwfull',
     ('matching', 'seed'): 'seed', ('matching', 'candidates_floor'): 'floor', ('matching', 'fuzzy_all'): 'fuzzyall',
     ('robustness', 'keep_duplicates'): 'dup', ('robustness', 'order_sensitive_keys'): 'order',

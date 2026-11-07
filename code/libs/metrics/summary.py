@@ -76,6 +76,7 @@ for _attribute in ('productivity', 'influence', 'location'):
                                                  NEUTRAL, 'social', 'popularity', short=_SOCIAL_SHORT[_attribute])
 METRICS['connectedness'] = Metric('connectedness', 'Coh.$_{conn}$', NEUTRAL, 'social', 'cohesion', short='Connect.')
 METRICS['similarity'] = Metric('similarity', 'Coh.$_{sim}$', NEUTRAL, 'social', 'cohesion', short='Sim.')
+METRICS['locality'] = Metric('locality', 'Locality', NEUTRAL, 'social', 'locality', short='Locality', narrow='Loc.')
 # Size-adjusted social metrics (metrics/expected.py): <key>_adj = observed - expected under a random recommender;
 # group <group>_adj (so 'parity' still selects the raw ones); differences, so scaled to the data
 ADJ_SUFFIX = '_adj'

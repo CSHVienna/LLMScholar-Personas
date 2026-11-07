@@ -47,6 +47,8 @@ def synthetic_gt(folder: Path) -> None:
         'p_hispanic': [0.1, 0.05, np.nan, 0.1, 0.1, 0.2], 'p_white': [0.6, 0.05, np.nan, 0.1, 0.6, 0.1],
         'p_other': [0.1, 0.05, np.nan, 0.1, 0.1, 0.1],
         'ethnicity': ['white', 'asian', 'unknown', 'asian', 'white', 'unknown'],
+        'country': ['US', 'DE', 'US', 'US', None, 'JP'],
+        'last_known_country': ['US', 'DE', 'FR', 'US', 'DE', 'JP'],
     })
     authors.to_parquet(folder / 'gt_authors.parquet')
     members = authors.explode('fields').rename(columns={'fields': 'field'})[
@@ -195,6 +197,36 @@ class GTStatsTest(unittest.TestCase):
         self.assertIn('DE', countries.columns)                                 # kept (prompt country)
         with self.assertRaises(ValueError):
             gs.composition(shares, 'nothing')
+
+    def test_country_ranking(self):
+        r = gs.country_ranking(self.con, self.dir)
+        pooled = r[r['field'] == gs.ALL_FIELDS].set_index('country')       # each scholar once
+        self.assertEqual(pooled['n_scholars'].to_dict(), {'US': 3, 'DE': 1, 'JP': 1, 'unknown': 1})
+        self.assertEqual(pooled.loc['US', 'n_works'], 61)
+        self.assertEqual(pooled.loc['US', 'n_citations'], 940)
+        self.assertAlmostEqual(pooled.loc['US', 'share_n_scholars'], 3 / 6)  # of all, unknown included
+        phys = r[r['field'] == 'Physics'].set_index('country')['n_scholars'].to_dict()
+        self.assertEqual(phys, {'US': 3, 'DE': 1, 'unknown': 1})
+        last = gs.country_ranking(self.con, self.dir, column='last_known_country')
+        self.assertEqual(last[last['field'] == gs.ALL_FIELDS].set_index('country')['n_scholars'].to_dict(),
+                         {'US': 2, 'DE': 2, 'FR': 1, 'JP': 1})
+        with self.assertRaises(ValueError):
+            gs.country_ranking(self.con, self.dir, column='institution')
+        order = gs.country_order(r, 'n_scholars')                          # known only, renormalised
+        self.assertEqual(order['country'].tolist(), ['US', 'DE', 'JP'])    # tie DE / JP: alphabetical
+        self.assertAlmostEqual(order['share'].iloc[0], 3 / 5)
+        self.assertAlmostEqual(order['cumulative'].iloc[-1], 1.0)
+        self.assertEqual(gs.country_order(r, 'n_works')['country'].tolist(), ['US', 'DE', 'JP'])
+        self.assertEqual(gs.country_order(r, 'h_index_mean', min_scholars=2)['country'].tolist(), ['US'])
+        top = gs.country_top(r, ['n_scholars', 'h_index_mean'], top=4)
+        self.assertEqual(top.loc[1, 'scholars'], 'US 60.0 %')
+        self.assertEqual(top.loc[4, 'scholars'], '')                       # fewer countries than top
+        fig = gt_plots.plot_gt_countries(r, 'n_scholars', top=2)          # US, DE + other (1)
+        self.assertEqual([t.get_text() for t in fig.axes[0].get_xticklabels()], ['US', 'DE', 'other (1)'])
+        plt.close(fig)
+        fig = gt_plots.plot_gt_countries(r, 'h_index_median', top=2, min_scholars=1)   # no 'other' for h-index
+        self.assertEqual(len(fig.axes[0].get_xticklabels()), 2)
+        plt.close(fig)
 
     def test_cached(self):
         calls = []

@@ -14,6 +14,7 @@ How each expected value is obtained:
                                 n, the metric computed exactly as for the observed lists (same unknown handling, same
                                 target q = the parity target of the config)
     popularity_<m>, _location   the target's top share (a share is unbiased at any n): no simulation, done in social.py
+    locality                    the GT share of the prompted country (same reason): done in social.py
     connectedness               real people: PEOPLE_DRAWS random lists of N_MAX members (without replacement; the first
                                 n of a list are a random list of n) and their coauthorship edges
     similarity                  does not depend on n: the mean pairwise cosine of SIMILARITY_SAMPLE random members
@@ -37,8 +38,9 @@ PEOPLE_DRAWS = 1_000        # random people lists per (field, seniority) for con
 SIMILARITY_SAMPLE = 5_000   # random members per (field, seniority) for similarity
 COLUMNS = ['field', 'seniority', 'metric', 'n', 'expected']
 ADJ_SUFFIX = '_adj'
+EXPECTED_SUFFIX = '_expected'
 SIMULATED = ([f"parity_{a}" for a in so.ATTRIBUTES] + [f"diversity_{a}" for a in so.ATTRIBUTES]
-             + ['connectedness', 'similarity'])                          # from the table (popularity: in social.py)
+             + ['connectedness', 'similarity'])               # from the table (popularity, locality: in social.py)
 
 
 def rng_for(seed: int, *keys: str) -> np.random.Generator:
@@ -175,13 +177,15 @@ class Expected:
         return self.values.get((metric, field, seniority, min(int(n), self.n_max)), np.nan)
 
     def adjust(self, metrics: pd.DataFrame) -> pd.DataFrame:
-        """``metrics`` (social rows with field, seniority, n_people) with <metric>_adj for the simulated metrics."""
+        """``metrics`` (social rows with field, seniority, n_people) with <metric>_expected and <metric>_adj for the
+        simulated metrics."""
         out = metrics.copy()
         for metric in SIMULATED:
             if metric in out:
                 expected = [self.value(metric, f, s, n) for f, s, n in
                             zip(out['field'], out['seniority'], out['n_people'])]
-                out[metric + ADJ_SUFFIX] = out[metric] - np.array(expected, dtype=float)
+                out[metric + EXPECTED_SUFFIX] = np.array(expected, dtype=float)
+                out[metric + ADJ_SUFFIX] = out[metric] - out[metric + EXPECTED_SUFFIX]
         return out
 
 

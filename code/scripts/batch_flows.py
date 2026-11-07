@@ -70,7 +70,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--order_sensitive_keys', action='store_true', help='Robustness: names compared in written order')
     for flag in ('--keep_duplicates', '--consistency_all_runs', '--include_unknown'):   # runner flags without effect here
         parser.add_argument(flag, action='store_true', help=argparse.SUPPRESS)
-    for option in ('--parity_target', '--top_country_share'):
+    for option in ('--parity_target', '--top_countries'):
         parser.add_argument(option, default=None, help=argparse.SUPPRESS)
     ac.add_config_argument(parser)
     return parser

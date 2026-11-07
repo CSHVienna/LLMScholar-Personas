@@ -431,11 +431,12 @@ duplicates, factuality at 4 levels on the unique valid names). Variant `main` by
 
 Code: `libs/metrics/social.py`. Per response, on the matched authors of its unique valid names: parity (1 − TV to
 the GT target, `config: social.parity_target`), diversity (normalised entropy) and unknown share for gender,
-ethnicity, location, productivity, influence, collaboration; popularity (top group by works / citations);
-connectedness (coauthorship components); similarity (PCA cosine). `social.include_unknown` (config) decides whether
-'unknown' is a class. Outputs `metrics/<variant>/social/<model>.parquet` and `social_gaps/<model>.parquet`.
+ethnicity, location, productivity, influence, collaboration; popularity (top group by works / citations; location:
+the top-k countries by GT scholars, `config: social.top_countries`, default 2); connectedness (coauthorship
+components); similarity (PCA cosine); locality (share from the prompted country). `social.include_unknown` (config)
+decides whether 'unknown' is a class. Outputs `metrics/<variant>/social/<model>.parquet` and `social_gaps/<model>.parquet`.
 
-**Size-adjusted** (every social metric): `<metric>_adj = observed − expected`, expected = the mean for a random list
+**Size-adjusted** (every social metric): `<metric>_expected` and `<metric>_adj = observed − expected`, expected = the mean for a random list
 of the same size n from the GT of the requested field × seniority (0 = like random). Expected values: step
 `expected` (`batch_social_expected.py`, `libs/metrics/expected.py`, ~4 min) → `metrics/<variant>/social_expected/`;
 the social step needs it. RQ1 / RQ2 run on raw and adjusted metrics (`--metrics all social_adj`); notebooks 3 and 4:
@@ -446,6 +447,7 @@ next to the raw ones: `rq1_omega2_paper_bar.pdf` / `rq1_omega2_paper_bar_adj.pdf
 |---|---|
 | parity, diversity | random labels with the GT class shares (10,000 lists per n) |
 | popularity | the target's top share (no simulation) |
+| locality | the GT share of the prompted country (no simulation) |
 | connectedness | 1,000 random lists of real members + their coauthor edges |
 | similarity | mean pairwise cosine of 5,000 random members (same for every n) |
 

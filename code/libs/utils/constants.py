@@ -242,6 +242,10 @@ VARIABLE_VALUES = {
     VAR_FIELD: [f['field'] for f in INPUTS['fields']],
     VAR_SUBFIELD: [s for f in INPUTS['fields'] for s in f['subfields']],
 }
+# prompt location -> ISO 3166-1 alpha-2 (OpenAlex country codes): location drift (flows) and locality (social)
+LOCATION_COUNTRY = {'South Africa': 'ZA', 'Germany': 'DE', 'Canada': 'CA', 'Ecuador': 'EC', 'Japan': 'JP',
+                    'United States': 'US', 'USA': 'US', 'United Kingdom': 'GB', 'China': 'CN', 'India': 'IN',
+                    'Brazil': 'BR', 'Mexico': 'MX', 'France': 'FR', 'Spain': 'ES', 'Nigeria': 'NG', 'Kenya': 'KE'}
 
 # -----------------------------------------------------------------------------
 # Response taxonomy (multi-label; ordered). "Valid" is defined later as a combination of tags.
@@ -582,12 +586,16 @@ METRIC_COLUMN_SETS = {
     'diversity': [f"diversity_{a}" for a in _SOCIAL_ATTRIBUTES],
     'popularity': ['popularity_productivity', 'popularity_influence', 'popularity_location'],
     'cohesion': ['connectedness', 'similarity'],
+    'locality': ['locality'],
     'consistency': ['behaviour_consistency', 'recommendation_consistency'],
 }
 METRIC_COLUMN_SETS['technical_factuality'] = METRIC_COLUMN_SETS['technical'] + METRIC_COLUMN_SETS['factuality']
 METRIC_COLUMN_SETS['popularity_cohesion'] = METRIC_COLUMN_SETS['popularity'] + METRIC_COLUMN_SETS['cohesion']
+METRIC_COLUMN_SETS['popularity_cohesion_locality'] = (METRIC_COLUMN_SETS['popularity_cohesion']
+                                                      + METRIC_COLUMN_SETS['locality'])
 METRIC_COLUMN_SETS['social'] = (METRIC_COLUMN_SETS['parity'] + METRIC_COLUMN_SETS['diversity']
-                                + METRIC_COLUMN_SETS['popularity'] + METRIC_COLUMN_SETS['cohesion'])
+                                + METRIC_COLUMN_SETS['popularity'] + METRIC_COLUMN_SETS['cohesion']
+                                + METRIC_COLUMN_SETS['locality'])
 METRIC_COLUMN_SETS['all'] = METRIC_COLUMN_SETS['technical_factuality'] + METRIC_COLUMN_SETS['social']
 # The columns of the paper's figures (one per metric family; the full sets go to the appendix)
 METRIC_COLUMN_SETS['paper'] = ['refusals', 'validity', 'recommendation_consistency', 'factuality_author',
@@ -597,9 +605,10 @@ METRIC_COLUMN_SETS['paper'] = ['refusals', 'validity', 'recommendation_consisten
 # '<set>_adj' = the set with its social metrics adjusted, e.g. 'parity_adj', 'social_adj', 'paper_adj'
 for _name in list(METRIC_COLUMN_SETS):
     _keys = METRIC_COLUMN_SETS[_name]
-    if any(k.startswith(('parity_', 'diversity_', 'popularity_')) or k in ('connectedness', 'similarity') for k in _keys):
+    if any(k.startswith(('parity_', 'diversity_', 'popularity_')) or k in ('connectedness', 'similarity', 'locality')
+           for k in _keys):
         METRIC_COLUMN_SETS[_name + '_adj'] = [k + '_adj' if k.startswith(('parity_', 'diversity_', 'popularity_'))
-                                              or k in ('connectedness', 'similarity') else k for k in _keys]
+                                              or k in ('connectedness', 'similarity', 'locality') else k for k in _keys]
 
 # RQ3: socio-technical trade-off (analysis/tradeoff.py). Per model, the sum of the metrics of each axis; metrics where
 # lower is better (refusals, duplicates) enter as complements (1 - x), so larger is better on both axes.
