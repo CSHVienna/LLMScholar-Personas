@@ -359,8 +359,8 @@ def plot_rq3(scores: pd.DataFrame, mode: str = 'relative', pareto: bool = False,
              grid: bool = False, labels_in_quadrant: bool = viscons.RQ3_LABELS_IN_QUADRANT) -> plt.Figure:
     """Scatter of tradeoff.model_scores: x = technical score, y = social score, one labelled point per model coloured
     by its quadrant (its name too); Pearson correlation of the two scores in the corner. mode 'relative': split at the
-    medians of the models, axes zoomed on the data; 'absolute': split at half of each axis maximum, axes from 0 to the
-    maximum. pareto: dotted line through the Pareto front; grid: background grid (default off: only the split lines).
+    medians of the models, axes zoomed on the data; 'absolute': split at the middle of each axis' possible range,
+    axes over that range (raw: 0 to the maximum; size-adjusted: -max to max, split at 0). pareto: dotted line through the Pareto front; grid: background grid (default off: only the split lines).
 
     Labels: deterministic greedy placement in pixels (_place_labels): each label takes the nearest free spot around
     its point, clear of every point, every placed label and the correlation box; labels_in_quadrant keeps it inside
@@ -385,8 +385,8 @@ def plot_rq3(scores: pd.DataFrame, mode: str = 'relative', pareto: bool = False,
         ax.plot(front['technical'], front['social'], zorder=2, **viscons.RQ3_PARETO_LINE)
 
     if mode == 'absolute':
-        ax.set_xlim(0, float(scores['technical_max'].iloc[0]))
-        ax.set_ylim(0, float(scores['social_max'].iloc[0]))
+        ax.set_xlim(*tradeoff.axis_range(scores, 'technical'))
+        ax.set_ylim(*tradeoff.axis_range(scores, 'social'))
     else:   # room around the data for the labels of the outer points (labels stay inside the axes)
         for axis, column, (low_pad, high_pad) in ((ax.set_xlim, 'technical', viscons.RQ3_PAD_X),
                                                   (ax.set_ylim, 'social', viscons.RQ3_PAD_Y)):
@@ -457,8 +457,8 @@ def plot_rq3_inset(scores: pd.DataFrame, pareto: bool = False,
         axes.set_axisbelow(True)
 
     draw(ax, viscons.RQ3_INSET_OVERVIEW_MARKER_SIZE, legend=True)
-    ax.set_xlim(0, float(scores['technical_max'].iloc[0]))
-    ax.set_ylim(0, float(scores['social_max'].iloc[0]))
+    ax.set_xlim(*tradeoff.axis_range(scores, 'technical'))
+    ax.set_ylim(*tradeoff.axis_range(scores, 'social'))
     ax.set_xlabel(f"Technical: {tradeoff.axis_label(technical)}", fontsize='small')
     ax.set_ylabel(f"Social: {tradeoff.axis_label(social)}", fontsize='small')
     for side in ('top', 'right'):
@@ -648,12 +648,14 @@ def _place_labels(sizes, points, axes_box, obstacles, dot_r, regions=None, gap=3
 
 
 def rq3_figure_name(mode: str, technical: Optional[Sequence[str]] = None, social: Optional[Sequence[str]] = None) -> str:
-    """rq3_<mode> for the default metric sets, else rq3_<mode>_<technical keys>_<social keys> (keys joined by '-')."""
-    technical = list(technical or cons.RQ3_TECHNICAL_METRICS)
-    social = list(social or cons.RQ3_SOCIAL_METRICS)
-    if technical == list(cons.RQ3_TECHNICAL_METRICS) and social == list(cons.RQ3_SOCIAL_METRICS):
-        return f"rq3_{mode}"
-    return f"rq3_{mode}_{'-'.join(technical)}_{'-'.join(social)}"
+    """rq3_<mode> for the default metric sets, else rq3_<mode>_<technical keys>_<social keys> (keys joined by '-');
+    + '_adj' at the end if any metric is size-adjusted (keys without their _adj)."""
+    technical, adj_t = summary.split_adjusted(list(technical or cons.RQ3_TECHNICAL_METRICS))
+    social, adj_s = summary.split_adjusted(list(social or cons.RQ3_SOCIAL_METRICS))
+    suffix = summary.ADJ_SUFFIX if adj_t or adj_s else ''
+    if technical == '-'.join(cons.RQ3_TECHNICAL_METRICS) and social == '-'.join(cons.RQ3_SOCIAL_METRICS):
+        return f"rq3_{mode}{suffix}"
+    return f"rq3_{mode}_{technical}_{social}{suffix}"
 
 
 # --- RQ2: local influence of each value ---------------------------------------------------------------------------
@@ -887,8 +889,7 @@ def plot_rq2_forest(results: pd.DataFrame, value: str = 'contrast', metrics: Opt
         if kind == 'header':
             tick.set_fontweight('bold')
     fig.supxlabel('Difference from the reference value' if value == 'contrast' else 'Deviation from the grand mean',
-                  fontsize='x-small', color=viscons.COLOR_TEXT_SECONDARY, y=0.004,
-                  x=(fig.subplotpars.left + fig.subplotpars.right) / 2)     # centred over the panels, not the figure
+                  fontsize='x-small', color=viscons.COLOR_TEXT_SECONDARY, y=0.004)
     handles = [Line2D([], [], marker='o', linestyle='', color=viscons.FAMILY_COLORS[f], label=f.capitalize())
                for f in (summary.PERSONA, summary.CONTEXT) if any(line[2] == f for line in lines)]
     fig.legend(handles=handles, loc='lower left', ncol=len(handles), frameon=False, fontsize='x-small',

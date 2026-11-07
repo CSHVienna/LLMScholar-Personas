@@ -85,6 +85,59 @@ class TestTradeoff(unittest.TestCase):
                          'rq3_relative_validity-refusals-duplicates_parity_gender-parity_ethnicity')
 
 
+class TestTradeoffAdjusted(unittest.TestCase):
+    """Size-adjusted social metrics (<key>_adj in [-1, 1]): axis -n..n, absolute split at 0, _adj label / file name."""
+    def setUp(self):
+        from metrics import summary
+        self.social = summary.adjusted_keys(SOCIAL)
+        frame = configs()
+        for raw, adj in zip(SOCIAL, self.social):
+            frame[adj] = frame[raw] - 0.5                                        # observed - expected, can be < 0
+        self.scores = tr.model_scores(frame, TECH, self.social)
+
+    def test_range_and_split(self):
+        self.assertEqual(self.social, ['parity_gender_adj', 'parity_ethnicity_adj'])
+        self.assertEqual(tr.axis_range(self.scores, 'social'), (-2.0, 2.0))
+        self.assertEqual(tr.axis_range(self.scores, 'technical'), (0.0, 3.0))
+        self.assertEqual(tr.splits(self.scores, 'absolute'), (1.5, 0.0))
+        d = self.scores.set_index(cons.COL_MODEL).loc['d', 'social']
+        self.assertAlmostEqual(d, -0.8)
+
+    def test_warning_when_mixed(self):
+        import warnings
+        frame = configs()
+        frame['similarity'] = frame['parity_gender']
+        for key in ('parity_gender', 'parity_ethnicity', 'diversity_gender', 'similarity'):
+            if key not in frame:
+                frame[key] = frame['parity_gender']
+            frame[key + '_adj'] = frame[key] - 0.5
+        for social in (['parity_gender_adj', 'parity_ethnicity'],              # raw + adj mixed
+                       ['parity_gender_adj', 'similarity_adj'], ['parity_gender', 'similarity']):   # no direction
+            with self.assertWarns(UserWarning):
+                tr.model_scores(frame, TECH, social)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')                                       # higher-is-better sums: no warning
+            tr.model_scores(frame, TECH, ['parity_gender_adj', 'parity_ethnicity_adj', 'diversity_gender_adj'])
+            tr.model_scores(frame, TECH, SOCIAL + ['diversity_gender'])
+
+    def test_label_and_name(self):
+        from metrics import summary
+        from viz import rq_plots
+        self.assertEqual(tr.axis_label(summary.adjusted_keys(cons.RQ3_SOCIAL_METRICS)), '$\\sum$ parity$^{adj}$')
+        self.assertEqual(tr.axis_label(['parity_gender_adj']), 'parity$^{adj}$')
+        self.assertEqual(tr.axis_label(TECH), 'validity + refusals$^c$ + duplicates$^c$')
+        self.assertEqual(rq_plots.rq3_figure_name('absolute_inset_access', None,
+                                                  summary.adjusted_keys(cons.RQ3_SOCIAL_METRICS)),
+                         'rq3_absolute_inset_access_adj')
+        self.assertEqual(rq_plots.rq3_figure_name('relative', TECH, self.social),
+                         'rq3_relative_validity-refusals-duplicates_parity_gender-parity_ethnicity_adj')
+        fig = rq_plots.plot_rq3(self.scores, 'absolute', technical=TECH, social=self.social)
+        self.assertEqual(fig.axes[0].get_ylim(), (-2.0, 2.0))
+        self.assertIn('parity$^{adj}$', fig.axes[0].get_ylabel())
+        fig = rq_plots.plot_rq3_inset(self.scores, technical=TECH, social=self.social)
+        self.assertEqual(fig.axes[0].get_ylim(), (-2.0, 2.0))
+
+
 class TestLabelPlacement(unittest.TestCase):
     def test_no_overlaps_and_deterministic(self):
         from viz import rq_plots

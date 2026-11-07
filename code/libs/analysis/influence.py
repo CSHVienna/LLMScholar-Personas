@@ -28,8 +28,7 @@ import pandas as pd
 from utils import constants as cons
 
 MODEL_FACTOR = cons.COL_MODEL
-DEFAULT_FACTORS = [MODEL_FACTOR, cons.VAR_LANGUAGE, cons.VAR_ROLE, cons.VAR_LOCATION,
-                   cons.VAR_K, cons.VAR_SENIORITY, cons.VAR_FIELD, cons.VAR_SUBFIELD]
+DEFAULT_FACTORS = [MODEL_FACTOR] + cons.CONFIG_VARIABLES
 NESTED = {cons.VAR_SUBFIELD: cons.VAR_FIELD}      # factor -> the factor it is nested in (used when both are present)
 
 

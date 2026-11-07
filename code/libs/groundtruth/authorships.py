@@ -66,11 +66,17 @@ def chunk_dir(output_dir: Path | str, chunk: int) -> Path:
     return Path(output_dir) / f"chunk={chunk}"
 
 
-def check_params(output_dir: Path | str, params: Dict) -> None:
-    """Record the run parameters once (atomically); refuse to mix chunks written with different parameters."""
+def check_params(output_dir: Path | str, params: Dict, overwrite: bool = False) -> None:
+    """Record the run parameters once (atomically); refuse to mix chunks written with different parameters.
+    overwrite: replace the stored parameters (the caller recomputes every output)."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / PARAMS_FILE
+    if overwrite:   # atomic replace; parallel jobs write the same content
+        tmp = output_dir / f".{PARAMS_FILE}.{os.getpid()}"
+        tmp.write_text(json.dumps(params, indent=1))
+        os.replace(tmp, path)
+        return
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)   # first process wins (GNU parallel safe)
         with os.fdopen(fd, 'w') as f:
@@ -81,7 +87,7 @@ def check_params(output_dir: Path | str, params: Dict) -> None:
     stored = json.loads(path.read_text() or '{}')
     if stored and stored != params:
         raise ValueError(f"{path} was written with other parameters: {stored} != {params}. "
-                         f"Use another --output_dir or --overwrite.")
+                         f"Use another --output_dir or --overwrite (recomputes every output).")
 
 
 def write_chunk(con: duckdb.DuckDBPyConnection, output_dir: Path | str, chunk: int, chunk_size: int,

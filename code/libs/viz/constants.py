@@ -218,7 +218,7 @@ DRIFT_ROW_IN = 0.24                     # plot_drift: height per prompted locati
 FLOW_GRID_NCOLS = 3                     # panels per row of plot_flow_grid (6 panels: 3 -> 2 x 3, 6 -> 1 x 6)
 # The appendix figures (notebook 5_flows.ipynb): one figure per prompt variable (source fixed), its panels the person
 # attributes metrics/flows.TARGETS; and the reverse (target fixed). Sources: prompt variables or model characteristics.
-FLOW_SOURCES = ['field', 'subfield', 'k', 'seniority', 'role', 'language', 'location', 'origin']
+FLOW_SOURCES = ['language', 'location', 'role', 'k', 'field', 'subfield', 'seniority', 'origin']   # = CONFIG_VARIABLES + origin
 FLOW_TARGET_FIGURES = ['gender', 'ethnicity']   # target fixed: one figure each, panels = FLOW_SOURCES
 
 # GT descriptives (viz/gt_plots.py, notebook 0_gt.ipynb; data: groundtruth/stats.py). Seniority uses the flows'

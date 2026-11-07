@@ -212,8 +212,8 @@ VAR_SENIORITY = 'seniority'
 VAR_FIELD = 'field'
 VAR_SUBFIELD = 'subfield'
 
-PERSONA_VARIABLES = [VAR_LANGUAGE, VAR_ROLE, VAR_LOCATION]
-CONTEXT_VARIABLES = [VAR_K, VAR_SENIORITY, VAR_FIELD, VAR_SUBFIELD]
+PERSONA_VARIABLES = [VAR_LANGUAGE, VAR_LOCATION, VAR_ROLE]
+CONTEXT_VARIABLES = [VAR_K, VAR_FIELD, VAR_SUBFIELD, VAR_SENIORITY]
 CONFIG_VARIABLES = PERSONA_VARIABLES + CONTEXT_VARIABLES
 
 # A configuration (set of <=10 runs) and a single response
@@ -599,8 +599,7 @@ METRIC_COLUMN_SETS['social'] = (METRIC_COLUMN_SETS['parity'] + METRIC_COLUMN_SET
 METRIC_COLUMN_SETS['all'] = METRIC_COLUMN_SETS['technical_factuality'] + METRIC_COLUMN_SETS['social']
 # The columns of the paper's figures (one per metric family; the full sets go to the appendix)
 METRIC_COLUMN_SETS['paper'] = ['refusals', 'validity', 'recommendation_consistency', 'factuality_author',
-                               'parity_gender', 'diversity_gender', 'popularity_influence', 'popularity_location',
-                               'similarity']
+                               'parity_gender', 'diversity_gender', 'popularity_influence', 'similarity', 'locality']
 # Size-adjusted social metrics (<key>_adj = observed - expected under a random recommender, metrics/expected.py):
 # '<set>_adj' = the set with its social metrics adjusted, e.g. 'parity_adj', 'social_adj', 'paper_adj'
 for _name in list(METRIC_COLUMN_SETS):

@@ -53,7 +53,7 @@ METRICS: Dict[str, Metric] = {m.key: m for m in [
     Metric('refusals', 'Refusals', LOWER, 'technical', 'refusals', short='Refusals'),
     Metric('validity', 'Validity', HIGHER, 'technical', 'validity', short='Validity'),
     Metric('behaviour_consistency', 'Consist.$_{behav}$', NEUTRAL, 'technical', 'consistency', short='Behaviour'),
-    Metric('recommendation_consistency', 'Consist.$_{recs}$', NEUTRAL, 'technical', 'consistency', short='Recs.'),
+    Metric('recommendation_consistency', 'Consist.$_{recs}$', NEUTRAL, 'technical', 'consistency', short='Recomm.'),
     Metric('duplicates', 'Duplicates', LOWER, 'technical', 'duplicates', short='Duplicat.', narrow='Dup.'),
     Metric('k_ratio', 'k ratio', NEUTRAL, 'technical', 'k_ratio', limits=(0.0, 2.0), short='k ratio'),
     Metric('factuality_name', 'Fact.$_{name}$', HIGHER, 'factuality', 'factuality', short='Name'),
@@ -75,7 +75,7 @@ for _attribute in ('productivity', 'influence', 'location'):
     METRICS[f"popularity_{_attribute}"] = Metric(f"popularity_{_attribute}", f"Pop.$_{{{_SOCIAL_SUB[_attribute]}}}$",
                                                  NEUTRAL, 'social', 'popularity', short=_SOCIAL_SHORT[_attribute])
 METRICS['connectedness'] = Metric('connectedness', 'Coh.$_{conn}$', NEUTRAL, 'social', 'cohesion', short='Connect.')
-METRICS['similarity'] = Metric('similarity', 'Coh.$_{sim}$', NEUTRAL, 'social', 'cohesion', short='Sim.')
+METRICS['similarity'] = Metric('similarity', 'Coh.$_{sim}$', NEUTRAL, 'social', 'cohesion', short='Similar.')
 METRICS['locality'] = Metric('locality', 'Locality', NEUTRAL, 'social', 'locality', short='Locality', narrow='Loc.')
 # Size-adjusted social metrics (metrics/expected.py): <key>_adj = observed - expected under a random recommender;
 # group <group>_adj (so 'parity' still selects the raw ones); differences, so scaled to the data
@@ -194,8 +194,8 @@ def attribute_rows(attributes: Sequence[str] = tuple(MODEL_ATTRIBUTES)) -> List[
     return [RowGroup(MODEL_ATTRIBUTES[a][0], a, MODEL_ATTRIBUTES[a][1], MODEL_ATTRIBUTES[a][2], a) for a in attributes]
 
 
-def prompt_rows(variables: Sequence[str] = (cons.VAR_LANGUAGE, cons.VAR_LOCATION, cons.VAR_ROLE,
-                                            cons.VAR_K, cons.VAR_FIELD, cons.VAR_SENIORITY)) -> List[RowGroup]:
+def prompt_rows(variables: Sequence[str] = tuple(v for v in cons.CONFIG_VARIABLES if v != cons.VAR_SUBFIELD)
+                ) -> List[RowGroup]:
     groups = []
     for v in variables:
         levels = list(cons.VARIABLE_VALUES[v])

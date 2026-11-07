@@ -2,7 +2,7 @@
 Technical metrics (plan §2.3; steps 7-8): per configuration and per response, from the B.1-B.3 tags and the
 B.6 author matching. Pure pandas on one model at a time.
 
-Configuration (CONFIG_ID_COLUMNS = model, date, language, role, location, k, seniority, field, subfield):
+Configuration (CONFIG_ID_COLUMNS = model, date, language, location, role, k, field, subfield, seniority):
     n_runs, n_valid, n_refused, n_invalid
     validity                    n_valid / n_runs
     refusals                    n_refused / n_runs

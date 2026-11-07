@@ -2,7 +2,7 @@
 RQ2: local influence of each VALUE of the configuration variables on each metric.
 
 Same data and model as RQ1 (analysis/influence.py): one row per model x configuration; per metric, rows with a missing
-value are left out; metric ~ model + language + role + location + k + seniority + field + subfield(field), additive
+value are left out; metric ~ model + language + location + role + k + field + subfield(field) + seniority, additive
 OLS (subfield nested in field).
 
 Per level of a variable, weighted effect coding (te Grotenhuis et al. 2017): every level is compared with the GRAND

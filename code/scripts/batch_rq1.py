@@ -71,7 +71,8 @@ def main() -> None:
     logs.setup_logging('rq1', args, keys[0] if len(keys) == 1 else f"{len(keys)}metrics")
     check_params(args.output_dir, {'variables': list(args.variables), 'n_boot': args.n_boot,
                                    'n_boot_shapley': args.n_boot_shapley or args.n_boot, 'seed': args.seed,
-                                   'metrics_dir': str(Path(args.metrics_dir).resolve())})
+                                   'metrics_dir': str(Path(args.metrics_dir).resolve())},
+                 overwrite=args.overwrite)
     args.configs = summary.configuration_table(args.metrics_dir)
     batch.run_jobs(keys, run_metric, args)
 

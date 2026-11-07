@@ -157,6 +157,14 @@ class GroundTruthPipeline(unittest.TestCase):
         with self.assertRaises(ValueError):                          # other parameters cannot be mixed in
             check_params(self.authorships_dir, {'n_chunks': 99})
 
+    def test_check_params_overwrite(self):
+        out = Path(self.tmp.name) / 'params_overwrite'
+        check_params(out, {'a': [1, 2]})
+        with self.assertRaises(ValueError):
+            check_params(out, {'a': [2, 1]})
+        check_params(out, {'a': [2, 1]}, overwrite=True)            # replaces the stored parameters
+        check_params(out, {'a': [2, 1]})
+
     # --- A.1 ---------------------------------------------------------------------------------------------------
     def test_indices(self):
         a1 = self.bib.loc[1]
