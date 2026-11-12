@@ -61,9 +61,9 @@ METRICS: Dict[str, Metric] = {m.key: m for m in [
     Metric('factuality_name_seniority', 'Fact.$_{seniority}$', HIGHER, 'factuality', 'factuality', short='Seniority'),
     Metric('factuality_author', 'Fact.$_{author}$', HIGHER, 'factuality', 'factuality', short='Author'),
 ]}
-_SOCIAL_SHORT = {'gender': 'Gender', 'ethnicity': 'Ethnicity', 'location': 'Location', 'productivity': 'Works',
+_SOCIAL_SHORT = {'gender': 'Gender', 'race': 'Race', 'ethnicity': 'Ethnicity', 'location': 'Location', 'productivity': 'Works',
                  'influence': 'Citations', 'collaboration': 'Coauthors'}       # heatmap column labels
-_SOCIAL_SUB = {'gender': 'gender', 'ethnicity': 'ethn', 'location': 'loc', 'productivity': 'works',
+_SOCIAL_SUB = {'gender': 'gender', 'race': 'race', 'ethnicity': 'ethn', 'location': 'loc', 'productivity': 'works',
                'influence': 'cit', 'collaboration': 'coauth'}                 # subscripts of the bar headers
 for _attribute in _SOCIAL_SHORT:
     METRICS[f"parity_{_attribute}"] = Metric(f"parity_{_attribute}", f"Par.$_{{{_SOCIAL_SUB[_attribute]}}}$", HIGHER,
@@ -80,6 +80,7 @@ METRICS['locality'] = Metric('locality', 'Locality', NEUTRAL, 'social', 'localit
 # Size-adjusted social metrics (metrics/expected.py): <key>_adj = observed - expected under a random recommender;
 # group <group>_adj (so 'parity' still selects the raw ones); differences, so scaled to the data
 ADJ_SUFFIX = '_adj'
+EXPECTED_SUFFIX = '_expected'                  # value of a random recommender of the same n (stored, not a metric)
 
 
 def adjusted_label(label: str) -> str:
@@ -93,7 +94,7 @@ for _key in [k for k, m in METRICS.items() if m.family == 'social']:
                                         _m.group + ADJ_SUFFIX, _m.decimals, None, _m.short,
                                         adjusted_label(_m.narrow) if _m.narrow else '')
 # Default columns of each family (the figures of the paper); social metrics are added with step 9
-COLUMN_SETS = cons.METRIC_COLUMN_SETS          # named column sets: all, technical, factuality, technical_factuality, ...
+COLUMN_SETS = cons.METRIC_COLUMN_SETS          # named column sets: all, technical, factuality, social, parity, paper, ...
 FAMILY_DEFAULTS = COLUMN_SETS                    # (old name)
 _unknown = sorted({k for keys in COLUMN_SETS.values() for k in keys} - set(METRICS))
 if _unknown:
@@ -101,6 +102,18 @@ if _unknown:
 CONFIG_METRICS = ['validity', 'refusals', 'behaviour_consistency', 'format_consistency', 'recommendation_consistency']
 RESPONSE_METRICS = ['duplicates', 'k_ratio'] + [f"factuality_{level}" for level in tm.LEVELS]
 SOCIAL_METRICS = [k for k, m in METRICS.items() if m.family == 'social']
+SOCIAL_EXPECTED = [k + EXPECTED_SUFFIX for k in SOCIAL_METRICS if not k.endswith(ADJ_SUFFIX)]   # RQ3 adj ranges
+
+
+def use_study_ethnicity(attribute: str) -> List[str]:
+    """Point the named metric sets (COLUMN_SETS = cons.METRIC_COLUMN_SETS) and cons.RQ3_SOCIAL_METRICS at the study's
+    perceived-ethnicity attribute (analysis config study.ethnicity_attribute: ethnicity | race | both), in place, so
+    every later selection uses it. Call once, right after loading the config. Returns the study attributes."""
+    sets = cons.metric_column_sets(attribute)
+    COLUMN_SETS.clear()
+    COLUMN_SETS.update(sets)
+    cons.RQ3_SOCIAL_METRICS[:] = sets['parity']
+    return cons.study_ethnicity_attributes(attribute)
 
 
 def adjusted_keys(keys: Sequence[str]) -> List[str]:
@@ -109,16 +122,23 @@ def adjusted_keys(keys: Sequence[str]) -> List[str]:
             and k + ADJ_SUFFIX in METRICS else k for k in keys]
 
 
+def _adjusted_item(item: str) -> str:
+    """One selection item size-adjusted: a set / subgroup name -> '<name>_adj' (if it exists), a key -> '<key>_adj'."""
+    if item + ADJ_SUFFIX in COLUMN_SETS or any(m.group == item + ADJ_SUFFIX for m in METRICS.values()):
+        return item + ADJ_SUFFIX
+    return adjusted_keys([item])[0]
+
+
 def adjusted_selection(selection, adjusted: bool):
-    """A column selection with its social metrics size-adjusted if ``adjusted``: a set name -> '<name>_adj' (if it has
-    one; None = all -> 'all_adj'), a list of keys -> adjusted_keys; unchanged if not adjusted (notebooks: ADJUSTED)."""
+    """A column selection with its social metrics size-adjusted if ``adjusted``: every item (set name, subgroup or key)
+    -> its '_adj' version where one exists (None = all -> 'all_adj'); unchanged if not adjusted (notebooks: ADJUSTED)."""
     if not adjusted:
         return selection
     if selection is None:
         return 'all_adj'
     if isinstance(selection, str):
-        return selection + ADJ_SUFFIX if selection + ADJ_SUFFIX in COLUMN_SETS else adjusted_keys([selection])[0]
-    return adjusted_keys(selection)
+        return _adjusted_item(selection)
+    return [_adjusted_item(item) for item in selection]
 
 
 def selection_name(selection) -> str:
@@ -128,27 +148,42 @@ def selection_name(selection) -> str:
     return base + (ADJ_SUFFIX if adjusted else '')
 
 
-def split_adjusted(selection) -> tuple:
-    """(name without _adj, adjusted?) of a selection: None = 'all', a set name, or a list of keys (joined by '-')."""
+def _items(selection) -> List[str]:
+    return [selection] if isinstance(selection, str) else list(selection)
+
+
+def split_adjusted(selection, exclude=None) -> tuple:
+    """(name without _adj, adjusted?) of a selection: None = 'all', else its items joined by '-' (e.g.
+    'technical-factuality'); excluded items appended as '-no-<items>' (e.g. 'technical-factuality-no-consistency')."""
     if selection is None:
         return 'all', False
-    keys = [selection] if isinstance(selection, str) else list(selection)
-    adjusted = any(k.endswith(ADJ_SUFFIX) for k in keys)
-    return '-'.join(k.removesuffix(ADJ_SUFFIX) for k in keys), adjusted
+    items = _items(selection)
+    adjusted = any(k.endswith(ADJ_SUFFIX) for k in items)
+    name = '-'.join(k.removesuffix(ADJ_SUFFIX) for k in items)
+    if exclude:
+        name += '-no-' + '-'.join(k.removesuffix(ADJ_SUFFIX) for k in _items(exclude))
+    return name, adjusted
 
 
-def select_metrics(selection: str | Sequence[str], adjusted: bool = False) -> List[Metric]:
-    """A named column set (cons.METRIC_COLUMN_SETS: 'all', 'technical', 'technical_factuality', 'social', 'parity',
-    ...), a subgroup, one metric key, or a list of metric keys. adjusted: the social metrics as <key>_adj."""
-    if isinstance(selection, str):
-        if selection in COLUMN_SETS:
-            keys = COLUMN_SETS[selection]
-        else:
-            keys = [m.key for m in METRICS.values() if m.group == selection] or [selection]
-    else:
-        keys = list(selection)
+def _expand(item: str) -> List[str]:
+    """The keys of one selection item: a named set, a subgroup, or a metric key."""
+    if item in COLUMN_SETS:
+        return list(COLUMN_SETS[item])
+    return [m.key for m in METRICS.values() if m.group == item] or [item]
+
+
+def select_metrics(selection: str | Sequence[str], adjusted: bool = False,
+                   exclude: Optional[str | Sequence[str]] = None) -> List[Metric]:
+    """A named column set (cons.METRIC_COLUMN_SETS: 'all', 'technical', 'social', 'parity', 'paper', ...), a subgroup
+    ('consistency', 'parity_adj', ...), one metric key, or a list mixing them (expanded in order, duplicates once).
+    adjusted: the social metrics as <key>_adj. exclude: items of the same kinds to leave out; excluding a raw key also
+    drops its _adj twin (e.g. exclude='parity_gender' with 'parity_adj')."""
+    keys = list(dict.fromkeys(k for item in _items(selection) for k in _expand(item)))
     if adjusted:
         keys = adjusted_keys(keys)
+    if exclude:
+        drop = {k for item in _items(exclude) for k in _expand(item)}
+        keys = [k for k in keys if k not in drop and k.removesuffix(ADJ_SUFFIX) not in drop]
     unknown = [k for k in keys if k not in METRICS]
     if unknown:
         raise ValueError(f"Unknown metrics {unknown}; known: {list(METRICS)}")
@@ -235,7 +270,8 @@ def with_model_attributes(configs: pd.DataFrame, metadata: Optional[pd.DataFrame
 # --- configuration table -----------------------------------------------------------------------------------------
 def configuration_table(metrics_dir: Path | str, models: Optional[Sequence[str]] = None) -> pd.DataFrame:
     """One row per configuration: the configuration metrics, and the response metrics averaged over the responses
-    of the configuration (missing values left out)."""
+    of the configuration (missing values left out); also <social metric>_expected (SOCIAL_EXPECTED, for the RQ3
+    ranges of the adjusted metrics)."""
     rows = []
     for config_file in sorted((Path(metrics_dir) / 'config').glob('*.parquet')):
         if models and config_file.stem not in models:
@@ -246,11 +282,13 @@ def configuration_table(metrics_dir: Path | str, models: Optional[Sequence[str]]
         if social_file.exists():                       # social metrics (step 9), per response like the others
             social = pd.read_parquet(social_file)
             social['rid'], response['rid'] = tm.row_id(social, tm.RESPONSE_KEY), tm.row_id(response, tm.RESPONSE_KEY)
-            response = response.merge(social[['rid'] + [c for c in SOCIAL_METRICS if c in social]], on='rid', how='left')
+            response = response.merge(social[['rid'] + [c for c in SOCIAL_METRICS + SOCIAL_EXPECTED if c in social]],
+                                      on='rid', how='left')
         key = tm.CONFIG_KEY
         config['cid'] = tm.row_id(config, key)
         response['cid'] = tm.row_id(response, key)
-        per_config = response.groupby('cid')[[c for c in RESPONSE_METRICS + SOCIAL_METRICS if c in response]].mean()
+        per_config = response.groupby('cid')[[c for c in RESPONSE_METRICS + SOCIAL_METRICS + SOCIAL_EXPECTED
+                                              if c in response]].mean()
         rows.append(config.join(per_config, on='cid').drop(columns='cid'))
     if not rows:
         raise FileNotFoundError(f"No metrics in {metrics_dir}/config/ (run run_metrics_pipeline.sh)")

@@ -37,7 +37,8 @@ def people(n_models=3, seed=0):
                 country = home if rng.random() < (0.4 if location == 'Germany' else 0.1) else rng.choice(['US', 'DE', 'GB'])
                 rows.append({**CONFIG, cons.COL_MODEL: f"m{m}", 'location': location, 'run_id': i, 'author_id': i,
                              'gender': rng.choice(['male', 'female', 'unknown'], p=[.6, .3, .1]),
-                             'ethnicity': rng.choice(['white', 'asian']), 'country': country,
+                             'race': rng.choice(['white', 'asian']),
+                             'ethnicity': rng.choice(['british', 'east_asian', 'nordic', 'japanese']), 'country': country,
                              'productivity': 'H', 'influence': 'M', 'collaboration': 'L', 'author_seniority': 'senior',
                              'is_top_productivity': False, 'is_top_influence': False})
     return pd.DataFrame(rows)
@@ -116,13 +117,30 @@ class TestFlows(unittest.TestCase):
             fp.plot_flow_grid(p)
         fig = fp.plot_drift_flow(p)
         self.assertEqual(len(fig.axes), 1)
-        countries = fp.country_table(p, 'location', 'country', False)
+        countries = fp.display_table(p, 'location', 'country', False)
         self.assertTrue({'DE', 'JP', 'CA'} <= set(countries['target']))       # prompt countries never pooled
         order, colors = fp.target_order_colors('country', ['US', 'JP', 'DE', 'GB'])
         self.assertEqual(order[:2], ['DE', 'JP'])                               # prompt countries first (design order)
         order, colors = fp.target_order_colors('gender', ['female', 'male', 'other'], ['male', 'neutral', 'female'])
         self.assertEqual(order, ['male', 'female', 'other'])
         self.assertNotEqual(colors['male'], colors['female'])
+        ethnicity = fp.display_table(p, 'location', 'ethnicity', False)        # classes outside the shown set pooled
+        self.assertEqual(set(ethnicity['target']), {'british', 'east_asian', 'other'})
+        order, colors = fp.target_order_colors('ethnicity', ['british', 'other', 'east_asian'])
+        self.assertEqual(order, ['east_asian', 'british', 'other'])              # fixed order of the shown classes
+        _, alone = fp.target_order_colors('ethnicity', ['british'])
+        self.assertEqual(alone['british'], colors['british'])                    # the colour follows the class
+        order, colors = fp.target_order_colors('race', ['white', 'asian', 'other'])
+        self.assertEqual(order, ['asian', 'white', 'other'])
+        self.assertEqual(fp.class_label('ethnicity', 'east_asian'), 'East asian')
+
+
+class TestStudyTargets(unittest.TestCase):
+    def test_targets(self):
+        self.assertEqual(fl.study_targets(), fl.TARGETS)
+        self.assertEqual(fl.study_targets('race')[1], 'race')
+        self.assertEqual(fl.study_targets('both')[1:3], ['ethnicity', 'race'])
+        self.assertEqual(fl.study_targets('race', ['ethnicity', 'country']), ['race', 'country'])
 
 
 if __name__ == '__main__':

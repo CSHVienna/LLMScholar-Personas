@@ -6,9 +6,10 @@
 #   edges         A.1a coauthorship edge list per author bucket                         DuckDB, one job at a time
 #   bibliometrics A.1  per author bucket (needs A.0 + A.1a)                             DuckDB, one job at a time
 #   names         A.2  per author bucket (Python normalisation)                         GNU parallel
-#   demographics  A.3  needs A.1; four stages, models run ONCE per distinct name:     GNU parallel
-#                        keys (per bucket: names) -> gender (one process, ~1 min) -> ethnicity (raceBERT per
-#                        name shard, CPU; the slow part) -> merge (per bucket)
+#   demographics  A.3  needs A.1; five stages, models run ONCE per distinct name:     GNU parallel
+#                        keys (per bucket: names) -> gender (one process, ~1 min) -> race (raceBERT race model per
+#                        name shard, CPU; the slow part) -> ethnicity (raceBERT ethnicity model per name shard, GPU
+#                        if any) -> merge (per bucket: gender, race and ethnicity probabilities)
 #   population    A.4  single process (needs A.1 + A.3; thresholds live here)           DuckDB
 #
 # DuckDB already uses many threads per process, so its steps run one chunk / bucket after the other
@@ -34,9 +35,10 @@
 #   -t N      DuckDB threads per DuckDB-step job (default 12)
 #   -m SIZE   DuckDB memory limit per DuckDB-step job (default 40GB)
 #   -j N      parallel jobs for the Python steps names / demographics (default 4)
-#   -S N      raceBERT name shards (default 64; must stay the same until demographics is complete)
-#   -C DIRS   demographics: reuse raceBERT probabilities of earlier runs, comma-separated folders: ethnicity shards
-#             (matched by name) and / or demographics buckets (by author_id -> name), e.g. -C _old/ethnicity,_old/demographics
+#   -S N      name shards per raceBERT model (default 64; must stay the same until demographics is complete)
+#   -C DIRS   demographics: reuse raceBERT probabilities of earlier runs, comma-separated folders: race / ethnicity
+#             shards (matched by name) and / or demographics buckets (by author_id -> name), e.g.
+#             -C _old/race,_old/ethnicity,_old/demographics (each model uses the files with its columns)
 #   -c N      threads per Python-step job (raceBERT / DuckDB reads; default 3)
 #   -T DIR    DuckDB spill folder (default <project>/tmp/duckdb)
 #   -n N      number of author buckets (default 64; must be the same in every step)
@@ -85,7 +87,7 @@ while getopts "s:d:t:m:j:S:C:c:T:n:k:o:p:r:l:x:a:y:v:h" option; do
         a) SINGLE_ARGS="${OPTARG}" ;;
         y) CONFIG="${OPTARG}"; CONFIG_GIVEN=1 ;;
         v) VARIANT_NAME="${OPTARG}" ;;
-        h|*) sed -n '2,54p' "$0"; exit 0 ;;
+        h|*) sed -n '2,56p' "$0"; exit 0 ;;
     esac
 done
 # -v NAME: analysis variant (configure_variant.py): its config, and the variants whose GT population / author
@@ -174,8 +176,10 @@ if selected demographics; then
     "${PYTHON}" "${SCRIPTS_DIR}/batch_gt_demographics.py" --stage gender --n_buckets "${N_BUCKETS}" ${DEMO} \
         --log_dir "${LOGS_DIR}" ${EXTRA_ARGS} > /dev/null
     echo "[$(date +%H:%M:%S)] gt_demographics_gender: done"
-    run_jobs "gt_demographics_ethnicity" "${JOBS}" shards "${N_SHARDS}" "batch_gt_demographics.py" \
-        "--stage ethnicity --n_buckets ${N_BUCKETS} --torch_threads ${PY_THREADS} ${CACHE_ARGS} ${DEMO} ${EXTRA_ARGS}"
+    for model in race ethnicity; do
+        run_jobs "gt_demographics_${model}" "${JOBS}" shards "${N_SHARDS}" "batch_gt_demographics.py" \
+            "--stage ${model} --n_buckets ${N_BUCKETS} --torch_threads ${PY_THREADS} ${CACHE_ARGS} ${DEMO} ${EXTRA_ARGS}"
+    done
     per_bucket "gt_demographics_merge" "${JOBS}" "batch_gt_demographics.py" "--stage merge ${DEMO}"
 fi
 if selected population && [[ -n "${VARIANT_NAME}" && "${VARIANT_POPULATION}" != "${VARIANT_NAME}" ]]; then

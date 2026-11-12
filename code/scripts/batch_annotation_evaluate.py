@@ -16,12 +16,13 @@ Verification tasks (matching, authors; annotation/verification.py) write instead
         agreement       per label group: Krippendorff's alpha (if >= 2 annotators)
 
 Demographics (annotation/demographics.py) writes
-        summary         per mapping, side (gt / recommended) and group (gender / ethnicity): items, weighted accuracy,
-                        share annotated unknown
+        summary         per mapping, side (gt / recommended) and group (gender / race / ethnicity): items, weighted
+                        accuracy, share annotated unknown
         confusion       per mapping, side and group, annotated x inferred: n, weighted n, P(inferred | annotated),
                         P(annotated | inferred) (the misclassification matrices of the D.4 correction)
-        (mapping = how the fine annotated ethnicities map onto raceBERT's classes: main = US census convention,
-        the others robustness checks, fine = unmapped; cons.ANNOTATION_ETHNICITY_MAPPINGS)
+        (mapping = how the annotated ethnicities map onto the inferred race classes: main = US census convention,
+        the others robustness checks, fine = unmapped; cons.ANNOTATION_RACE_MAPPINGS; the inferred ethnicity is
+        mapped onto the annotated classes, cons.ANNOTATION_FROM_ETHNICITY, under main)
         agreement       per group: Krippendorff's alpha (if >= 2 annotators)
 
 Usage (from any folder):

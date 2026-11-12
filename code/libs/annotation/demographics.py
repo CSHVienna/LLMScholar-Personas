@@ -1,24 +1,27 @@
 """
 Demographics annotation (blind): the annotator sees ONLY a name and assigns the PERCEIVED gender and
 the PERCEIVED ethnicity (never identity; 'unknown' = cannot tell from the name). The inferred labels (nomquamgender,
-raceBERT; A.3-A.4) are never shown; they stay in the key.
+raceBERT race and ethnicity models; A.3-A.4) are never shown; they stay in the key.
 
 Unit: one OpenAlex person, shown by the name the classifiers saw: the A.1 display name, on one line as written. Two
 sides, so that the misclassification can be checked where it is used:
     gt           GT scholars (gt_authors)
     recommended  people recommended by the LLMs (B.6 matched author_id), also GT scholars; a person on both sides is
                  kept once, as recommended (the rarer side)
-Strata: side x inferred gender x inferred ethnicity (rare combinations are all checked; at most per_stratum each);
-the key keeps the stratum sizes, so the evaluation re-weights the sample to each side's population.
+Strata: side x inferred gender x inferred race (rare combinations are all checked; at most per_stratum each); the
+key keeps the stratum sizes, so the evaluation re-weights the sample to each side's population.
 
-Ethnicity is annotated in finer, origin-based classes (european, hispanic, portuguese_brazilian, mena, east_asian,
-south_asian, black, aian, unknown) and mapped onto the raceBERT classes for the comparison
-(cons.ANNOTATION_ETHNICITY_MAPPINGS: 'main' = the US census convention raceBERT was trained on, the others robustness
-checks, never chosen by fit; 'fine' = no mapping, to see where each group lands).
+Ethnicity is annotated in origin-based classes (european, hispanic, portuguese_brazilian, mena, east_asian,
+south_asian, black, aian, unknown) and compared with both inferred labels (evaluation group):
+    race       the annotated class mapped onto the race classes (cons.ANNOTATION_RACE_MAPPINGS: 'main' = the US census
+               convention the race model was trained on, the others robustness checks, never chosen by fit)
+    ethnicity  the inferred 13 classes mapped onto the annotated ones (cons.ANNOTATION_FROM_ETHNICITY; the annotated
+               classes the model cannot separate merged, cons.ANNOTATION_ETHNICITY_MERGE), mapping 'main'
+'fine' = no mapping for either, to see where each group lands.
 
-Evaluation (per mapping, side and group): Krippendorff's alpha between annotators; majority label per item (ties left
-out); weighted confusion matrix annotated x inferred with P(inferred | annotated) and P(annotated | inferred) (inputs
-of the Barron / Marshall correction, D.4) and the weighted accuracy.
+Evaluation (per mapping, side and group gender / race / ethnicity): Krippendorff's alpha between annotators; majority
+label per item (ties left out); weighted confusion matrix annotated x inferred with P(inferred | annotated) and
+P(annotated | inferred) (inputs of the Barron / Marshall correction, D.4) and the weighted accuracy.
 """
 
 from pathlib import Path
@@ -28,10 +31,14 @@ import duckdb
 import pandas as pd
 
 from annotation.tasks import ITEM_ID, Section
+from demographics import ethnicity as eth
+from demographics import race
 from groundtruth.db import sql_path
 from utils import constants as cons
 
 DEMOGRAPHICS = cons.ANNOTATION_TASK_DEMOGRAPHICS
+INFERRED = ['gender', 'race', 'ethnicity']                    # labels of A.4 kept in the key
+PROBABILITIES = ['p_female', *race.PROB_COLUMNS, *eth.PROB_COLUMNS]
 SIDE_GT, SIDE_RECOMMENDED = 'gt', 'recommended'
 STRATUM, STRATUM_SIZE = 'stratum', 'stratum_size'
 GROUPS = {'gender': list(cons.ANNOTATION_GENDER_CLASSES), 'ethnicity': list(cons.ANNOTATION_ETHNICITY_CLASSES)}
@@ -105,7 +112,7 @@ def quota_for(sizes: pd.Series, per_stratum: int, max_items: int) -> int:
 def sample_demographics(gt_dir: Path | str, matching_dir: Optional[Path | str], per_stratum: int, max_items: int,
                         seed: int, threads: int = cons.GT_STATS_DUCKDB_THREADS,
                         memory_limit: str = cons.GT_STATS_DUCKDB_MEMORY) -> pd.DataFrame:
-    """Stratified sample of people (side x inferred gender x inferred ethnicity) with their names and inferred
+    """Stratified sample of people (side x inferred gender x inferred race) with their names and inferred
     labels / probabilities. Without B.6 outputs (matching_dir missing), only the GT side is sampled."""
     con = duckdb.connect(':memory:')
     con.execute(f"SET threads = {int(threads)}")
@@ -115,29 +122,29 @@ def sample_demographics(gt_dir: Path | str, matching_dir: Optional[Path | str], 
     if rec_files:
         con.execute(f"""CREATE TEMP TABLE rec AS SELECT DISTINCT author_id
                         FROM read_parquet({sql_path(Path(matching_dir) / '*.parquet')}) WHERE author_id IS NOT NULL""")
-        rec_side = f"""UNION ALL SELECT a.author_id, '{SIDE_RECOMMENDED}' AS side, a.gender, a.ethnicity
+        rec_side = f"""UNION ALL SELECT a.author_id, '{SIDE_RECOMMENDED}' AS side, a.gender, a.race
                        FROM {authors} a SEMI JOIN rec USING (author_id)"""
     else:
         rec_side = ''
     con.execute(f"""CREATE TEMP VIEW pool AS
-                    SELECT author_id, '{SIDE_GT}' AS side, gender, ethnicity FROM {authors} {rec_side}""")
-    sizes = con.execute("SELECT side, gender, ethnicity, count(*) AS n FROM pool GROUP BY ALL").df()
+                    SELECT author_id, '{SIDE_GT}' AS side, gender, race FROM {authors} {rec_side}""")
+    sizes = con.execute("SELECT side, gender, race, count(*) AS n FROM pool GROUP BY ALL").df()
     quota = quota_for(sizes['n'], per_stratum, max_items)
     drawn = con.execute(f"""
         WITH ranked AS (
-            SELECT *, row_number() OVER (PARTITION BY side, gender, ethnicity ORDER BY hash(author_id + {int(seed)}))
+            SELECT *, row_number() OVER (PARTITION BY side, gender, race ORDER BY hash(author_id + {int(seed)}))
                       AS r
             FROM pool)
-        SELECT r.author_id, r.side, r.gender, r.ethnicity, a.display_name, a.p_female, a.p_asian, a.p_black,
-               a.p_hispanic, a.p_white, a.p_other
+        SELECT r.author_id, r.side, r.gender, r.race, a.ethnicity, a.display_name,
+               {', '.join(f'a.{c}' for c in PROBABILITIES)}
         FROM ranked r JOIN {authors} a USING (author_id)
         WHERE r.r <= {quota}""").df()
     con.close()
     # a person drawn on both sides is kept once, as recommended
     drawn = drawn.sort_values('side', key=lambda s: s.ne(SIDE_RECOMMENDED), kind='stable') \
                  .drop_duplicates('author_id').reset_index(drop=True)
-    drawn[STRATUM] = drawn['side'] + '|' + drawn['gender'].astype(str) + '|' + drawn['ethnicity'].astype(str)
-    sizes[STRATUM] = sizes['side'] + '|' + sizes['gender'].astype(str) + '|' + sizes['ethnicity'].astype(str)
+    drawn[STRATUM] = drawn['side'] + '|' + drawn['gender'].astype(str) + '|' + drawn['race'].astype(str)
+    sizes[STRATUM] = sizes['side'] + '|' + sizes['gender'].astype(str) + '|' + sizes['race'].astype(str)
     drawn[STRATUM_SIZE] = drawn[STRATUM].map(sizes.set_index(STRATUM)['n']).astype('int64')
     drawn['sections'] = [[Section('Name', str(name).strip() or '–', preformatted=True)] for name in drawn['display_name']]
     return drawn.sample(frac=1, random_state=seed).reset_index(drop=True)
@@ -149,8 +156,7 @@ def items_payload(task: str, sample: pd.DataFrame) -> dict:
 
 
 def key_table(task: str, sample: pd.DataFrame) -> pd.DataFrame:
-    columns = [ITEM_ID, 'author_id', 'side', 'display_name', 'gender', 'ethnicity',
-               'p_female', 'p_asian', 'p_black', 'p_hispanic', 'p_white', 'p_other', STRATUM, STRATUM_SIZE]
+    columns = [ITEM_ID, 'author_id', 'side', 'display_name', *INFERRED, *PROBABILITIES, STRATUM, STRATUM_SIZE]
     return sample[[c for c in columns if c in sample.columns]].copy()
 
 
@@ -164,29 +170,33 @@ def gold_classes(gold: pd.DataFrame) -> pd.DataFrame:
     return g[[ITEM_ID, 'group', 'annotated', 'n_annotators']]
 
 
-def map_ethnicity(items: pd.DataFrame, mapping: str) -> pd.DataFrame:
-    """Annotated ethnicity classes mapped onto the inferred (raceBERT) classes; 'fine' keeps the annotated classes."""
-    if mapping == cons.ANNOTATION_MAPPING_FINE:
-        return items
-    table = cons.ANNOTATION_ETHNICITY_MAPPINGS[mapping]
+def map_classes(items: pd.DataFrame, mapping: str) -> pd.DataFrame:
+    """Rows of the mapping (module docstring): race rows with the annotated class mapped onto the race classes,
+    ethnicity rows (main) with the inferred class mapped onto the annotated ones; 'fine' keeps every class as it is.
+    Gender only under 'main'; ethnicity under 'main' and 'fine'; race under every mapping."""
     out = items.copy()
-    eth = out['group'] == 'ethnicity'
-    out.loc[eth, 'annotated'] = out.loc[eth, 'annotated'].map(lambda c: table.get(c, c))
+    if mapping == cons.ANNOTATION_MAPPING_FINE:
+        return out[out['group'] != 'gender']
+    is_race, is_eth = out['group'] == 'race', out['group'] == 'ethnicity'
+    table = cons.ANNOTATION_RACE_MAPPINGS[mapping]
+    out.loc[is_race, 'annotated'] = out.loc[is_race, 'annotated'].map(lambda c: table.get(c, c))
+    if mapping != cons.ANNOTATION_MAPPING_MAIN:
+        return out[is_race]
+    out.loc[is_eth, 'inferred'] = out.loc[is_eth, 'inferred'].map(lambda c: cons.ANNOTATION_FROM_ETHNICITY.get(c, c))
+    out.loc[is_eth, 'annotated'] = out.loc[is_eth, 'annotated'].map(lambda c: cons.ANNOTATION_ETHNICITY_MERGE.get(c, c))
     return out
 
 
 def mappings() -> List[str]:
-    return [*cons.ANNOTATION_ETHNICITY_MAPPINGS, cons.ANNOTATION_MAPPING_FINE]
+    return [*cons.ANNOTATION_RACE_MAPPINGS, cons.ANNOTATION_MAPPING_FINE]
 
 
 def evaluate(key: pd.DataFrame, gold: pd.DataFrame) -> Dict[str, pd.DataFrame]:
-    """summary and confusion for every mapping (column 'mapping'; gender is the same under every mapping)."""
+    """summary and confusion for every mapping (column 'mapping'; see map_classes for the groups of each)."""
     items = weighted_items(key, gold)
     out = {'summary': [], 'confusion': []}
     for mapping in mappings():
-        mapped = map_ethnicity(items, mapping)
-        if mapping != cons.ANNOTATION_MAPPING_MAIN:
-            mapped = mapped[mapped['group'] == 'ethnicity']
+        mapped = map_classes(items, mapping)
         out['summary'].append(summary(mapped).assign(mapping=mapping))
         out['confusion'].append(confusion(mapped).assign(mapping=mapping))
     return {name: pd.concat(parts, ignore_index=True).pipe(lambda d: d[['mapping', *d.columns.drop('mapping')]])
@@ -194,12 +204,17 @@ def evaluate(key: pd.DataFrame, gold: pd.DataFrame) -> Dict[str, pd.DataFrame]:
 
 
 def weighted_items(key: pd.DataFrame, gold: pd.DataFrame) -> pd.DataFrame:
-    """One row per (item, group) with annotated and inferred class and the item weight = stratum size / items of the
-    stratum answered for that group (re-weights the stratified sample to each side's population)."""
-    g = gold_classes(gold).merge(key[[ITEM_ID, 'side', 'gender', 'ethnicity', STRATUM, STRATUM_SIZE]], on=ITEM_ID)
-    g['inferred'] = [row[row['group']] for _, row in g.iterrows()]
+    """One row per (item, evaluation group) with annotated and inferred class (unmapped) and the item weight =
+    stratum size / items of the stratum answered for that annotation group (re-weights the stratified sample to each
+    side's population). The annotated ethnicity gives two rows: group race (vs the inferred race) and group
+    ethnicity (vs the inferred ethnicity, when the key has it)."""
+    inferred = [c for c in INFERRED if c in key]
+    g = gold_classes(gold).merge(key[[ITEM_ID, 'side', *inferred, STRATUM, STRATUM_SIZE]], on=ITEM_ID)
     answered = g.groupby(['group', STRATUM])[ITEM_ID].transform('count')
     g['weight'] = g[STRATUM_SIZE] / answered
+    targets = {'gender': ['gender'], 'ethnicity': [c for c in ('race', 'ethnicity') if c in inferred]}
+    g = pd.concat([g[g['group'] == annotated].assign(group=target, inferred=lambda d, t=target: d[t])
+                   for annotated, ts in targets.items() for target in ts], ignore_index=True)
     return g[[ITEM_ID, 'side', 'group', STRATUM, 'annotated', 'inferred', 'weight']]
 
 

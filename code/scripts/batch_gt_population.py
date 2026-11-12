@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Step A.4: target population, seniority, prominence bins (L/M/H within field x seniority), top group and GT shares
-(per field x seniority, field, seniority, all). Needs steps A.1 and A.3 (without A.3, gender/ethnicity = unknown).
+(per field x seniority, field, seniority, all). Needs steps A.1 and A.3 (without A.3, gender / race / ethnicity = unknown).
 
 Writes to <gt_dir>/ (default results/groundtruth/):
     gt_authors.parquet, gt_members.parquet, gt_shares.parquet, gt_cutoffs.parquet   (see libs/groundtruth/population.py)
@@ -37,8 +37,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help='Cut points on p_female (increasing, in (0, 1)), e.g. 0.1 0.9 or 0.1 0.4 0.6 0.9')
     parser.add_argument('--gender_labels', nargs='+', default=cons.DEFAULT_GENDER_LABELS,
                         help='One label per interval [0, e1), [e1, e2), ..., [ek, 1], e.g. male neutral female')
+    parser.add_argument('--race_min_prob', type=float, default=cons.DEFAULT_RACE_MIN_PROB,
+                        help='raceBERT race model: label = top class if its probability >= this (else unknown)')
     parser.add_argument('--ethnicity_min_prob', type=float, default=cons.DEFAULT_ETHNICITY_MIN_PROB,
-                        help='raceBERT: label = top class if its probability >= this (else unknown)')
+                        help='raceBERT ethnicity model: label = top class if its probability >= this (else unknown)')
     parser.add_argument('--reference_year', type=int, default=cons.GT_REFERENCE_YEAR, help='academic_age = year - first_pub_year')
     parser.add_argument('--junior_max', type=int, default=cons.DEFAULT_SENIORITY_JUNIOR_MAX)
     parser.add_argument('--senior_min', type=int, default=cons.DEFAULT_SENIORITY_SENIOR_MIN)
@@ -67,7 +69,7 @@ def main() -> None:
     demo_files = sorted(Path(args.demographics_dir).glob('bucket-*.parquet'))
     if len(demo_files) < len(authors_files):
         ios.printf(f"WARNING: demographics for {len(demo_files)} of {len(authors_files)} buckets "
-                   f"(missing authors get gender/ethnicity = unknown)")
+                   f"(missing authors get gender / race / ethnicity = unknown)")
 
     start = ios.datetime.now()
     con = db.connect(args, ':memory:')
@@ -75,7 +77,7 @@ def main() -> None:
                  str(Path(args.demographics_dir) / 'bucket-*.parquet') if demo_files else None,
                  load_field_mapping(args.field_mapping_file), args.min_field_share, args.reference_year,
                  args.junior_max, args.senior_min, args.single_cutoff, args.bin_edges, args.top_percentile, args.bin_labels,
-                 args.gender_edges, args.gender_labels, args.ethnicity_min_prob)
+                 args.gender_edges, args.gender_labels, args.race_min_prob, args.ethnicity_min_prob)
     counts = write_outputs(con, args.gt_dir)
     ios.printf(f"Done in {ios.datetime.now() - start} | rows: {counts} -> {args.gt_dir}")
 

@@ -26,7 +26,7 @@ from typing import Dict, List, Optional, Sequence
 import numpy as np
 import pandas as pd
 
-from analysis.influence import DEFAULT_FACTORS, MODEL_FACTOR, NESTED, Gram, _prepare, resample_models, variable_family
+from analysis.influence import DEFAULT_FACTORS, MODEL_FACTOR, NESTED, Gram, _prepare, lstsq, resample_models, variable_family
 from utils import constants as cons
 
 
@@ -34,7 +34,7 @@ def fit(y: np.ndarray, blocks: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
     """OLS on [1, blocks]; the contribution of every factor to every fitted value (block @ its coefficients)."""
     X = np.column_stack([np.ones(len(y)), *blocks.values()])
     G, c = X.T @ X, X.T @ y
-    beta, *_ = np.linalg.lstsq(G, c, rcond=None)
+    beta = lstsq(G, c)
     out, start = {}, 1
     for factor, block in blocks.items():
         out[factor] = block @ beta[start:start + block.shape[1]]

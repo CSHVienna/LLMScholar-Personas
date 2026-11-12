@@ -22,7 +22,7 @@ flowchart TD
         direction LR
         A1["run_responses_pipeline.sh<br/>eval_responses → eval_recommendations"]
         A2["run_matching_pipeline.sh<br/>candidates → authors"]
-        A3["run_metrics_pipeline.sh<br/>technical, social, flows, rq1, rq2"]
+        A3["run_metrics_pipeline.sh<br/>technical, social, flows, rq1, rq2, interactions"]
         A1 --> A2 --> A3
     end
     inputs --> collect --> audit
@@ -50,10 +50,10 @@ bash code/scripts/run_metrics_pipeline.sh -v jw097
 
 | Stage | Folder | Own folder if the variant changes |
 |---|---|---|
-| GT population (A.4) | `groundtruth/population/<name>/` | seniority, field share, gender, ethnicity, prominence |
+| GT population (A.4) | `groundtruth/population/<name>/` | seniority, field share, gender, race, ethnicity, prominence |
 | author matching (B.6b) | `matching/authors/<name>/` | seniority, field share, Jaro-Winkler, seed |
 | metrics, RQs | `metrics/<name>/` | always |
-| plots (notebooks) | `plots/<name>/` | always (`VARIANT = '<name>'`) |
+| plots (notebooks) | `plots/<name>/` (paper main text), `plots/<name>/si/` (rest) | always (`VARIANT = '<name>'`) |
 
 Shared by every variant: the GT tables of A.0–A.3 (`groundtruth/authorships, coauthor_*, authors, names,
 demographics`) and the matching candidates (B.6a; `candidates_floor` and `fuzzy_all` cannot change).
@@ -283,7 +283,7 @@ all models (mean of the model shares, every model weighs equally, with a 95% hie
 then configurations within models; `tag_stats.model_mean_shares`, constants `DEFAULT_BOOTSTRAP_SAMPLES`,
 `DEFAULT_CONFIDENCE`, `DEFAULT_SEED`). Valid combinations
 (all tags in the valid set; defaults `DEFAULT_VALID_RESPONSE_TAGS` / `DEFAULT_VALID_REC_TAGS` in `constants.py`,
-overridable in the notebook) are green, the others red and hatched. Plots: `plots/<variant>/tags_*.{png,pdf}`.
+overridable in the notebook) are green, the others red and hatched. Plots: `plots/<variant>/si/tags_*.{png,pdf}`.
 Paper figures (`tags_responses_paper`, `tags_recommendations_paper`): per-model panel (4/5) + overall panel (1/5),
 both vertical with a shared 0–100 axis, A4 width × 2.9 in; models sorted by valid share (desc.); short model labels
 (`viz/labels.py`, rules in `viz/constants.MODEL_LABEL_RULES`, checked to be unique) and short tag labels
@@ -364,8 +364,8 @@ demographics continues inside a name shard from its last stored part (every 20k 
 | A.1a | `batch_gt_edges.py` | `coauthor_edges/bucket-<bb>.parquet` | **the coauthorship edge list**: author_id, coauthor_id, n_shared_works, newman_weight (Σ 1/(team−1)), min_team, first/last year. Used for the coauthor counts (A.1) and the network (A.5) |
 | A.1 | `batch_gt_bibliometrics.py` | `authors/bucket-<bb>.parquet` | per author: first/last year, # works, # works with a primary topic, # citations, h / i10 / e index, # unique coauthors (rows in the edge list), works per prompt field, OpenAlex stats, latest affiliation country, is_person |
 | A.2 | `batch_gt_names.py` | `names/bucket-<bb>.parquet` | name index over ALL authors (display + alternative names, cleaned with `utils/text.py`): `name_key` (= recommendations' `name_key`), `name_key_short`, `name_norm`, `first_norm` / `last_norm` (OpenAlex has full names only: split like the recommendations), `initials_key`, is_person |
-| A.3 | `batch_gt_demographics.py --stage keys / gender / ethnicity / merge` | `demographics/bucket-<bb>.parquet` (+ `keys/`, `gender/first_names.parquet`, `ethnicity/shard-<ss>.parquet`) | people with ≥ 1 field work: **probabilities only** — p_female (nomquamgender, first name), p_asian … p_other (raceBERT, full name). Both models run **once per distinct name over all buckets** (gender: one process, ~2 min; raceBERT: 40.4M authors → 31.3M names, sorted by length, in 64 shards); `-C DIR` reuses the probabilities of an earlier demographics output by name. Slowest step (CPU) |
-| A.4 | `batch_gt_population.py` | `gt_authors`, `gt_members`, `gt_shares`, `gt_cutoffs` | field shares (`share_<field>`) and membership (`--min_field_share`, default 0 = any work), academic age, seniority, gender / ethnicity labels (`--gender_uncertainty` 0.1, `--ethnicity_min_prob` 0.5), L/M/H bins, top 5 %, GT shares. Cheap: re-run with other thresholds any time |
+| A.3 | `batch_gt_demographics.py --stage keys / gender / race / ethnicity / merge` | `demographics/bucket-<bb>.parquet` (+ `keys/`, `gender/first_names.parquet`, `race/shard-<ss>.parquet`, `ethnicity/shard-<ss>.parquet`) | people with ≥ 1 field work: **probabilities only** — `p_female` (nomquamgender, first name), `p_race_<5 classes>` (raceBERT race model: asian, black, hispanic, white, other; transliterated `first LAST`; CPU) and `p_eth_<13 classes>` (raceBERT ethnicity model; original script, `first_last`; GPU if any). Every model runs **once per distinct name over all buckets** (gender: one process, ~2 min; race / ethnicity: 40.4M authors → 31.3M names, sorted by length, in 64 shards per model); `-C DIRS` reuses earlier probabilities by name (files with the model's columns). Slowest step |
+| A.4 | `batch_gt_population.py` | `gt_authors`, `gt_members`, `gt_shares`, `gt_cutoffs` | field shares (`share_<field>`) and membership (`--min_field_share`, default 0 = any work), academic age, seniority, gender / race / ethnicity labels (`--gender_uncertainty` 0.1, `--race_min_prob` 0.5, `--ethnicity_min_prob` 0.5), L/M/H bins, top 5 %, GT shares. Cheap: re-run with other thresholds any time |
 | A.5 | `batch_gt_coauthorship.py` | `coauthorship/coauthorship_<ids>.parquet` | network among given authors (e.g. the factual recommended ones): edges of the edge list with both ends in the set |
 
 **Memory**: DuckDB takes 80 % of the RAM per process unless limited; every script has bounded defaults
@@ -380,10 +380,12 @@ No script: the notebook aggregates the A.1 / A.4 outputs in DuckDB (`libs/ground
 `cons.GT_STATS_*`; the big tables are never loaded into pandas) and plots with `libs/viz/gt_plots.py`. Aggregated
 tables are cached in `groundtruth/population/<variant>/descriptives/` and recomputed when an A.4 file is newer. Sections: population (funnel,
 scholars per field x seniority, field overlap), academic age with the seniority cut-offs, bibliometrics (per field x
-seniority, by perceived gender, by perceived ethnicity), perceived gender / ethnicity (unknown reasons, p_female and
+seniority, by perceived gender / race / ethnicity), perceived gender / race / ethnicity (unknown reasons, p_female and
 each raceBERT probability with the config thresholds, composition = the parity targets), countries (+ the prompt
-countries), prominence (L / M / H ranges, composition, perceived gender / ethnicity inside each class and the top x %).
-Per field only (no subfield level in the GT). Plots `plots/<variant>/gt_*`.
+countries), prominence (L / M / H ranges, composition, perceived gender / race / ethnicity inside each class and the
+top x %). Ethnicity in the figures: the 8 classes of `viscons.FLOW_SHOWN_CLASSES`, the rest pooled as 'other' (also
+in the flows).
+Per field only (no subfield level in the GT). Plots `plots/<variant>/si/gt_*`.
 
 ### Author matching (step B.6) — `run_matching_pipeline.sh`, `batch_match_candidates.py`, `batch_match_authors.py`
 
@@ -398,16 +400,23 @@ Needs B.3 and A.1 / A.2. Code: `libs/matching/` (the factuality metric is comput
 
 Every analysis decision in one YAML file: valid response / recommendation tags, seniority (reference year,
 junior ≤, senior ≥, single cut-off, definition for matching), minimum field share, perceived gender (cut points on
-p_female + one label per interval, any number of classes), ethnicity minimum probability, prominence bins and top
+p_female + one label per interval, any number of classes), race / ethnicity minimum probability, prominence bins and top
 group, author-matching thresholds (fuzzy, seed, candidate floor). `config/analysis.yaml` (full runs) and
 `config/analysis_smoke.yaml` (smoke tests), created by the wizard; once a file exists it is loaded as it is.
 
 Two phases. **Early** settings are needed to build the ground truth and the matching candidates (seniority, field
 share, L/M/H bins, top percentile, candidate floor); **late** settings are decided after looking at the data and the
-metrics (valid tags, gender / ethnicity thresholds, social settings, Jaro-Winkler thresholds). Until reviewed, the
+metrics (valid tags, gender / race / ethnicity thresholds, social settings, study choices, Jaro-Winkler thresholds). Until reviewed, the
 late settings hold provisional defaults (marked in the YAML): the pipeline runs with them, but the research questions
 (`run_metrics_pipeline.sh -s rq1,rq2`, notebook 4) refuse to run. Reviewing them lists the steps to re-run. The
 Jaro-Winkler thresholds can never go below the early `candidates_floor`.
+
+Study choices (`study:`; figures and RQs only, no metric is recomputed):
+
+| Setting | Values | Effect |
+|---|---|---|
+| `ethnicity_attribute` | `ethnicity` (default) \| `race` \| `both` | every `*_ethnicity` metric of the metric sets → `*_race` (`both`: followed by `*_race`): figures (notebooks 3-5), RQ1 / RQ2 / interactions metric list, RQ3 social axis (`both`: 7 parities). Social metrics and GT plots always cover both |
+| `rq3_ceilings` | `true` \| `false` | RQ3 absolute views: each model's own social maximum marked |
 
 ```bash
 python code/scripts/configure_analysis.py --phase early      # before the GT (config/analysis.yaml)
@@ -431,7 +440,7 @@ duplicates, factuality at 4 levels on the unique valid names). Variant `main` by
 
 Code: `libs/metrics/social.py`. Per response, on the matched authors of its unique valid names: parity (1 − TV to
 the GT target, `config: social.parity_target`), diversity (normalised entropy) and unknown share for gender,
-ethnicity, location, productivity, influence, collaboration; popularity (top group by works / citations; location:
+race (5 classes), ethnicity (13), location, productivity, influence, collaboration; popularity (top group by works / citations; location:
 the top-k countries by GT scholars, `config: social.top_countries`, default 2); connectedness (coauthorship
 components); similarity (PCA cosine); locality (share from the prompted country). `social.include_unknown` (config)
 decides whether 'unknown' is a class. Outputs `metrics/<variant>/social/<model>.parquet` and `social_gaps/<model>.parquet`.
@@ -439,7 +448,8 @@ decides whether 'unknown' is a class. Outputs `metrics/<variant>/social/<model>.
 **Size-adjusted** (every social metric): `<metric>_expected` and `<metric>_adj = observed − expected`, expected = the mean for a random list
 of the same size n from the GT of the requested field × seniority (0 = like random). Expected values: step
 `expected` (`batch_social_expected.py`, `libs/metrics/expected.py`, ~4 min) → `metrics/<variant>/social_expected/`;
-the social step needs it. RQ1 / RQ2 run on raw and adjusted metrics (`--metrics all social_adj`); notebooks 3 and 4:
+the social step needs it. RQ1 / RQ2 / interactions run on raw and adjusted metrics (`--metrics all social_adj`, with the
+`*_ethnicity` metrics as the config's `study.ethnicity_attribute`: 45 metrics, `both` 49; `--study_ethnicity` overrides); notebooks 3 and 4:
 `ADJUSTED = True` plots the adjusted ones (set names → `<name>_adj`, e.g. `paper_adj`); their files end in `_adj`,
 next to the raw ones: `rq1_omega2_paper_bar.pdf` / `rq1_omega2_paper_bar_adj.pdf`, `metrics_paper_models_adj.pdf`.
 
@@ -453,7 +463,7 @@ next to the raw ones: `rq1_omega2_paper_bar.pdf` / `rq1_omega2_paper_bar_adj.pdf
 
 ### Metric figures — `code/notebooks/3_metrics.ipynb`
 
-All notebook plots go to `plots/<VARIANT>/` (smoke: `tmp/smoke/plots/<VARIANT>/`) (set `VARIANT` in the notebook, as for `metrics/<VARIANT>/`).
+All notebook plots go to `plots/<VARIANT>/` (smoke: `tmp/smoke/plots/<VARIANT>/`) (set `VARIANT` in the notebook, as for `metrics/<VARIANT>/`): the paper's main-text figures (`viz/constants.PAPER_MAIN_FIGURES`) at its root, all others in `si/`.
 
 One function for every bar figure: `viz/metric_plots.plot_metric_bars(summary.estimate(configs, rows, metrics), rows,
 metrics)` (`libs/metrics/summary.py`). Rows: `model_rows(models)`, `attribute_rows(['access', 'size', 'reasoning',
@@ -463,7 +473,7 @@ Unit = configuration (response metrics averaged within it). CIs: a model row boo
 row is the mean of its models (models weigh equally) with a hierarchical bootstrap (models, then configurations).
 Bold = best within a group of rows on the displayed (rounded) values.
 
-### Research questions — `batch_rq1.py`, `batch_rq2.py`, `code/notebooks/4_research_questions.ipynb`
+### Research questions — `batch_rq1.py`, `batch_rq2.py`, `batch_interactions.py`, `code/notebooks/4_research_questions.ipynb`
 
 RQ1 (`run_metrics_pipeline.sh -s rq1`, one process per metric): partial ω² (type-II ANOVA) and Shapley R² of the
 model and of every configuration variable on each metric, cluster-bootstrap CIs over models →
@@ -479,9 +489,33 @@ estimated marginal mean and its deviation from the grand mean (weighted effect c
 cluster-bootstrap CIs over models, plus the contrast vs a reference value (`cons.RQ2_REFERENCE_LEVELS`) and R² /
 adjusted R² / ΔR² (LLM) → `metrics/<variant>/rq2/<metric>.parquet`.
 
+Interactions (`run_metrics_pipeline.sh -s interactions`, one process per metric; robustness of the additive RQ1 / RQ2
+model, separate outputs and figures `interactions_*`): two-way blocks added to the RQ1 model one at a time and all at once.
+
+| Setting (`utils/constants.py`) | Default | Meaning |
+|---|---|---|
+| `INTERACTION_VARIABLES` | language, role, location, seniority, k, field | screening: 15 pairs + LLM × each (subfield left out) |
+| `INTERACTION_PRESPECIFIED` | language × location, role × seniority, seniority × k, LLM × k / language / location | Holm family, SESOI flag |
+| `INTERACTION_DECOMPOSITIONS` | size × k, origin × language, origin × location | share of their LLM block |
+| `INTERACTION_ALPHA` | 0.05 | Holm (pre-specified, global) / BY (screening) |
+| `INTERACTION_OMEGA2_MIN` | 0.01 | screening / global: partial ω² ≥ this |
+| `INTERACTION_SESOI` (`_BY_METRIC`) | 0.05 (k_ratio 0.10) | pre-specified: max \|cell deviation\| ≥ this |
+
+Outputs: `metrics/<variant>/interactions/<metric>.parquet` (per block: ΔR², adjusted ΔR², local f², partial ω², max
+\|cell deviation\|, share, bootstrap CIs, p) and `interactions/cells/<metric>.parquet` (observed, additive prediction,
+deviation per cell). Correction and flags at load time (`analysis.interactions.load`, over all metrics); the
+thresholds can be changed in notebook 4 without re-running.
+
+Significance in the heatmaps (RQ1, RQ2, interaction cells): faded = not significant after BY over all rows of the
+loaded results (Wald p from the bootstrap SE; `analysis/multiple_testing.py`; `cons.HEATMAP_CORRECTION`: 'by' | 'bh' |
+'holm' | None = 95% CI includes 0). Computed at load time, no re-run.
+
 RQ3 (no script; notebook only): per model, technical score = validity + (1 − refusals) + (1 − duplicates) + the
-4 factualities, social score = the 6 parities (`cons.RQ3_*_METRICS`), from the configuration table; scatter with
-quadrants split at the model medians (`relative`) or at half of each axis maximum (`absolute`).
+4 factualities, social score = the 6 parities of the study attribute (`cons.RQ3_*_METRICS`), from the configuration table; scatter with
+quadrants split at the model medians (`relative`) or absolutely (`absolute`: 1/2 per raw metric, 0 = random recommender
+per adjusted one). Axes (absolute): the attainable range of the models; an adjusted metric spans [−E, 1 − E]
+(E = `<metric>_expected`, mean over the model's configurations), so ΣE sets the floor and n − ΣE the ceiling.
+`study.rq3_ceilings` (config; notebook `RQ3_CEILINGS` overrides): each model's own ceiling marked.
 
 ### Tests
 

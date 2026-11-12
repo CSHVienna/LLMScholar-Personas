@@ -14,8 +14,9 @@ Flow figures (appendix): who is recommended, by prompt variable or model charact
     plot_drift(people, drift)     prompt location -> the people's country: (a) heatmap of the country shares per
                                   prompted location, the prompt's own country outlined; (b) share from the prompt's
                                   country vs the baseline (other locations prompted), with CIs over models
-Colours: gender diverging (blue - grey - red, in the label order of the config), ethnicity / country categorical in a
-fixed, colour-vision-checked order ('other' grey), prominence classes sequential; source nodes in the prompt family
+Colours: gender diverging (blue - grey - red, in the label order of the config), race / ethnicity / country categorical
+in a fixed, colour-vision-checked order ('other' grey; ethnicity: the 8 classes of viscons.FLOW_SHOWN_CLASSES, the
+rest pooled as 'other'), prominence classes sequential; source nodes in the prompt family
 colour (persona orange, context blue) or grey (model characteristics). 'unknown' is left out unless included.
 """
 
@@ -33,7 +34,7 @@ from utils import constants as cons
 from viz import constants as viscons
 from viz.metric_plots import text_size
 
-TARGET_TITLES = {'gender': 'perceived gender', 'ethnicity': 'perceived ethnicity', 'country': 'country (latest affiliation)',
+TARGET_TITLES = {'gender': 'perceived gender', 'race': 'perceived race', 'ethnicity': 'perceived ethnicity', 'country': 'country (latest affiliation)',
                  fl.AUTHOR_SENIORITY: 'seniority', 'productivity': 'productivity', 'influence': 'influence',
                  'collaboration': 'collaboration'}
 SENIORITY_ORDER = [cons.SENIORITY_JUNIOR, 'mid', cons.SENIORITY_SENIOR]
@@ -87,12 +88,15 @@ def target_order_colors(target: str, classes: Sequence[str], gender_labels: Opti
         order = [c for c in scheme if c in rest] + sorted(set(rest) - set(scheme))
         full = _ramp(viscons.FLOW_SEQUENTIAL, len(scheme))
         colors = {c: full[scheme.index(c)] if c in scheme else viscons.FLOW_OTHER_COLOR for c in order}
-    else:
-        if target == 'ethnicity':
-            order = [c for c in fl.ETHNICITY_ORDER if c in rest] + sorted(set(rest) - set(fl.ETHNICITY_ORDER))
-        else:   # countries: the prompt countries first (design order: the same colour in every figure), then by share
-            prompt = prompt_countries()
-            order = [c for c in prompt if c in rest] + [c for c in rest if c not in prompt]
+    elif target in ('race', 'ethnicity'):   # fixed slot per class (the same colour in every figure)
+        scheme = fl.RACE_ORDER if target == 'race' else viscons.FLOW_SHOWN_CLASSES['ethnicity']
+        order = [c for c in scheme if c in rest] + sorted(set(rest) - set(scheme))
+        palette = viscons.FLOW_CATEGORICAL
+        colors = {c: palette[scheme.index(c)] if c in scheme and scheme.index(c) < len(palette)
+                  else viscons.FLOW_OTHER_COLOR for c in order}
+    else:   # countries: the prompt countries first (design order: the same colour in every figure), then by share
+        prompt = prompt_countries()
+        order = [c for c in prompt if c in rest] + [c for c in rest if c not in prompt]
         palette = viscons.FLOW_CATEGORICAL
         # consecutive slots of the validated order (neighbours stay distinguishable); the prompt countries are kept in
         # every country table (prompt_countries()), so they take the first slots: the same colour in every figure
@@ -111,17 +115,32 @@ def prompt_countries() -> List[str]:
     return [fl.LOCATION_COUNTRY[l] for l in map(str, cons.VARIABLE_VALUES[cons.VAR_LOCATION]) if l in fl.LOCATION_COUNTRY]
 
 
-def country_table(people: pd.DataFrame, source: str, target: str, include_unknown: bool) -> pd.DataFrame:
-    """flow_table with the top countries pooled (prompt countries always kept); other targets unchanged."""
-    if target != 'country':
-        return fl.flow_table(people, source, target, include_unknown)
-    return fl.flow_table(people, source, target, include_unknown, viscons.FLOW_TOP_COUNTRIES, keep=prompt_countries())
+def pool_shown(values: pd.Series, target: str) -> pd.Series:
+    """Classes outside viscons.FLOW_SHOWN_CLASSES[target] (e.g. the smaller ethnicities) pooled as 'other'."""
+    shown = viscons.FLOW_SHOWN_CLASSES.get(target)
+    if not shown:
+        return values
+    return values.where(values.isin(set(shown) | {fl.OTHER, fl.UNKNOWN}), fl.OTHER)
+
+
+def display_table(people: pd.DataFrame, source: str, target: str, include_unknown: bool) -> pd.DataFrame:
+    """flow_table as shown: the top countries pooled (prompt countries always kept), the classes outside
+    viscons.FLOW_SHOWN_CLASSES pooled as 'other' (ethnicity); other targets unchanged."""
+    if target == 'country':
+        return fl.flow_table(people, source, target, include_unknown, viscons.FLOW_TOP_COUNTRIES,
+                             keep=prompt_countries())
+    if target in viscons.FLOW_SHOWN_CLASSES:
+        people = people.assign(**{target: pool_shown(people[target].astype(str), target)})
+    return fl.flow_table(people, source, target, include_unknown)
 
 
 def class_label(target: str, value: str) -> str:
+    """'east_asian' -> 'East asian'; countries and bins as they are."""
     if value in (fl.OTHER, fl.UNKNOWN):
         return value.capitalize()
-    return value if target in ('country', 'productivity', 'influence', 'collaboration') else value.capitalize()
+    if target in ('country', 'productivity', 'influence', 'collaboration'):
+        return value
+    return value.replace('_', ' ').capitalize()
 
 
 # --- one panel ---------------------------------------------------------------------------------------------------
@@ -254,7 +273,7 @@ def plot_flows(people: pd.DataFrame, pairs: Sequence[Tuple[str, str]], include_u
     """A row (or grid) of flow panels, one per (source, target)."""
     ncols = ncols or min(len(pairs), 3)
     nrows = int(np.ceil(len(pairs) / ncols))
-    tables = [country_table(people, s, t, include_unknown)
+    tables = [display_table(people, s, t, include_unknown)
               for s, t in pairs]
     n_nodes = [max(t['source'].nunique(), t['target'].nunique()) for t in tables]
     rows_in = [max(n_nodes[r * ncols:(r + 1) * ncols]) * viscons.FLOW_ROW_IN * 1.6 + 0.45 for r in range(nrows)]
@@ -331,8 +350,8 @@ def plot_drift(people: pd.DataFrame, drift: pd.DataFrame, top: int = viscons.FLO
     if 'share_ci_low' in d:
         bx.errorbar(d['share'], ys, xerr=[(d['share'] - d['share_ci_low']).clip(lower=0),
                                          (d['share_ci_high'] - d['share']).clip(lower=0)],
-                    fmt='none', ecolor=viscons.METRIC_CI_COLOR, elinewidth=viscons.RQ_CI_LINEWIDTH,
-                    capsize=viscons.RQ_CI_CAPSIZE, capthick=viscons.RQ_CI_LINEWIDTH, zorder=2)
+                    fmt='none', ecolor=viscons.CI_COLOR, elinewidth=viscons.CI_LINEWIDTH,
+                    capsize=viscons.CI_CAPSIZE, capthick=viscons.CI_CAPTHICK, zorder=2)
         high = d[['share', 'share_ci_high']].max(axis=1)
     bx.scatter(d['share'], ys, color=viscons.FAMILY_COLORS['persona'], s=18, zorder=3, label='this location prompted')
     x_max = max(0.05, float(np.nanmax(high.to_numpy())) * 1.22)
@@ -373,7 +392,7 @@ def plot_flow_grid(people: pd.DataFrame, source: Optional[str] = None, target: O
     ncols = min(ncols, len(pairs))
     nrows = int(np.ceil(len(pairs) / ncols))
     width = width or viscons.PAPER_TEXT_WIDTH_IN          # always the paper text width (A4)
-    tables = [country_table(people, s, t, include_unknown)
+    tables = [display_table(people, s, t, include_unknown)
               for s, t in pairs]
     mentions = {s: people[s].astype(str).value_counts() for s, _ in pairs}       # n = all mentions (also unknown)
     n_nodes = [max(t['source'].nunique(), t['target'].nunique()) for t in tables]

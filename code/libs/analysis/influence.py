@@ -24,6 +24,7 @@ from typing import Dict, List, Sequence
 
 import numpy as np
 import pandas as pd
+import scipy.sparse as sp
 
 from utils import constants as cons
 
@@ -58,9 +59,28 @@ def nested_contrasts(values: pd.Series, parents: pd.Series) -> np.ndarray:
 def residual_ss(y: np.ndarray, blocks: Sequence[np.ndarray]) -> float:
     """Residual sum of squares of y on an intercept + the given dummy blocks (direct least squares)."""
     X = np.column_stack([np.ones(len(y)), *blocks]) if blocks else np.ones((len(y), 1))
-    beta, *_ = np.linalg.lstsq(X, y, rcond=None)
+    beta = lstsq(X, y)
     residual = y - X @ beta
     return float(residual @ residual)
+
+
+def lstsq(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Least-squares solution (minimum norm): numpy's SVD solver, or LAPACK gelsy (QR) in the rare case where the SVD
+    does not converge (near-singular designs of some bootstrap replicates; same solution, residual ~1e-12)."""
+    try:
+        return np.linalg.lstsq(a, b, rcond=None)[0]
+    except np.linalg.LinAlgError:
+        import scipy.linalg
+        return scipy.linalg.lstsq(a, b, lapack_driver='gelsy')[0]
+
+
+def matrix_rank(G: np.ndarray) -> int:
+    """Rank of a symmetric positive semi-definite matrix (SVD; eigenvalues if the SVD does not converge)."""
+    try:
+        return int(np.linalg.matrix_rank(G))
+    except np.linalg.LinAlgError:
+        w = np.linalg.eigvalsh(G)
+        return int((w > w.max() * G.shape[0] * np.finfo(float).eps).sum()) if len(w) else 0
 
 
 class Gram:
@@ -68,25 +88,39 @@ class Gram:
     a small solve, RSS(S) = y'y - c_S' G_SS^+ c_S (same result as fitting the subset; 128 subsets cost ~1 fit)."""
 
     def __init__(self, y: np.ndarray, blocks: Dict[str, np.ndarray]):
-        X = np.column_stack([np.ones(len(y)), *blocks.values()])
-        self.G, self.c, self.yy = X.T @ X, X.T @ y, float(y @ y)
+        if any(sp.issparse(b) for b in blocks.values()):     # sparse blocks (interaction dummies): sparse products
+            X = sp.hstack([sp.csr_matrix(np.ones((len(y), 1))), *map(sp.csr_matrix, blocks.values())]).tocsr()
+            self.G, self.c = (X.T @ X).toarray(), np.asarray(X.T @ y).ravel()
+        else:
+            X = np.column_stack([np.ones(len(y)), *blocks.values()])
+            self.G, self.c = X.T @ X, X.T @ y
+        self.yy = float(y @ y)
         self.columns, start = {}, 1
         for factor, block in blocks.items():
             self.columns[factor] = list(range(start, start + block.shape[1]))
             start += block.shape[1]
 
     def _sub(self, factors: Sequence[str]):
-        idx = [0] + [c for f in factors for c in self.columns[f]]
+        idx = self.indices(factors)
         return self.G[np.ix_(idx, idx)], self.c[idx]
+
+    def indices(self, factors: Sequence[str]) -> List[int]:
+        """Design columns of [intercept, factors] (in this order)."""
+        return [0] + [c for f in factors for c in self.columns[f]]
+
+    def coefficients(self, factors: Sequence[str]) -> np.ndarray:
+        """Least-squares coefficients on [intercept, factors] (minimum norm if the design is rank deficient)."""
+        G, c = self._sub(factors)
+        return lstsq(G, c)
 
     def rss(self, factors: Sequence[str]) -> float:
         G, c = self._sub(factors)
-        beta, *_ = np.linalg.lstsq(G, c, rcond=None)
+        beta = lstsq(G, c)
         return max(self.yy - float(c @ beta), 0.0)
 
     def rank(self, factors: Sequence[str]) -> int:
         """Rank of the design (intercept + factors): dependent dummy columns (empty cells, unbalanced data) don't count."""
-        return int(np.linalg.matrix_rank(self._sub(factors)[0]))
+        return matrix_rank(self._sub(factors)[0])
 
 
 def _prepare(df: pd.DataFrame, metric: str, factors: Sequence[str]):

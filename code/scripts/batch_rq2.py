@@ -21,7 +21,7 @@ from pathlib import Path
 
 from analysis import deviations as dv
 from analysis import influence as inf
-from batch_rq1 import metric_keys
+from batch_rq1 import add_study_arguments, metric_keys, parse_study_args
 from groundtruth.authorships import check_params
 from metrics import summary
 from utils import batch
@@ -54,13 +54,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--seed', type=int, default=cons.DEFAULT_SEED)
     parser.add_argument('--output_dir', default=None, help='Default: <metrics_dir>/rq2')
     parser.add_argument('--list_metrics', action='store_true', help='Print the metric keys of --metrics and exit')
+    add_study_arguments(parser)
     parser.add_argument('--overwrite', action='store_true', help='Recompute existing outputs')
     logs.add_log_arguments(parser)
     return parser
 
 
 def main() -> None:
-    args = build_parser().parse_args()
+    args = parse_study_args(build_parser())
     keys = metric_keys(args.metrics)
     if args.list_metrics:
         print(' '.join(keys))

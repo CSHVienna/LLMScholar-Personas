@@ -5,23 +5,24 @@ RQ1 (results of batch_rq1.py; measure = 'omega2' or 'shapley_r2'):
     plot_rq1          bars: rows = the model and the configuration variables (grouped model / persona / context, in
                       their colours), columns = metrics, bars with cluster-bootstrap CIs; bold = largest of its group
     plot_rq1_heatmap  heatmap: the same rows (persona, context, model), columns grouped TECHNICAL / SOCIAL with
-                      subgroup brackets; one colour ramp per row family on a shared scale; a value whose CI includes 0
-                      is faded; with Shapley R^2 a Residual row (1 - R^2): every column then sums to 1
+                      subgroup brackets; one colour ramp per row family on a shared scale; a value not significant
+                      after the correction (cons.HEATMAP_CORRECTION, default BY; one-sided) is faded; with Shapley R^2 a Residual row (1 - R^2): every column then sums to 1
     plot_rq1_figure   either of them (kind = 'bars' | 'heatmap'); file name: rq1_figure_name()
 
-RQ2 (results of batch_rq2.py; value = 'deviation' from the grand mean or 'emm', the estimated marginal mean):
-    plot_rq2          bars: rows = the values of every configuration variable (grouped by variable, persona orange /
-                      context blue), columns = metrics; deviations are signed bars around 0
-    plot_rq2_forest   forest plot: one dot + CI per value, one panel per metric; value 'contrast' (vs the reference
-                      value, named in the variable's header; a subfield vs the reference of its field) or 'deviation';
-                      R^2, adjusted R^2 and Delta R^2 (LLM) in each panel
+RQ2 (results of batch_rq2.py; notebook 4: raw technical + factuality as EMM bars, size-adjusted social as EMM dots):
+    plot_rq2          bars of the estimated marginal mean (EMM): rows = the values of every configuration variable
+                      (grouped by variable, persona orange / context blue), columns = metrics; raw metrics from 0
+    plot_rq2_forest   forest plot: one dot + CI per value, one panel per metric; value 'emm' (size-adjusted: signed
+                      axis, 0 = as a random recommender), 'contrast' (vs the reference value, named in the variable's
+                      header; a subfield vs the reference of its field) or 'deviation'; R^2, adjusted R^2 and
+                      Delta R^2 (LLM) in each panel
     plot_rq2_heatmap  heatmap of the deviations: green = better than the grand mean, red = worse (the metric's
-                      direction), grey = metrics without a better direction; colour scaled per metric; faded = CI
-                      includes 0; file names: rq2_figure_name()
+                      direction), grey = metrics without a better direction; colour scaled per metric; faded = not
+                      significant after the correction (cons.HEATMAP_CORRECTION, default BY); file names: rq2_figure_name()
 
 RQ3 (analysis/tradeoff.model_scores of the configuration table):
     plot_rq3          scatter technical vs social score per model, quadrants Q1-Q4 (relative: medians of the models;
-                      absolute: half of each axis maximum); file name: rq3_figure_name()
+                      absolute: middle of a raw axis, 0 = random recommender on an adjusted one; axes = attainable range); file name: rq3_figure_name()
 """
 
 from dataclasses import replace
@@ -31,9 +32,10 @@ from typing import List, Optional, Sequence, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.colors import LinearSegmentedColormap, Normalize
+from matplotlib.colors import LinearSegmentedColormap, Normalize, to_rgb
 from matplotlib.patches import Rectangle
 
+from analysis import multiple_testing as mt
 from analysis.influence import MODEL_FACTOR
 from metrics import summary
 from utils import constants as cons
@@ -54,11 +56,18 @@ def load_rq(folder: Path | str, rq: str = 'rq1') -> pd.DataFrame:
 
 
 def load_rq1(folder: Path | str) -> pd.DataFrame:
-    return load_rq(folder, 'rq1')
+    """RQ1 results with p-values (one-sided Wald, > 0) and their corrections over all variables x metrics:
+    p_omega2[_holm|_bh|_by], p_shapley_r2[...] (analysis/multiple_testing.py)."""
+    results = load_rq(folder, 'rq1')
+    for measure in RQ1_MEASURES:
+        results = mt.add_p_values(results, measure, 'greater')
+    return results
 
 
 def load_rq2(folder: Path | str) -> pd.DataFrame:
-    return load_rq(folder, 'rq2')
+    """RQ2 results with p-values of the deviations (two-sided Wald) and their corrections over all values x metrics:
+    p_deviation[_holm|_bh|_by]."""
+    return mt.add_p_values(load_rq(folder, 'rq2'), 'deviation', 'two')
 
 
 def rq1_rows(variables: Sequence[str], order: Sequence[str] = RQ1_ROW_ORDER) -> List[summary.RowGroup]:
@@ -79,7 +88,12 @@ def rq1_metric_keys(results: pd.DataFrame, metrics: Optional[str | Sequence[str]
     if metrics is None:
         return [k for k in available if not k.endswith(summary.ADJ_SUFFIX)]
     wanted = [m.key for m in summary.select_metrics(metrics)]
-    return [k for k in wanted if k in available]
+    keys = [k for k in wanted if k in available]
+    if not keys:
+        raise ValueError(f"No results for the metrics {metrics!r} ({', '.join(wanted)}); results exist for: "
+                         f"{', '.join(available)}. Size-adjusted (_adj) metrics need the expected + social steps, then "
+                         f"the RQ step again (or set ADJUSTED = False in the notebook)")
+    return keys
 
 
 def rq1_bars(results: pd.DataFrame, measure: str = 'omega2', metrics: Optional[str | Sequence[str]] = None
@@ -100,7 +114,6 @@ def plot_rq1(results: pd.DataFrame, measure: str = 'omega2', metrics: Optional[S
              title: Optional[str] = None) -> plt.Figure:
     table, rows, columns = rq1_bars(results, measure, metrics)
     return plot_metric_bars(table, rows, columns, title=title or f"RQ1: {RQ1_MEASURES[measure]} per metric", arrows=False,
-                            ci_linewidth=viscons.RQ_CI_LINEWIDTH, ci_capsize=viscons.RQ_CI_CAPSIZE,
                             tick_size=viscons.RQ_TICK_SIZE)
 
 
@@ -117,12 +130,14 @@ def plot_rq1_figure(results: pd.DataFrame, kind: str = 'heatmap', measure: str =
 def plot_rq1_heatmap(results: pd.DataFrame, measure: str = 'shapley_r2', metrics: Optional[Sequence[str]] = None,
                      residual: Optional[bool] = None, vmax: Optional[float] = None,
                      title: Optional[str] = None, width: Optional[float] = None,
-                     fit_row: Optional[str] = 'auto') -> plt.Figure:
+                     fit_row: Optional[str] = 'auto', correction: Optional[str] = cons.HEATMAP_CORRECTION,
+                     alpha: float = cons.HEATMAP_ALPHA) -> plt.Figure:
     """Heatmap of RQ1 (see module docstring). fit_row, the short row under the grid: 'residual' (1 - R^2: with
     Shapley R^2 every column then sums to 1), 'r2' (the model's R^2: partial omega^2 values are not shares of a total,
     so a residual would not complete them), 'auto' (residual for Shapley R^2, R^2 for omega^2) or None. residual=
     True / False (older argument) = 'residual' / None. The layout (HeatmapFrame) fits `width` (default
-    viscons.HEATMAP_WIDTH_IN, the A4 text width) by narrowing the cells."""
+    viscons.HEATMAP_WIDTH_IN, the A4 text width) by narrowing the cells. Faded = not significant: adjusted p >= alpha
+    (correction over ALL rows of `results`, i.e. every variable x metric loaded; None: the 95% CI includes 0)."""
     if residual is not None:
         fit_row = 'residual' if residual else None
     if fit_row == 'auto':
@@ -135,7 +150,8 @@ def plot_rq1_heatmap(results: pd.DataFrame, measure: str = 'shapley_r2', metrics
     columns = [summary.METRICS[k] for k in keys]
     rows = rq1_rows(list(dict.fromkeys(results['variable'])))
     value = results.pivot(index='variable', columns='metric', values=measure)
-    low = results.pivot(index='variable', columns='metric', values=f"{measure}_ci_low")
+    low = results.assign(_sig=mt.significant(results, measure, correction, alpha, 'greater')).pivot(
+        index='variable', columns='metric', values='_sig')                  # True = significant
     r2 = results.groupby('metric')['r2_full'].first()
     vmax = vmax or max(0.05, float(np.nanmax(value[keys].clip(lower=0).to_numpy())))
     norm = Normalize(0, vmax)
@@ -150,11 +166,11 @@ def plot_rq1_heatmap(results: pd.DataFrame, measure: str = 'shapley_r2', metrics
         for variable, label, yy in zip(group.levels, group.labels, ys):
             for metric, xx in zip(columns, frame.xs):
                 v = value.at[variable, metric.key] if variable in value.index and metric.key in value.columns else np.nan
-                ci_low = low.at[variable, metric.key] if variable in low.index and metric.key in low.columns else np.nan
+                sig = bool(low.at[variable, metric.key]) if variable in low.index and metric.key in low.columns else False
                 shown = 0.0 if np.isfinite(v) and -0.005 < v < 0 else v
                 color = cmaps[family](norm(max(shown, 0))) if np.isfinite(shown) else '#ffffff'
                 frame.cell(xx, yy, color)
-                faded = not np.isfinite(ci_low) or ci_low <= 0
+                faded = not sig
                 text_color = viscons.RQ1_HEATMAP_FADED_TEXT if faded else ('white' if norm(shown) > 0.55 else '#1f1f1f')
                 frame.value(xx, yy, '–' if not np.isfinite(shown) else f"{shown:.2f}", text_color)
             ax.text(-frame.pad * frame.ux, yy + 0.5, label, ha='right', va='center_baseline', fontweight='bold',
@@ -338,29 +354,35 @@ def _colorbars(frame: 'HeatmapFrame', cmaps, norm: Normalize, rows: Sequence[sum
             bar.set_label(label, fontsize='x-small', labelpad=2)
 
 
-def rq_figure_name(rq: int, kind: str, measure: str, metrics: Optional[str | Sequence[str]] = None) -> str:
-    """File name of an RQ figure: rq<rq>_<measure>_<metrics>_<kind>[_adj], metrics = 'all' / a column set / keys joined
-    by '-', kind = 'heatmap' | 'bar' ('bars' accepted) | 'forest'; size-adjusted metrics: _adj at the end (e.g.
-    rq1_omega2_paper_bar and rq1_omega2_paper_bar_adj, rq2_deviation_all_heatmap)."""
-    selection, adjusted = summary.split_adjusted(metrics)
+def rq_figure_name(rq: int, kind: str, measure: str, metrics: Optional[str | Sequence[str]] = None,
+                   exclude: Optional[str | Sequence[str]] = None) -> str:
+    """File name of an RQ figure: rq<rq>_<measure>_<metrics>_<kind>[_adj], metrics = 'all' / the selection items joined
+    by '-' (+ '-no-<excluded>'), kind = 'heatmap' | 'bar' ('bars' accepted) | 'forest'; size-adjusted metrics: _adj at
+    the end (e.g. rq1_omega2_paper_bar and rq1_omega2_paper_bar_adj, rq2_emm_technical-factuality_bar)."""
+    selection, adjusted = summary.split_adjusted(metrics, exclude)
     kind = 'bar' if kind == 'bars' else kind
     return f"rq{rq}_{measure}_{selection}_{kind}" + (summary.ADJ_SUFFIX if adjusted else '')
 
 
-def rq1_figure_name(kind: str, measure: str, metrics: Optional[str | Sequence[str]] = None) -> str:
+def rq1_figure_name(kind: str, measure: str, metrics: Optional[str | Sequence[str]] = None,
+                    exclude: Optional[str | Sequence[str]] = None) -> str:
     """rq1_<measure>_<metrics>_<kind> (see rq_figure_name; e.g. rq1_omega2_technical_heatmap)."""
-    return rq_figure_name(1, kind, measure, metrics)
+    return rq_figure_name(1, kind, measure, metrics, exclude)
 
 
 # --- RQ3: socio-technical trade-off ------------------------------------------------------------------------------
 def plot_rq3(scores: pd.DataFrame, mode: str = 'relative', pareto: bool = False,
              technical: Sequence[str] = tuple(cons.RQ3_TECHNICAL_METRICS),
              social: Sequence[str] = tuple(cons.RQ3_SOCIAL_METRICS), title: Optional[str] = None,
-             grid: bool = False, labels_in_quadrant: bool = viscons.RQ3_LABELS_IN_QUADRANT) -> plt.Figure:
+             grid: bool = False, labels_in_quadrant: bool = viscons.RQ3_LABELS_IN_QUADRANT,
+             ceilings: bool = False) -> plt.Figure:
     """Scatter of tradeoff.model_scores: x = technical score, y = social score, one labelled point per model coloured
     by its quadrant (its name too); Pearson correlation of the two scores in the corner. mode 'relative': split at the
     medians of the models, axes zoomed on the data; 'absolute': split at the middle of each axis' possible range,
-    axes over that range (raw: 0 to the maximum; size-adjusted: -max to max, split at 0). pareto: dotted line through the Pareto front; grid: background grid (default off: only the split lines).
+    axes over the attainable range of the models (tradeoff.axis_range; raw: 0 to the number of metrics, split at the
+    middle; size-adjusted: from the expected values, split at 0 = random recommender). pareto: dotted line through the
+    Pareto front; grid: background grid (default off: only the split lines); ceilings (absolute only): each model's
+    own social maximum (it differs through n), a dotted line from the point up to a short tick.
 
     Labels: deterministic greedy placement in pixels (_place_labels): each label takes the nearest free spot around
     its point, clear of every point, every placed label and the correlation box; labels_in_quadrant keeps it inside
@@ -387,6 +409,8 @@ def plot_rq3(scores: pd.DataFrame, mode: str = 'relative', pareto: bool = False,
     if mode == 'absolute':
         ax.set_xlim(*tradeoff.axis_range(scores, 'technical'))
         ax.set_ylim(*tradeoff.axis_range(scores, 'social'))
+        if ceilings:
+            _draw_ceilings(ax, scores, colors)
     else:   # room around the data for the labels of the outer points (labels stay inside the axes)
         for axis, column, (low_pad, high_pad) in ((ax.set_xlim, 'technical', viscons.RQ3_PAD_X),
                                                   (ax.set_ylim, 'social', viscons.RQ3_PAD_Y)):
@@ -412,7 +436,7 @@ def plot_rq3(scores: pd.DataFrame, mode: str = 'relative', pareto: bool = False,
         ax.spines[side].set_visible(False)
     ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1.0), ncol=4, frameon=False, fontsize='x-small',
               handletextpad=0.1, columnspacing=1.2, borderaxespad=0.2)
-    split = 'medians of the models' if mode == 'relative' else 'half of the maximum'
+    split = 'medians of the models' if mode == 'relative' else 'middle of the range / random recommender'
     ax.set_title(title or f"RQ3: socio-technical trade-off (split: {split})", pad=16)   # PNG only (save_figure)
     fig.tight_layout()   # final layout BEFORE placing: a later re-layout would move points under fixed-size labels
     labels = model_labels(scores[cons.COL_MODEL])
@@ -424,12 +448,13 @@ def plot_rq3(scores: pd.DataFrame, mode: str = 'relative', pareto: bool = False,
 def plot_rq3_inset(scores: pd.DataFrame, pareto: bool = False,
                    technical: Sequence[str] = tuple(cons.RQ3_TECHNICAL_METRICS),
                    social: Sequence[str] = tuple(cons.RQ3_SOCIAL_METRICS), title: Optional[str] = None,
-                   grid: bool = False, color_by: Optional[str] = None) -> plt.Figure:
-    """The absolute view (axes from 0 to the maximum, quadrants split at half of each axis maximum; points without
+                   grid: bool = False, color_by: Optional[str] = None, ceilings: bool = False) -> plt.Figure:
+    """The absolute view (axes over the attainable range, quadrants split as in plot_rq3; points without
     labels) with a zoomed inset on the models, where the labels are (placed as in plot_rq3). The inset sits in the
     empty part of the axes (viscons.RQ3_INSET_BOUNDS); a light shaded frame in the inset's colour marks the zoomed
     area, joined to the inset by two thin connectors, with the legend of the quadrants that occur under it. color_by: a model characteristic (summary.MODEL_ATTRIBUTES: 'access', 'reasoning', 'size', 'origin') for the
-    points and labels of the inset, with their own legend (the overview keeps the quadrant colours); None: quadrants."""
+    points and labels of the inset, with their own legend (the overview keeps the quadrant colours); None: quadrants.
+    ceilings: each model's own social maximum in the overview (as plot_rq3)."""
     from scipy.stats import pearsonr
     from analysis import tradeoff
     from viz.labels import model_labels
@@ -459,6 +484,8 @@ def plot_rq3_inset(scores: pd.DataFrame, pareto: bool = False,
     draw(ax, viscons.RQ3_INSET_OVERVIEW_MARKER_SIZE, legend=True)
     ax.set_xlim(*tradeoff.axis_range(scores, 'technical'))
     ax.set_ylim(*tradeoff.axis_range(scores, 'social'))
+    if ceilings:
+        _draw_ceilings(ax, scores, colors)
     ax.set_xlabel(f"Technical: {tradeoff.axis_label(technical)}", fontsize='small')
     ax.set_ylabel(f"Social: {tradeoff.axis_label(social)}", fontsize='small')
     for side in ('top', 'right'):
@@ -468,7 +495,7 @@ def plot_rq3_inset(scores: pd.DataFrame, pareto: bool = False,
         ax.text(0.012, 0.02, f"Pearson $\\rho$ = {r:.2f} ({_stars(p)})", transform=ax.transAxes, ha='left',
                 va='bottom', fontsize='x-small', color=viscons.METRIC_ROW_LABEL_COLOR, zorder=5,
                 bbox={'facecolor': 'white', 'edgecolor': 'none', 'alpha': 0.8, 'pad': 1.2})
-    ax.set_title(title or "RQ3: socio-technical trade-off (split: half of the maximum; inset: zoom on the models)",
+    ax.set_title(title or "RQ3: socio-technical trade-off (absolute split; inset: zoom on the models)",
                  pad=16)   # PNG only (save_figure)
     fig.tight_layout()
 
@@ -525,6 +552,17 @@ def plot_rq3_inset(scores: pd.DataFrame, pareto: bool = False,
     _label_points(inset, [labels[m] for m in scores[cons.COL_MODEL]], xs, ys, inset_colors, (split_x, split_y),
                   legends, in_quadrant=False)
     return fig
+
+
+def _draw_ceilings(ax: plt.Axes, scores: pd.DataFrame, colors: Sequence[str]) -> None:
+    """Each model's own social maximum: a dotted line from its point up to a short tick (call after the limits)."""
+    x0, x1 = ax.get_xlim()
+    half = viscons.RQ3_CEILING_TICK * (x1 - x0)
+    for x, y, top, color in zip(scores['technical'], scores['social'], scores['social_max'], colors):
+        if not (np.isfinite(x) and np.isfinite(y) and np.isfinite(top)):
+            continue
+        ax.plot([x, x], [y, top], color=color, zorder=2, **viscons.RQ3_CEILING_LINE)
+        ax.plot([x - half, x + half], [top, top], color=color, zorder=2, linewidth=0.8)
 
 
 def _stars(p: float) -> str:
@@ -698,11 +736,15 @@ def rq2_bars(results: pd.DataFrame, value: str = 'deviation', metrics: Optional[
     return table, rows, columns
 
 
-def plot_rq2(results: pd.DataFrame, value: str = 'deviation', metrics: Optional[str | Sequence[str]] = None,
+def plot_rq2(results: pd.DataFrame, metrics: Optional[str | Sequence[str]] = None,
              variables: Optional[Sequence[str]] = None, title: Optional[str] = None) -> plt.Figure:
-    table, rows, columns = rq2_bars(results, value, metrics, variables)
-    return plot_metric_bars(table, rows, columns, title=title or f"RQ2: {RQ2_VALUES[value]} per value",
-                            ci_linewidth=viscons.RQ_CI_LINEWIDTH, ci_capsize=viscons.RQ_CI_CAPSIZE,
+    """Bars of the estimated marginal mean (EMM) per value: the LEVEL of the metric (differences: plot_rq2_forest).
+    Raw metrics on their scale; size-adjusted ones signed around 0 = as a random recommender of the same n."""
+    if isinstance(metrics, str) and metrics in RQ2_VALUES:
+        raise TypeError("plot_rq2 draws the EMM only; its second argument is now `metrics` (differences: "
+                        "plot_rq2_forest)")
+    table, rows, columns = rq2_bars(results, 'emm', metrics, variables)
+    return plot_metric_bars(table, rows, columns, title=title or f"RQ2: {RQ2_VALUES['emm']} per value",
                             tick_size=viscons.RQ_TICK_SIZE)
 
 
@@ -718,14 +760,17 @@ def _short_signed(v: float) -> str:
 
 def plot_rq2_heatmap(results: pd.DataFrame, metrics: Optional[str | Sequence[str]] = None,
                      variables: Optional[Sequence[str]] = None, title: Optional[str] = None,
-                     width: Optional[float] = None) -> plt.Figure:
+                     width: Optional[float] = None, correction: Optional[str] = cons.HEATMAP_CORRECTION,
+                     alpha: float = cons.HEATMAP_ALPHA) -> plt.Figure:
     """Heatmap of the RQ2 deviations (see module docstring), in the RQ1 heatmap frame: family bands, then the variable
-    titles (bold, right-aligned) and their values (left-aligned)."""
+    titles (bold, right-aligned) and their values (left-aligned). Faded = not significant: adjusted p >= alpha
+    (two-sided; correction over ALL rows of `results`; None: the 95% CI includes 0)."""
     from matplotlib.patches import Patch
     keys = rq1_metric_keys(results, metrics)
     columns = [summary.METRICS[k] for k in keys]
     rows = rq2_rows(results, variables)
-    index = results.set_index(['variable', 'level', 'metric'])
+    index = results.assign(_sig=mt.significant(results, 'deviation', correction, alpha, 'two').astype(float)) \
+        .set_index(['variable', 'level', 'metric'])
     better = LinearSegmentedColormap.from_list('better', ['#ffffff', viscons.RQ2_HEATMAP_BETTER])
     worse = LinearSegmentedColormap.from_list('worse', ['#ffffff', viscons.RQ2_HEATMAP_WORSE])
     neutral = LinearSegmentedColormap.from_list('neutral', ['#ffffff', viscons.RQ2_HEATMAP_NEUTRAL])
@@ -758,7 +803,7 @@ def plot_rq2_heatmap(results: pd.DataFrame, metrics: Optional[str | Sequence[str
             for level, label, yy in zip(group.levels, group.labels, group_ys):
                 for metric, xx in zip(columns, frame.xs):
                     v = cell(group.column, level, metric.key, 'deviation')
-                    lo, hi = (cell(group.column, level, metric.key, f"deviation_{s}") for s in ('ci_low', 'ci_high'))
+                    sig = cell(group.column, level, metric.key, '_sig') == 1
                     if not np.isfinite(v):
                         color, strength = '#ffffff', 0.0
                     else:
@@ -767,7 +812,7 @@ def plot_rq2_heatmap(results: pd.DataFrame, metrics: Optional[str | Sequence[str
                             better if v * metric.direction > 0 else worse
                         color = cmap(0.85 * strength)
                     frame.cell(xx, yy, color)
-                    faded = not (np.isfinite(lo) and np.isfinite(hi)) or lo <= 0 <= hi
+                    faded = not sig
                     text_color = viscons.RQ1_HEATMAP_FADED_TEXT if faded else ('white' if strength > 0.6 else '#1f1f1f')
                     frame.value(xx, yy, _short_signed(v), text_color)
                 ax.text(labels_left, yy + 0.5, label, ha='left', va='center_baseline', fontsize='small', clip_on=False,
@@ -787,32 +832,72 @@ def plot_rq2_heatmap(results: pd.DataFrame, metrics: Optional[str | Sequence[str
     fig.legend(handles=handles, loc='lower left', bbox_to_anchor=(frame.left_in / fig.get_figwidth(), top), ncol=3,
                frameon=False, fontsize='x-small', handlelength=1.0, handletextpad=0.4, columnspacing=1.2)
     fig.text(1 - 0.1 / fig.get_figwidth(), top, f"colour scaled per metric (full at ≥ {viscons.RQ2_HEATMAP_MIN_SCALE:g})"
-             " · faded: 95% CI includes 0", ha='right', va='bottom', fontsize=viscons.MIN_FONT_SIZE,
+             f" · faded: {_fade_rule(correction, alpha)}", ha='right', va='bottom', fontsize=viscons.MIN_FONT_SIZE,
              color=viscons.COLOR_TEXT_SECONDARY)
     if title:
         fig.suptitle(title, y=1 + 0.28 / fig.get_figheight(), fontsize='small')
     return fig
 
 
-def rq2_figure_name(kind: str, value: str = 'deviation', metrics: Optional[str | Sequence[str]] = None) -> str:
+def _fade_rule(correction: Optional[str], alpha: float) -> str:
+    """Legend text of the fading rule of a heatmap."""
+    if correction is None:
+        return '95% CI includes 0'
+    return f"{ {'by': 'BY', 'bh': 'BH', 'holm': 'Holm'}[correction]}-adjusted p ≥ {alpha:g}"
+
+
+def rq2_figure_name(kind: str, value: str = 'deviation', metrics: Optional[str | Sequence[str]] = None,
+                    exclude: Optional[str | Sequence[str]] = None) -> str:
     """rq2_<value>_<metrics>_<kind> (see rq_figure_name; e.g. rq2_deviation_all_heatmap, rq2_emm_technical_bar)."""
-    return rq_figure_name(2, kind, value, metrics)
+    return rq_figure_name(2, kind, value, metrics, exclude)
+
+
+def rq2_forest_xlabel(value: str, adjusted: bool = False) -> str:
+    """x label of the RQ2 forest; size-adjusted metrics: what the difference is made of (obs. = observed, exp. =
+    expected under a random recommender)."""
+    if value == 'emm':
+        return 'Estimated marginal mean of obs. − exp. (0 = as random)' if adjusted else 'Estimated marginal mean'
+    if value == 'contrast':
+        return 'Difference in (obs. − exp.) from the reference value' if adjusted else \
+            'Difference from the reference value'
+    return 'Deviation of (obs. − exp.) from the grand mean' if adjusted else 'Deviation from the grand mean'
 
 
 def plot_rq2_forest(results: pd.DataFrame, value: str = 'contrast', metrics: Optional[str | Sequence[str]] = 'technical',
                     variables: Optional[Sequence[str]] = None, fit: bool = True,
-                    title: Optional[str] = None) -> plt.Figure:
+                    title: Optional[str] = None, marks: str = 'dots', nest_subfields: bool = True) -> plt.Figure:
     """Forest plot of RQ2 (see module docstring): rows = a header per variable, then its values (the reference left
-    out for contrasts), persona orange / context blue; fit = R^2 box in every panel."""
+    out for contrasts), persona orange / context blue; fit = R^2 box in every panel. value 'emm': size-adjusted
+    metrics on a signed axis with 0 = as a random recommender; raw metrics on their own scale (no 0 line).
+    marks: 'dots' (dot + CI on shaded rows) | 'bars' (bar from 0 + CI, no shading; e.g. raw EMM).
+    nest_subfields: each field's subfields right under it (smaller grey label, lighter row and mark; the field's EMM
+    averages them), no separate Subfield block; False = Subfield as its own block."""
     from matplotlib.lines import Line2D
-    if value not in ('contrast', 'deviation'):
-        raise ValueError("value must be 'contrast' or 'deviation'")
+    if value not in ('contrast', 'deviation', 'emm'):
+        raise ValueError("value must be 'contrast', 'deviation' or 'emm'")
+    if marks not in ('dots', 'bars'):
+        raise ValueError("marks must be 'dots' or 'bars'")
     keys = rq1_metric_keys(results, metrics)
     columns = [summary.METRICS[k] for k in keys]
     groups = rq2_rows(results, variables)
     first = results.drop_duplicates(['variable', 'parent', 'level']).set_index(['variable', 'level'])
 
-    lines = []                                  # (kind, text, family, variable, level)
+    nested = {}                                 # field level -> [(subfield level, label)] when nested
+    subs = next((g for g in groups if g.column == cons.VAR_SUBFIELD), None)
+    if nest_subfields and subs is not None and any(g.column == cons.VAR_FIELD for g in groups):
+        groups = [g for g in groups if g is not subs]
+        for level, label in zip(subs.levels, subs.labels):
+            nested.setdefault(first.at[(cons.VAR_SUBFIELD, level), 'parent'], []).append((level, label))
+
+    def value_line(kind, variable, level, label, family):
+        reference = first.at[(variable, level), 'reference']
+        if value == 'contrast' and level == reference:
+            return None
+        if value == 'contrast' and variable in influence_nested():
+            label += f" (vs. {_level_label(reference)})"
+        return (kind, label, family, variable, level)
+
+    lines = []                                  # (kind 'header' | 'row' | 'sub', text, family, variable, level)
     for g in groups:
         family = g.color_key
         header = g.title
@@ -821,15 +906,15 @@ def plot_rq2_forest(results: pd.DataFrame, value: str = 'contrast', metrics: Opt
             header += f" [ref: {_level_label(refs[0])}]" if g.column not in influence_nested() else ' [ref: first within field]'
         lines.append(('header', header, family, g.column, None))
         for level, label in zip(g.levels, g.labels):
-            reference = first.at[(g.column, level), 'reference']
-            if value == 'contrast' and level == reference:
-                continue
-            if value == 'contrast' and g.column in influence_nested():
-                label += f" (vs. {_level_label(reference)})"
-            lines.append(('row', label, family, g.column, level))
+            lines.append(value_line('row', g.column, level, label, family))
+            for sub, sub_label in nested.get(level, []) if g.column == cons.VAR_FIELD else []:
+                lines.append(value_line('sub', cons.VAR_SUBFIELD, sub, sub_label, subs.color_key))
+    lines = [line for line in lines if line is not None]
     n = len(lines)
+    label_size = {'header': 'small', 'row': 'small', 'sub': viscons.RQ2_FOREST_SUB_LABEL_SIZE}
     room = viscons.RQ2_FOREST_FIT_ROWS if fit and 'r2' in results else 0.0      # rows at the bottom for the fit text
-    label_w = max(text_size(text, 'small', 'bold' if kind == 'header' else 'normal')[0] for kind, text, *_ in lines)
+    label_w = max(text_size(text, label_size[kind], 'bold' if kind == 'header' else 'normal')[0]
+                  for kind, text, *_ in lines)
     top_in, bottom_in = 0.24, 0.34
     height = top_in + bottom_in + viscons.RQ2_FOREST_ROW_IN * (n + room)
     width = viscons.PAPER_TEXT_WIDTH_IN
@@ -843,9 +928,13 @@ def plot_rq2_forest(results: pd.DataFrame, value: str = 'contrast', metrics: Opt
     for ax, metric in zip(axes, columns):
         extent = 0.0
         for y, (kind, text, family, variable, level) in zip(ys, lines):
-            if kind != 'row':
+            if kind == 'header':
                 continue
-            ax.axhspan(y - 0.5 + half, y + 0.5 - half, color=viscons.FAMILY_LIGHT[family], linewidth=0, zorder=0)
+            sub = kind == 'sub'
+            if marks == 'dots':
+                shade = viscons.FAMILY_LIGHT[family]
+                shade = _lighter(shade, viscons.RQ2_FOREST_SUB_SHADE_LIGHTEN) if sub else shade
+                ax.axhspan(y - 0.5 + half, y + 0.5 - half, color=shade, linewidth=0, zorder=0)
             k = (variable, level, metric.key)
             if k not in index.index:
                 continue
@@ -855,17 +944,31 @@ def plot_rq2_forest(results: pd.DataFrame, value: str = 'contrast', metrics: Opt
             err = [[max(v - lo, 0)], [max(hi - v, 0)]] if np.isfinite(lo) and np.isfinite(hi) else None
             extent = max(extent, abs(v), *(abs(x) for x in (lo, hi) if np.isfinite(x)))
             color = viscons.FAMILY_COLORS[family]
-            ax.errorbar([v], [y], xerr=err, fmt='o', color=color, markersize=viscons.RQ2_FOREST_MARKER_SIZE,
-                        markeredgecolor='white', markeredgewidth=0.3, elinewidth=viscons.METRIC_CI_LINEWIDTH,
-                        capsize=viscons.METRIC_CI_CAPSIZE, capthick=viscons.METRIC_CI_LINEWIDTH, zorder=3)
-        limit = _nice_limit(extent)
-        ax.set_xlim(-limit, limit)
-        ax.set_xticks([-limit, 0, limit])
-        ax.set_xticklabels([_tick(-limit), '0', _tick(limit)])
+            color = _lighter(color, viscons.RQ2_FOREST_SUB_MARK_LIGHTEN) if sub else color
+            scale = viscons.RQ2_FOREST_SUB_BAR_SCALE if sub else 1.0          # bar height, CI caps
+            if marks == 'bars':
+                ax.barh(y, v, height=viscons.RQ2_FOREST_BAR_HEIGHT * scale, color=color, linewidth=0, zorder=2)
+                ax.errorbar([v], [y], xerr=err, fmt='none', ecolor=viscons.CI_COLOR, elinewidth=viscons.CI_LINEWIDTH,
+                            capsize=viscons.CI_CAPSIZE * scale, capthick=viscons.CI_CAPTHICK, zorder=3)
+            else:          # CI in the dot's colour, dot drawn apart (errorbar's markeredgewidth would also thin the caps)
+                ax.errorbar([v], [y], xerr=err, fmt='none', ecolor=color, elinewidth=viscons.CI_LINEWIDTH,
+                            capsize=viscons.CI_CAPSIZE * scale, capthick=viscons.CI_CAPTHICK, zorder=3)
+                ax.plot([v], [y], 'o', color=color, markeredgewidth=0, zorder=4,
+                        markersize=viscons.RQ2_FOREST_MARKER_SIZE * (viscons.RQ2_FOREST_SUB_MARK_SCALE if sub else 1))
+        signed = value != 'emm' or metric.key.endswith(summary.ADJ_SUFFIX)     # 0 = reference / mean / random
+        if signed:
+            limit = _nice_limit(extent)
+            low, high = -limit, limit
+        else:                                                   # raw EMM: the metric's scale
+            low, high = metric.limits or (0.0, _nice_limit(extent))
+        ax.set_xlim(low, high)
+        ax.set_xticks([low, (low + high) / 2, high])
+        ax.set_xticklabels([_tick(low), _tick((low + high) / 2), _tick(high)])
         ticks = ax.get_xticklabels()
         ticks[0].set_horizontalalignment('left')                # end labels inwards: no clash between panels
         ticks[-1].set_horizontalalignment('right')
-        ax.axvline(0, color=viscons.RQ2_FOREST_ZERO_COLOR, linewidth=viscons.RQ2_FOREST_ZERO_WIDTH, zorder=0.5)
+        if signed:
+            ax.axvline(0, color=viscons.RQ2_FOREST_ZERO_COLOR, linewidth=viscons.RQ2_FOREST_ZERO_WIDTH, zorder=0.5)
         ax.set_title(metric.label, fontsize='small', fontweight='bold', pad=3)
         ax.tick_params(axis='x', labelsize='x-small', colors=viscons.COLOR_TEXT_SECONDARY, length=2, width=0.5, pad=1.5)
         ax.tick_params(axis='y', length=0)
@@ -884,19 +987,29 @@ def plot_rq2_forest(results: pd.DataFrame, value: str = 'contrast', metrics: Opt
     axes[0].set_ylim(n - 0.5 + room, -0.5)
     axes[0].set_yticks(ys)
     axes[0].set_yticklabels([text for _, text, *_ in lines], fontsize='small')
+    label_color = {'row': viscons.METRIC_ROW_LABEL_COLOR, 'sub': viscons.RQ2_FOREST_SUB_LABEL_COLOR}
     for tick, (kind, _, family, *_) in zip(axes[0].get_yticklabels(), lines):
-        tick.set_color(viscons.FAMILY_COLORS[family] if kind == 'header' else viscons.METRIC_ROW_LABEL_COLOR)
+        tick.set_fontsize(label_size[kind])
+        tick.set_color(viscons.FAMILY_COLORS[family] if kind == 'header' else label_color[kind])
         if kind == 'header':
             tick.set_fontweight('bold')
-    fig.supxlabel('Difference from the reference value' if value == 'contrast' else 'Deviation from the grand mean',
-                  fontsize='x-small', color=viscons.COLOR_TEXT_SECONDARY, y=0.004)
-    handles = [Line2D([], [], marker='o', linestyle='', color=viscons.FAMILY_COLORS[f], label=f.capitalize())
+    adjusted = any(m.key.endswith(summary.ADJ_SUFFIX) for m in columns)
+    center = (axes[0].get_position().x0 + axes[-1].get_position().x1) / 2       # over the panels, not the figure
+    fig.supxlabel(rq2_forest_xlabel(value, adjusted), x=center, fontsize='x-small',
+                  color=viscons.COLOR_TEXT_SECONDARY, y=0.004)
+    handles = [Line2D([], [], marker='o' if marks == 'dots' else 's', linestyle='', color=viscons.FAMILY_COLORS[f],
+                      label=f.capitalize())
                for f in (summary.PERSONA, summary.CONTEXT) if any(line[2] == f for line in lines)]
     fig.legend(handles=handles, loc='lower left', ncol=len(handles), frameon=False, fontsize='x-small',
                bbox_to_anchor=(0.005, 0.0), handletextpad=0.2, borderaxespad=0.1)
     if title:
         fig.suptitle(title, x=0.02, ha='left', y=1.0, fontsize='small')
     return fig
+
+
+def _lighter(color, amount: float) -> Tuple[float, float, float]:
+    """``color`` blended ``amount`` (0-1) towards white."""
+    return tuple(c + (1 - c) * amount for c in to_rgb(color))
 
 
 def _nice_limit(extent: float) -> float:

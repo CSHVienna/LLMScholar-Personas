@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Step 9: social metrics per response (libs/metrics/social.py), one model at a time: parity, diversity and the unknown
-share per attribute (gender, ethnicity, location, productivity, influence, collaboration), popularity (top group by
+share per attribute (gender, race, ethnicity, location, productivity, influence, collaboration), popularity (top group by
 works / citations), connectedness and similarity, on the matched authors of the unique valid names of each valid
 response. Needs B.1-B.3, B.6 and the GT (A.1, A.1a edges, A.4).
 
@@ -103,7 +103,8 @@ def main() -> None:
                   'include_unknown': args.include_unknown, 'parity_target': args.parity_target,
                   'top_countries': args.top_countries,
                   'order_sensitive_keys': args.order_sensitive_keys, 'languages': args.languages,
-                  'matching_dir': str(Path(args.matching_dir).resolve()), 'gt_dir': str(Path(args.gt_dir).resolve())})
+                  'matching_dir': str(Path(args.matching_dir).resolve()), 'gt_dir': str(Path(args.gt_dir).resolve())},
+                 overwrite=args.overwrite)
     args.gt = so.GroundTruth(args.gt_dir)
     args.expected = ex.load(args.output_dir, args.gt_dir, args.include_unknown, args.parity_target)
     batch.run_per_model('social_metrics', run_model, args)

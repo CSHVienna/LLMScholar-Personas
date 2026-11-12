@@ -8,8 +8,8 @@ edited with the wizard (scripts/configure_analysis.py) and read by the batch scr
 Two phases (Setting.phase):
     early   needed to build the ground truth and the matching candidates (seniority, field share, L/M/H bins,
             candidate settings): asked first (configure_analysis.py --phase early)
-    late    decided after looking at the data and the metrics (valid tags, perceived gender / ethnicity thresholds,
-            social settings, Jaro-Winkler thresholds): until reviewed (--phase late) they hold PROVISIONAL defaults,
+    late    decided after looking at the data and the metrics (valid tags, perceived gender / race / ethnicity thresholds,
+            social settings, study choices, Jaro-Winkler thresholds): until reviewed (--phase late) they hold PROVISIONAL defaults,
             the pipeline runs with them, and the research questions (rq1, rq2, notebook 4) refuse to run.
 The file records whether the late settings were reviewed (late_reviewed; files without it count as reviewed).
 
@@ -36,6 +36,7 @@ STEP_POPULATION = 'A.4 population (run_gt_pipeline.sh -s population)'
 STEP_CANDIDATES = 'B.6a candidates (run_matching_pipeline.sh -s candidates,authors)'
 STEP_AUTHORS = 'B.6b author matching (run_matching_pipeline.sh -s authors)'
 STEP_METRICS = 'metrics (run_metrics_pipeline.sh)'
+STEP_RQS = 'research questions + figures (run_metrics_pipeline.sh -s rq1,rq2,interactions; notebooks 3-5)'
 PHASES = ('early', 'late')
 LATE = 'late'
 RERUN_NOTE = ('Re-run from the first step listed, in pipeline order (A.4 population -> B.6 matching -> metrics -> '
@@ -144,10 +145,15 @@ SCHEMA: List[Section] = [
                 'one label per interval, from p_female = 0 to 1', arg='gender_labels', used_by=[STEP_POPULATION], phase=LATE,
                 details='e.g. male neutral female, or male, mostly male, neutral, mostly female, female.'),
     ], _check_gender),
-    Section('ethnicity', 'Perceived ethnicity (raceBERT on the full name)', [
+    Section('race', 'Perceived race (raceBERT race model on the full name, 5 classes)', [
+        Setting('min_prob', 'float', cons.DEFAULT_RACE_MIN_PROB,
+                "label = top class if its probability >= this, else 'unknown'", arg='race_min_prob',
+                low=0.2, high=1.0, used_by=[STEP_POPULATION], phase=LATE),
+    ]),
+    Section('ethnicity', 'Perceived ethnicity (raceBERT ethnicity model on the full name, 13 classes)', [
         Setting('min_prob', 'float', cons.DEFAULT_ETHNICITY_MIN_PROB,
                 "label = top class if its probability >= this, else 'unknown'", arg='ethnicity_min_prob',
-                low=0.2, high=1.0, used_by=[STEP_POPULATION], phase=LATE),
+                low=0.05, high=1.0, used_by=[STEP_POPULATION], phase=LATE),
     ]),
     Section('prominence', 'Prominence classes: productivity, influence, collaboration (within field x seniority)', [
         Setting('bin_edges', 'floats', [round(e, 4) for e in cons.DEFAULT_GT_BIN_EDGES],
@@ -175,6 +181,18 @@ SCHEMA: List[Section] = [
                 low=1, high=50, used_by=[STEP_METRICS], phase=LATE,
                 details='Countries ranked by their number of GT scholars in the target (requested field x seniority, '
                         'known countries; ties with the k-th included).'),
+    ]),
+    Section('study', 'Study choices of the figures and research questions (the metrics are computed for every option)', [
+        Setting('ethnicity_attribute', 'choice', cons.DEFAULT_STUDY_ETHNICITY,
+                'perceived ethnicity of the figures and RQs: ethnicity (13 classes) | race (5 classes) | both',
+                arg='study_ethnicity', choices=cons.STUDY_ETHNICITY_CHOICES, used_by=[STEP_RQS], phase=LATE,
+                details="Replaces every *_ethnicity metric of the metric sets (cons.metric_column_sets: figures, RQ1 / "
+                        "RQ2 / interactions defaults, RQ3 social axis = the parities) and the ethnicity flow panels. "
+                        "'both': each *_ethnicity metric followed by its *_race twin (RQ3: 7 parities). Social metrics "
+                        "and the GT plots always cover both."),
+        Setting('rq3_ceilings', 'bool', cons.DEFAULT_RQ3_CEILINGS,
+                "RQ3 absolute views: mark each model's own social maximum (adjusted metrics: it differs by model)",
+                used_by=[STEP_RQS], phase=LATE),
     ]),
     Section('matching', 'Author matching (recommended name -> OpenAlex person)', [
         Setting('jw_first', 'float', cons.DEFAULT_MATCH_JW_FIRST, 'fuzzy rule: minimum Jaro-Winkler of the first names',
@@ -216,8 +234,9 @@ CODES = {
     ('seniority', 'single_cutoff'): 'scut', ('seniority', 'matching_definition'): 'sdef',
     ('field', 'min_field_share'): 'fshare',
     ('gender', 'p_female_edges'): 'pf', ('gender', 'labels'): 'glabels',
-    ('ethnicity', 'min_prob'): 'eprob',
+    ('race', 'min_prob'): 'rprob', ('ethnicity', 'min_prob'): 'eprob',
     ('prominence', 'bin_edges'): 'bins', ('prominence', 'bin_labels'): 'blabels', ('prominence', 'top_percentile'): 'top',
+    ('study', 'ethnicity_attribute'): 'ethn', ('study', 'rq3_ceilings'): 'ceil',
     ('social', 'include_unknown'): 'unknown', ('social', 'parity_target'): 'target', ('social', 'top_countries'): 'tcountry',
     ('matching', 'jw_first'): 'jwfirst', ('matching', 'jw_last'): 'jwlast', ('matching', 'jw_full'): 'jwfull',
     ('matching', 'seed'): 'seed', ('matching', 'candidates_floor'): 'floor', ('matching', 'fuzzy_all'): 'fuzzyall',

@@ -13,7 +13,10 @@
 #               configuration variable, cluster-bootstrap CIs over models -> DIR/metrics/<-V>/rq1/<metric>.parquet
 #   rq2         RQ2, one process per metric (GNU parallel): EMM and deviation from the grand mean of every value of
 #               every configuration variable, cluster-bootstrap CIs over models -> DIR/metrics/<-V>/rq2/<metric>.parquet
-# Needs B.1-B.3 and B.6 (social and flows need the GT; rq1 and rq2 need technical and social). Valid tag sets come from the analysis config (-y). Folders are derived from the results
+#   interactions  one process per metric (GNU parallel): two-way blocks added to the additive RQ1 model (screening,
+#               pre-specified, size / origin decompositions, global check), cluster-bootstrap CIs over models
+#               -> DIR/metrics/<-V>/interactions/<metric>.parquet (+ cells/<metric>.parquet)
+# Needs B.1-B.3 and B.6 (social and flows need the GT; rq1, rq2 and interactions need technical and social). Valid tag sets come from the analysis config (-y). Folders are derived from the results
 # root (-r): DIR/{responses,recommendations}_metadata, DIR/matching/authors/<-w>, output DIR/metrics/<-V>.
 #
 # Usage:
@@ -22,9 +25,9 @@
 #   bash code/scripts/run_metrics_pipeline.sh -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs
 #
 # Options (same letters as in the other runners):
-#   -s STEPS  comma-separated: technical,expected,social,flows,rq1,rq2, or all (default)
-#   -j N      parallel jobs (models; metrics for rq1 / rq2) (default 10)
-#   -c N      math-library threads per rq1 / rq2 job (default 2)
+#   -s STEPS  comma-separated: technical,expected,social,flows,rq1,rq2,interactions, or all (default)
+#   -j N      parallel jobs (models; metrics for rq1 / rq2 / interactions) (default 10)
+#   -c N      math-library threads per rq1 / rq2 / interactions job (default 2)
 #   -M FILE   models file (default data/models/models.txt)
 #   -r DIR    results root (default <project>/results)
 #   -V NAME   metrics variant: output DIR/metrics/NAME (default main; robustness checks: robustness/<check>)
@@ -69,10 +72,10 @@ while getopts "s:j:c:M:r:V:w:g:y:v:p:l:x:a:q:h" option; do
         l) LOGS_DIR="${OPTARG}" ;;
         x) EXTRA_ARGS="${OPTARG}" ;;
         a) SINGLE_ARGS="${OPTARG}" ;;
-        h|*) sed -n '2,42p' "$0"; exit 0 ;;
+        h|*) sed -n '2,45p' "$0"; exit 0 ;;
     esac
 done
-ALL_STEPS="technical expected social flows rq1 rq2"
+ALL_STEPS="technical expected social flows rq1 rq2 interactions"
 for s in ${STEP//,/ }; do
     if [[ "${s}" != "all" && " ${ALL_STEPS} " != *" ${s} "* ]]; then
         echo "ERROR: unknown step '${s}' in -s ${STEP} (steps: ${ALL_STEPS// /,} or all)"; exit 1
@@ -159,15 +162,15 @@ if selected flows; then
     fi
     echo "[$(date +%H:%M:%S)] flows: done"
 fi
-if selected rq1 || selected rq2; then   # the RQs need the late settings (valid tags, thresholds) reviewed
+if selected rq1 || selected rq2 || selected interactions; then   # the RQs need the late settings (valid tags, thresholds) reviewed
     if ! problem="$("${PYTHON}" "${SCRIPTS_DIR}/configure_analysis.py" --config "${CONFIG}" --check --phase late)"; then
         echo "STOP before the research questions: ${problem}"
         exit 1
     fi
 fi
-for rq in rq1 rq2; do
+for rq in rq1 rq2 interactions; do
     selected "${rq}" || continue
-    read -r -a RQ_METRICS <<< "$("${PYTHON}" "${SCRIPTS_DIR}/batch_${rq}.py" --list_metrics ${RQ_ARGS})"
+    read -r -a RQ_METRICS <<< "$("${PYTHON}" "${SCRIPTS_DIR}/batch_${rq}.py" --list_metrics --config "${CONFIG}" ${RQ_ARGS})"   # metric sets: study.ethnicity_attribute
     joblog="${LOGS_DIR}/$(date +%Y-%m-%d-%H:%M)_${rq}_metrics.joblog"
     echo "[$(date +%H:%M:%S)] ${rq} (${VARIANT}): ${#RQ_METRICS[@]} metrics, ${JOBS} job(s) x ${PY_THREADS} threads, -> ${METRICS_DIR}/${rq}, joblog ${joblog}"
     if ! OMP_NUM_THREADS="${PY_THREADS}" OPENBLAS_NUM_THREADS="${PY_THREADS}" MKL_NUM_THREADS="${PY_THREADS}" \

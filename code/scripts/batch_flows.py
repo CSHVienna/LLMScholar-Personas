@@ -2,7 +2,7 @@
 """
 Flows (appendix figures): the people table, one model at a time (libs/metrics/flows.py): one row per (valid
 response, factual person = matched author of a unique valid name) with the configuration (prompt variables, model)
-and the person's GT attributes (perceived gender, perceived ethnicity, country, productivity / influence /
+and the person's GT attributes (perceived gender, race, ethnicity, country, productivity / influence /
 collaboration, top groups). Any flow (prompt variable or model characteristic -> person attribute) and the location
 drift are then computed in code/notebooks/5_flows.ipynb. Needs B.1-B.3, B.6 and the GT (A.4 gt_members).
 
@@ -81,7 +81,8 @@ def main() -> None:
     check_params(Path(args.output_dir) / 'flows',
                  {'valid_response_tags': sorted(args.valid_response_tags), 'valid_rec_tags': sorted(args.valid_rec_tags),
                   'order_sensitive_keys': args.order_sensitive_keys, 'languages': args.languages,
-                  'matching_dir': str(Path(args.matching_dir).resolve()), 'gt_dir': str(Path(args.gt_dir).resolve())})
+                  'matching_dir': str(Path(args.matching_dir).resolve()), 'gt_dir': str(Path(args.gt_dir).resolve())},
+                 overwrite=args.overwrite)
     args.gt = so.GroundTruth(args.gt_dir)
     batch.run_per_model('flows', run_model, args)
 

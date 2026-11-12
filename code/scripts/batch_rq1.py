@@ -10,16 +10,18 @@ The parameters are recorded in <output_dir>/_params.json (other parameters: use 
 
 Usage (from any folder; run_metrics_pipeline.sh -s rq1 runs one process per metric):
     python batch_rq1.py --metrics_dir <smoke>/metrics/main --metrics validity --n_boot 200
-    python batch_rq1.py --list_metrics
+    python batch_rq1.py --list_metrics --config config/analysis.yaml    # sets follow study.ethnicity_attribute
 """
 
 import _bootstrap  # noqa: F401  (adds code/libs to sys.path)
 import argparse
+import sys
 from pathlib import Path
 
 from analysis import influence as inf
 from groundtruth.authorships import check_params
 from metrics import summary
+from utils import analysis_config
 from utils import batch
 from utils import constants as cons
 from utils import ios
@@ -51,9 +53,27 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--seed', type=int, default=cons.DEFAULT_SEED)
     parser.add_argument('--output_dir', default=None, help='Default: <metrics_dir>/rq1')
     parser.add_argument('--list_metrics', action='store_true', help='Print the metric keys of --metrics and exit')
+    add_study_arguments(parser)
     parser.add_argument('--overwrite', action='store_true', help='Recompute existing outputs')
     logs.add_log_arguments(parser)
     return parser
+
+
+def add_study_arguments(parser: argparse.ArgumentParser) -> None:
+    """--config / --study_ethnicity: the perceived-ethnicity attribute of the metric sets (config study.ethnicity_attribute)."""
+    analysis_config.add_config_argument(parser)
+    parser.add_argument('--study_ethnicity', choices=cons.STUDY_ETHNICITY_CHOICES, default=cons.DEFAULT_STUDY_ETHNICITY,
+                        help="*_ethnicity metrics of the sets in --metrics: ethnicity | race | both (default: the config)")
+
+
+def parse_study_args(parser: argparse.ArgumentParser) -> argparse.Namespace:
+    """parse_args, with --study_ethnicity defaulting to the config's (only that setting: e.g. --seed stays the RQ's own),
+    and the metric sets pointed at the study attribute."""
+    args = parser.parse_args()
+    if args.config and not any(a.startswith('--study_ethnicity') for a in sys.argv[1:]):
+        args.study_ethnicity = analysis_config.load(args.config)['study']['ethnicity_attribute']
+    summary.use_study_ethnicity(args.study_ethnicity)
+    return args
 
 
 def metric_keys(selection) -> list:
@@ -62,7 +82,7 @@ def metric_keys(selection) -> list:
 
 
 def main() -> None:
-    args = build_parser().parse_args()
+    args = parse_study_args(build_parser())
     keys = metric_keys(args.metrics)
     if args.list_metrics:
         print(' '.join(keys))

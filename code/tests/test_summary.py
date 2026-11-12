@@ -138,16 +138,68 @@ class TestRowsAndColors(unittest.TestCase):
         self.assertEqual(len(set(colors[6:])), 1)                            # persona: one colour
 
     def test_column_sets(self):
-        self.assertEqual([m.key for m in s.select_metrics('popularity_cohesion_locality')],
+        for removed in ('technical_factuality', 'popularity_cohesion', 'popularity_cohesion_locality'):
+            self.assertNotIn(removed, s.COLUMN_SETS)                     # combinations are lists now
+
+    def test_mixed_selection(self):
+        keys = lambda *a, **k: [m.key for m in s.select_metrics(*a, **k)]
+        self.assertEqual(keys(['popularity', 'cohesion', 'locality']),
                          ['popularity_productivity', 'popularity_influence', 'popularity_location', 'connectedness',
                           'similarity', 'locality'])
-        self.assertEqual([m.key for m in s.select_metrics('popularity_cohesion')],
-                         ['popularity_productivity', 'popularity_influence', 'popularity_location', 'connectedness',
-                          'similarity'])
-        self.assertEqual([m.key for m in s.select_metrics('technical_factuality')],
-                         cons.METRIC_COLUMN_SETS['technical'] + cons.METRIC_COLUMN_SETS['factuality'])
+        self.assertEqual(keys(['technical', 'factuality'], exclude=['consistency']),
+                         ['refusals', 'validity', 'duplicates'] + cons.METRIC_COLUMN_SETS['factuality'])
+        self.assertEqual(keys(['parity_gender', 'diversity', 'locality', 'parity_gender']),        # duplicates once
+                         ['parity_gender'] + cons.METRIC_COLUMN_SETS['diversity'] + ['locality'])
+        self.assertEqual(keys('parity_adj', exclude='parity_gender'),                             # raw key drops its twin
+                         [f"parity_{a}_adj" for a in ('ethnicity', 'location', 'productivity', 'influence',
+                                                       'collaboration')])
+        self.assertEqual(s.adjusted_selection(['popularity', 'cohesion', 'validity', 'locality'], True),
+                         ['popularity_adj', 'cohesion_adj', 'validity', 'locality_adj'])
+        self.assertEqual(s.split_adjusted(['technical', 'factuality'], ['consistency']),
+                         ('technical-factuality-no-consistency', False))
+        self.assertEqual(s.split_adjusted(['popularity_adj', 'locality_adj']), ('popularity-locality', True))
+
         self.assertEqual(len(s.select_metrics('social')), 18)               # 6 parity, 6 diversity, 3 popularity, 2 cohesion, locality
         self.assertEqual(s.select_metrics('social')[-1].key, 'locality')    # last, after cohesion
+
+
+class TestStudyEthnicity(unittest.TestCase):
+    """study.ethnicity_attribute: the *_ethnicity metrics of every set -> race / both (in place; restored after)."""
+
+    def tearDown(self):
+        s.use_study_ethnicity(cons.DEFAULT_STUDY_ETHNICITY)
+
+    def test_default_sets_unchanged(self):
+        self.assertEqual(cons.metric_column_sets(), cons.METRIC_COLUMN_SETS)
+        self.assertIn('parity_ethnicity', cons.METRIC_COLUMN_SETS['parity'])
+        self.assertNotIn('parity_race', cons.METRIC_COLUMN_SETS['all'])
+        self.assertEqual(cons.METRIC_COLUMN_SETS['race'], ['parity_race', 'diversity_race'])
+
+    def test_race(self):
+        self.assertEqual(s.use_study_ethnicity('race'), ['race'])
+        keys = [m.key for m in s.select_metrics('all')]
+        self.assertIn('parity_race', keys)
+        self.assertFalse(any(k.endswith('_ethnicity') for k in keys))
+        self.assertEqual(s.select_metrics('paper_social_adj')[0].key, 'parity_race_adj')   # order kept
+        self.assertEqual(cons.RQ3_SOCIAL_METRICS[1], 'parity_race')
+        self.assertEqual(len(cons.RQ3_SOCIAL_METRICS), 6)
+
+    def test_both(self):
+        s.use_study_ethnicity('both')
+        parity = cons.METRIC_COLUMN_SETS['parity']
+        self.assertEqual(parity[1:3], ['parity_ethnicity', 'parity_race'])                # race right after ethnicity
+        self.assertEqual(len(cons.RQ3_SOCIAL_METRICS), 7)
+        self.assertEqual(len([m.key for m in s.select_metrics(['all', 'social_adj'])]), len(set(
+            [m.key for m in s.select_metrics(['all', 'social_adj'])])))                    # no repeats
+
+    def test_unknown_choice(self):
+        with self.assertRaises(ValueError):
+            s.use_study_ethnicity('caste')
+
+    def test_every_choice_names_known_metrics(self):
+        for choice in cons.STUDY_ETHNICITY_CHOICES:
+            unknown = {k for keys in cons.metric_column_sets(choice).values() for k in keys} - set(s.METRICS)
+            self.assertEqual(unknown, set(), choice)
 
 
 if __name__ == '__main__':

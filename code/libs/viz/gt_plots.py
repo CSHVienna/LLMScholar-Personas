@@ -2,12 +2,12 @@
 GT descriptives (notebook 0_gt.ipynb; data: groundtruth/stats.py). Rows are grouped by field (field name above its
 rows, 'All fields' last), seniority junior / mid / senior inside a group.
 
-    plot_gt_population(pop, by)           scholars per field, stacked by seniority / perceived gender / ethnicity
+    plot_gt_population(pop, by)           scholars per field, stacked by seniority / perceived gender / race / ethnicity
     plot_gt_field_overlap(overlap)        heatmap: share of the row field's scholars that also belong to the column field
     plot_gt_bibliometrics(quantiles)      one panel per bibliometric: a box per field x seniority from precomputed
                                           quantiles (box q25-q75, line median, whiskers q05-q95, dot mean)
     plot_gt_bibliometrics_by(quantiles, attribute)
-                                          the same per perceived gender / ethnicity: per class a dot at the median and
+                                          the same per perceived gender / race / ethnicity: per class a dot at the median and
                                           a line q25-q75 (offset inside the row)
     plot_gt_shares_by_prominence(table, attribute, cls)
                                           share of one class (e.g. female) inside L / M / H and the top x % (vs all),
@@ -19,7 +19,7 @@ rows, 'All fields' last), seniority junior / mid / senior inside a group.
                                           top ones as bars and the rest as 'other'; cumulative % line; prompt
                                           countries highlighted
     plot_gt_composition(shares)           the GT targets: class shares per field x seniority, one panel per attribute
-                                          (the flows' colours: gender diverging, ethnicity / country categorical,
+                                          (the flows' colours: gender diverging, race / ethnicity / country categorical,
                                           L / M / H sequential; 'other' / 'unknown' grey)
 """
 
@@ -34,7 +34,7 @@ from matplotlib.ticker import FuncFormatter, NullFormatter
 from groundtruth import stats as gs
 from viz import constants as viscons
 from viz.figures import shades
-from viz.flow_plots import TARGET_TITLES, class_hatch, class_label, prompt_countries, target_order_colors
+from viz.flow_plots import TARGET_TITLES, class_hatch, class_label, pool_shown, prompt_countries, target_order_colors
 
 METRIC_LABELS = {'academic_age': 'academic age (years)', 'n_works': '# works', 'n_citations': '# citations',
                  'n_coauthors': '# unique coauthors', 'h_index': 'h-index',
@@ -96,12 +96,14 @@ def plot_gt_population(pop: pd.DataFrame, by: str = 'seniority', include_all: bo
                        include_unknown: bool = True, normalize: bool = False, gender_labels=None,
                        title: Optional[str] = None) -> plt.Figure:
     """Scholars per field (memberships), stacked by `by` (seniority junior / mid / senior, or perceived gender /
-    ethnicity in the flows' colours), values written in the segments. normalize=False: counts, unit (scholars /
+    race / ethnicity in the flows' colours; ethnicity: viscons.FLOW_SHOWN_CLASSES, the rest as other), values written
+    in the segments. normalize=False: counts, unit (scholars /
     thousands / millions) chosen from the largest field; True: % of the field (each row sums to 100; without unknown,
     over the known classes)."""
     pop = pop if include_all else pop[pop['field'] != gs.ALL_FIELDS]
     if not include_unknown:
         pop = pop[pop[by] != gs.UNKNOWN]
+    pop = pop.assign(**{by: pool_shown(pop[by].astype(str), by)})      # e.g. the smaller ethnicities -> other
     if by == 'seniority':
         classes = [s for s in gs.SENIORITY_ORDER if s in set(pop[by])]
         colors = SENIORITY_COLORS
@@ -219,6 +221,9 @@ def plot_gt_bibliometrics_by(quantiles: pd.DataFrame, attribute: str, metrics: O
                              title: Optional[str] = None) -> plt.Figure:
     """Per metric panel, rows field x seniority; per perceived class a dot (median) and a line (q25-q75)."""
     q = quantiles if include_unknown else quantiles[quantiles[attribute] != gs.UNKNOWN]
+    shown = viscons.FLOW_SHOWN_CLASSES.get(attribute)
+    if shown:                                     # quantiles cannot be pooled: only the shown classes
+        q = q[q[attribute].isin(set(shown) | {gs.UNKNOWN})]
     metrics = list(metrics) if metrics is not None else list(dict.fromkeys(q['metric'].astype(str)))
     cells = q[['field', 'seniority']].drop_duplicates().reset_index(drop=True)
     cells = gs._sort_cells(cells)
@@ -391,8 +396,9 @@ def plot_gt_countries(ranking: pd.DataFrame, measure: str = 'n_scholars', top: i
 # --- composition (the GT targets) --------------------------------------------------------------------------------
 def composition_tables(shares: pd.DataFrame, attributes: Sequence[str], include_unknown: bool = True,
                        top_countries: int = viscons.FLOW_TOP_COUNTRIES) -> Dict[str, pd.DataFrame]:
-    return {a: gs.composition(shares, a, include_unknown, top=top_countries if a == 'country' else None,
-                              keep=prompt_countries() if a == 'country' else ())
+    return {a: gs.composition(shares, a, include_unknown,
+                              top=top_countries if a == 'country' else 0 if a in viscons.FLOW_SHOWN_CLASSES else None,
+                              keep=prompt_countries() if a == 'country' else viscons.FLOW_SHOWN_CLASSES.get(a, ()))
             for a in attributes}
 
 

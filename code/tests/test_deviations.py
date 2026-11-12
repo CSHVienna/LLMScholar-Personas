@@ -124,8 +124,10 @@ class TestFigures(unittest.TestCase):
         rows = rq_plots.rq2_rows(results)
         self.assertEqual([g.column for g in rows], ['language', 'field', 'subfield'])
         self.assertEqual(rows[0].levels, [str(x) for x in cons.LANGUAGES])           # design order, not alphabetical
-        for value in rq_plots.RQ2_VALUES:
-            rq_plots.plot_rq2(results, value)
+        rq_plots.plot_rq2(results)                                              # EMM only
+        rq_plots.plot_rq2(results, ['validity'])
+        with self.assertRaises(TypeError):
+            rq_plots.plot_rq2(results, 'deviation')                              # old (results, value) call
         rq_plots.plot_rq2_heatmap(results)
         for value in ('contrast', 'deviation'):
             fig = rq_plots.plot_rq2_forest(results, value, ['validity', 'duplicates'])

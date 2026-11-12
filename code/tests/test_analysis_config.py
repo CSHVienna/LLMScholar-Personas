@@ -304,5 +304,20 @@ class TestVariants(unittest.TestCase):
             self.assertEqual(ac.variant_info('main', self.results, path)['population'], 'main')
 
 
+class TestStudySettings(unittest.TestCase):
+    def test_study_section(self):
+        d = ac.defaults()['study']
+        self.assertEqual(d, {'ethnicity_attribute': cons.DEFAULT_STUDY_ETHNICITY,
+                             'rq3_ceilings': cons.DEFAULT_RQ3_CEILINGS})
+        self.assertTrue(all(ac.SETTINGS[('study', k)].phase == ac.LATE for k in d))
+        bad = ac.defaults()
+        bad['study']['ethnicity_attribute'] = 'caste'
+        self.assertTrue(any(p.startswith('study.ethnicity_attribute') for p in ac.validate(bad)))
+
+    def test_project_configs_have_it(self):
+        for path in (ac.DEFAULT_CONFIG_FILE, ac.SMOKE_CONFIG_FILE):
+            self.assertIn(ac.load(path)['study']['ethnicity_attribute'], cons.STUDY_ETHNICITY_CHOICES)
+
+
 if __name__ == '__main__':
     unittest.main()

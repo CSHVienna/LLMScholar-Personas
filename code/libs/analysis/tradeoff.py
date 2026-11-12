@@ -2,14 +2,19 @@
 RQ3: socio-technical trade-off. One point per model: technical score = sum of the technical metrics, social score =
 sum of the social metrics (defaults: cons.RQ3_TECHNICAL_METRICS / cons.RQ3_SOCIAL_METRICS). A metric where lower is
 better (direction LOWER in metrics/summary.METRICS: refusals, duplicates) enters as its complement 1 - x, so larger is
-better on both axes and the maximum of an axis is its number of metrics. A size-adjusted social metric (<key>_adj =
-observed - expected, in [-1, 1]; notebooks: ADJUSTED) enters as is (-x if lower is better), so it adds -1 to the
-minimum of its axis (raw metrics: 0).
+better on both axes and a raw metric adds [0, 1] to its axis. A size-adjusted social metric (<key>_adj = observed - E,
+E = <key>_expected, the value of a random recommender of the same n; notebooks: ADJUSTED) enters as is (-x if lower
+is better) and can only take [-E, 1 - E] ([E - 1, E] if lower is better): with E ~ 0.8 (parity at n ~ 10) little room
+is left above random.
 
-A model's metric = the mean over its configurations (the configuration table of metrics/summary).
+A model's metric = the mean over its configurations (the configuration table of metrics/summary); its attainable
+range per axis = the sum of the per-metric ranges with E = its mean over the model's configurations (<axis>_min,
+<axis>_max: they differ between models through n). The axis range covers every model: [min of the minima, max of
+the maxima]. Without the _expected columns, an adjusted metric falls back to [-1, 1] (with a warning).
 Quadrants:
     relative   split at the per-axis MEDIANS across the models (models compared with each other)
-    absolute   split at the MIDDLE of each axis' possible range: half the maximum (raw), 0 (all size-adjusted)
+    absolute   split at 1/2 per raw metric and 0 per adjusted one: the middle of the axis (raw), the random
+               recommender (adjusted; not the middle of the lopsided range)
     Q1 high technical / high social, Q2 low / high, Q3 low / low, Q4 high / low (>= the split counts as high).
 Pareto front: models not dominated on both axes by another model.
 """
@@ -40,10 +45,34 @@ def oriented(values: pd.Series, metric: summary.Metric) -> pd.Series:
     return -values if is_adjusted(metric.key) else 1 - values
 
 
+def expected_column(key: str) -> str:
+    """<base>_expected of a size-adjusted key <base>_adj (the value of a random recommender)."""
+    return key[:-len(summary.ADJ_SUFFIX)] + summary.EXPECTED_SUFFIX
+
+
+def metric_range(configs: pd.DataFrame, metric: summary.Metric) -> pd.DataFrame:
+    """Per model: the attainable (low, high) of the oriented model mean. Raw: (0, 1); adjusted: (-E, 1 - E), or
+    (E - 1, E) if lower is better, E = mean of <base>_expected over the model's configurations with a value."""
+    models = configs[cons.COL_MODEL].drop_duplicates()
+    if not is_adjusted(metric.key):
+        return pd.DataFrame({'low': 0.0, 'high': 1.0}, index=pd.Index(models, name=cons.COL_MODEL))
+    column = expected_column(metric.key)
+    if column not in configs:
+        warnings.warn(f"RQ3: no {column} in the configuration table; {metric.key} assumed in [-1, 1]", UserWarning,
+                      stacklevel=3)
+        return pd.DataFrame({'low': -1.0, 'high': 1.0}, index=pd.Index(models, name=cons.COL_MODEL))
+    e = configs[configs[metric.key].notna()].groupby(cons.COL_MODEL)[column].mean().reindex(models)
+    e.index.name = cons.COL_MODEL
+    if metric.direction == summary.LOWER:
+        return pd.DataFrame({'low': e - 1, 'high': e})
+    return pd.DataFrame({'low': -e, 'high': 1 - e})
+
+
 def model_scores(configs: pd.DataFrame, technical: Sequence[str] = tuple(cons.RQ3_TECHNICAL_METRICS),
                  social: Sequence[str] = tuple(cons.RQ3_SOCIAL_METRICS)) -> pd.DataFrame:
-    """One row per model: each metric (mean over configurations, oriented), technical / social score, their minima
-    (-number of size-adjusted metrics) and maxima (number of metrics), n_missing (metrics without a value, left out of the sum)."""
+    """One row per model: each metric (mean over configurations, oriented), technical / social score, the model's
+    attainable range per axis (<axis>_min, <axis>_max; module docstring), the absolute split per axis (<axis>_split:
+    1/2 per raw metric, 0 per adjusted one) and n_missing (metrics without a value, left out of the sum)."""
     check_adjusted_axes(technical, social)
     keys = list(dict.fromkeys([*technical, *social]))
     missing = [k for k in keys if k not in configs]
@@ -55,9 +84,11 @@ def model_scores(configs: pd.DataFrame, technical: Sequence[str] = tuple(cons.RQ
     scores = means.copy()
     scores['technical'] = means[list(technical)].sum(axis=1, min_count=1)
     scores['social'] = means[list(social)].sum(axis=1, min_count=1)
-    scores['technical_max'], scores['social_max'] = len(technical), len(social)
-    scores['technical_min'] = -sum(is_adjusted(k) for k in technical)
-    scores['social_min'] = -sum(is_adjusted(k) for k in social)
+    for axis, axis_keys in (('technical', technical), ('social', social)):
+        ranges = [metric_range(configs, summary.METRICS[k]) for k in axis_keys]
+        scores[f'{axis}_min'] = sum(r['low'] for r in ranges).reindex(scores.index)
+        scores[f'{axis}_max'] = sum(r['high'] for r in ranges).reindex(scores.index)
+        scores[f'{axis}_split'] = 0.5 * sum(not is_adjusted(k) for k in axis_keys)
     scores['n_missing'] = means[keys].isna().sum(axis=1)
     return scores.reset_index()
 
@@ -75,14 +106,14 @@ def splits(scores: pd.DataFrame, mode: str = 'relative') -> tuple:
     if mode == 'relative':
         return float(scores['technical'].median()), float(scores['social'].median())
     if mode == 'absolute':
-        return tuple(sum(axis_range(scores, axis)) / 2 for axis in ('technical', 'social'))
+        return tuple(float(scores[f'{axis}_split'].iloc[0]) for axis in ('technical', 'social'))
     raise ValueError(f"mode must be one of {MODES}")
 
 
 def axis_range(scores: pd.DataFrame, axis: str) -> tuple:
-    """(minimum, maximum) possible score of an axis ('technical' / 'social'); minimum 0 if not in the table."""
-    low = float(scores[f'{axis}_min'].iloc[0]) if f'{axis}_min' in scores else 0.0
-    return low, float(scores[f'{axis}_max'].iloc[0])
+    """(minimum, maximum) attainable score of an axis ('technical' / 'social') over all models: the lowest model
+    minimum and the highest model maximum."""
+    return float(np.nanmin(scores[f'{axis}_min'])), float(np.nanmax(scores[f'{axis}_max']))
 
 
 def pareto_front(scores: pd.DataFrame) -> pd.Series:

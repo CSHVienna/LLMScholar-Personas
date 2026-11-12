@@ -2,8 +2,9 @@
 Social metrics (plan §2.3, step 9): per response, on its PEOPLE = the matched authors (B.6 author_id, i.e.
 matched_author) of its unique valid names, in a valid response; a person named twice counts once.
 
-Attributes of a person come from the GT row of the REQUESTED field (A.4 gt_members): perceived gender, perceived
-ethnicity, location (country), productivity, influence, collaboration (classes within field x seniority), and the
+Attributes of a person come from the GT row of the REQUESTED field (A.4 gt_members): perceived gender, perceived race
+(5 classes), perceived ethnicity (13), location (country), productivity, influence, collaboration (classes within
+field x seniority), and the
 top groups by works / citations.
 
     parity_<a>        1 - TV(p, q): p = the people's class distribution, q = the GT target (gt_shares, scope
@@ -45,7 +46,7 @@ from metrics import technical as tm
 from utils import constants as cons
 
 UNKNOWN = 'unknown'
-ATTRIBUTES = {'gender': 'gender', 'ethnicity': 'ethnicity', 'location': 'country', 'productivity': 'productivity',
+ATTRIBUTES = {'gender': 'gender', 'race': 'race', 'ethnicity': 'ethnicity', 'location': 'country', 'productivity': 'productivity',
               'influence': 'influence', 'collaboration': 'collaboration'}      # metric name -> gt_members / gt_shares
 POPULARITY = list(cons.GT_TOP_METRICS)                                            # productivity (works), influence
 PCA_FEATURES = ['n_works', 'n_citations', 'h_index', 'i10_index', 'e_index', 'two_year_mean_citedness', 'n_coauthors',

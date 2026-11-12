@@ -7,21 +7,21 @@ resources and never loaded into pandas; gt_shares / gt_cutoffs are small and rea
                                       a table computed once and re-read while it is newer than its source files
     connect()                         in-memory DuckDB with the GT_STATS_* threads / memory and the project spill folder
     funnel(con, gt_dir)               OpenAlex authors with >= 1 counted work (A.1) -> people -> GT scholars -> members
-    population(con, gt_dir, by)       scholars per field x seniority / gender / ethnicity (gt_members)
+    population(con, gt_dir, by)       scholars per field x seniority / gender / race / ethnicity (gt_members)
     fields_per_scholar(con, gt_dir)   how many prompt fields a scholar belongs to
     field_overlap(con, gt_dir)        scholars in field A that are also in field B (counts; diagonal = field size)
     bibliometric_quantiles(...)       n, mean and quantiles of each bibliometric per field x seniority (+ all fields),
-                                      optionally per perceived gender / ethnicity (by=)
+                                      optionally per perceived gender / race / ethnicity (by=)
     histogram(con, gt_dir, column)    counts in equal-width bins of a gt_authors column (optionally per field)
     gender_coverage(con, gt_dir)      perceived gender label by why it is unknown (no first name / no p_female)
     composition(shares, attribute)    class shares per field x seniority from gt_shares (countries pooled to the top)
     country_ranking(con, gt_dir)      per field x country: scholars, works, citations (sums) and h-index (mean,
                                       median) of the GT scholars of that country (latest or last known affiliation)
     country_top(ranking, measures)    the top countries by each measure, side by side (rank, code, % / value)
-    shares_by_prominence(...)         perceived gender / ethnicity inside each L / M / H class and the top x % group
+    shares_by_prominence(...)         perceived gender / race / ethnicity inside each L / M / H class and the top x % group
     cutoffs_table(cutoffs)            L / M / H value ranges per field x seniority (gt_cutoffs)
 
-Pooled rows ('All fields') count a scholar once per field (as gt_shares). Labels (gender, ethnicity, bins) are those
+Pooled rows ('All fields') count a scholar once per field (as gt_shares). Labels (gender, race, ethnicity, bins) are those
 written by A.4, i.e. with the config of the A.4 run.
 """
 
@@ -32,6 +32,8 @@ import duckdb
 import numpy as np
 import pandas as pd
 
+from demographics import ethnicity as eth
+from demographics import race
 from groundtruth.db import shared_gt_dir, sql_path
 from groundtruth.population import SCOPE_FIELD_SENIORITY, SCOPE_SENIORITY, UNKNOWN
 from utils import constants as cons
@@ -40,7 +42,7 @@ ALL_FIELDS = 'All fields'
 OTHER = 'other'
 SENIORITY_ORDER = list(cons.SENIORITY_CLASSES)
 GT_FILES = ['gt_authors', 'gt_members', 'gt_shares', 'gt_cutoffs']
-BY_ATTRIBUTES = ('gender', 'ethnicity')
+BY_ATTRIBUTES = ('gender', 'race', 'ethnicity')
 POPULATION_BY = ('seniority', *BY_ATTRIBUTES)
 PROMINENCE_GROUPS = [*cons.GT_BIN_METRICS, *(f'top_{n}' for n in cons.GT_TOP_METRICS)]
 
@@ -161,7 +163,7 @@ def bibliometric_quantiles(con: duckdb.DuckDBPyConnection, gt_dir: Path | str,
                            quantiles: Sequence[float] = cons.GT_STATS_QUANTILES,
                            by: Optional[str] = None) -> pd.DataFrame:
     """Long table field, seniority, [by,] metric, n, mean, q<..> (approximate quantiles, t-digest; one pass over
-    gt_authors with the fields unnested; All fields = memberships pooled). by: 'gender' or 'ethnicity' (perceived
+    gt_authors with the fields unnested; All fields = memberships pooled). by: 'gender', 'race' or 'ethnicity' (perceived
     labels of A.4, 'unknown' included as a class)."""
     if by not in (None, *BY_ATTRIBUTES):
         raise ValueError(f"by must be one of {BY_ATTRIBUTES}: {by}")
@@ -199,10 +201,11 @@ def histogram(con: duckdb.DuckDBPyConnection, gt_dir: Path | str, column: str, l
               n_bins: int, by_field: bool = False) -> pd.DataFrame:
     """Counts of a gt_authors numeric column in n_bins equal bins on [low, high] (values outside are clipped to the
     first / last bin; NULL / NaN left out): bin, left, right, n (+ field, memberships, if by_field)."""
-    classes = list(dict.fromkeys(cons.RACEBERT_LABELS.values()))
-    if column not in ('academic_age', 'p_female', 'p_ethnicity_max', *(f'p_{c}' for c in classes), *cons.GT_STATS_METRICS):
+    largest = {'p_race_max': race.PROB_COLUMNS, 'p_eth_max': eth.PROB_COLUMNS}     # the value min_prob is applied to
+    if column not in ('academic_age', 'p_female', *largest, *race.PROB_COLUMNS, *eth.PROB_COLUMNS,
+                      *cons.GT_STATS_METRICS):
         raise ValueError(f"Unknown column for a GT histogram: {column}")
-    value = f"greatest({', '.join(f'p_{c}' for c in classes)})" if column == 'p_ethnicity_max' else column
+    value = f"greatest({', '.join(largest[column])})" if column in largest else column
     width = (high - low) / n_bins
     source = (f"(SELECT unnest(fields) AS field, {value} AS v FROM {_src(gt_dir, 'gt_authors')})" if by_field
               else f"(SELECT {value} AS v FROM {_src(gt_dir, 'gt_authors')})")
@@ -326,7 +329,7 @@ def country_top(ranking: pd.DataFrame, measures: Sequence[str] = tuple(COUNTRY_M
 
 def shares_by_prominence(con: duckdb.DuckDBPyConnection, gt_dir: Path | str, attribute: str,
                          groups: Sequence[str] = tuple(PROMINENCE_GROUPS), include_unknown: bool = False) -> pd.DataFrame:
-    """Composition of a perceived attribute (gender / ethnicity) inside each prominence class, per field x seniority
+    """Composition of a perceived attribute (gender / race / ethnicity) inside each prominence class, per field x seniority
     (+ All fields): columns field, seniority, group (productivity / influence / collaboration / top_<metric>),
     level (L / M / H, or 'top' for the top x % group), class, n, share (within field x seniority x group x level).
     Without unknown, shares are over the known labels (as parity). The top groups compare 'top' with everyone."""

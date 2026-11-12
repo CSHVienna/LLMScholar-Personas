@@ -16,7 +16,7 @@ Verification tasks (annotation/verification.py; the pipeline's output IS shown, 
 
 Demographics (annotation/demographics.py; blind, name only):
     --task demographics  people (GT scholars + recommended people = B.6 matched authors), stratified by side x inferred
-                         gender x inferred ethnicity; the annotator picks perceived gender and ethnicity; needs A.4
+                         gender x inferred race; the annotator picks perceived gender and ethnicity; needs A.4
                          (--gt_dir) and, for the recommended side, B.6 (--matching_dir)
 
 An existing sample is never overwritten (annotations refer to its item ids) unless --overwrite.

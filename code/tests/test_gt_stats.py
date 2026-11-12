@@ -43,16 +43,19 @@ def synthetic_gt(folder: Path) -> None:
         'gender_first_name': ['Anna', 'Li', None, 'Kim', 'Bob', 'Xq'],
         'p_female': [0.95, 0.5, np.nan, 0.4, 0.02, np.nan],
         'gender': ['female', 'neutral', 'unknown', 'neutral', 'male', 'unknown'],
-        'p_asian': [0.1, 0.8, np.nan, 0.6, 0.1, 0.3], 'p_black': [0.1, 0.05, np.nan, 0.1, 0.1, 0.3],
-        'p_hispanic': [0.1, 0.05, np.nan, 0.1, 0.1, 0.2], 'p_white': [0.6, 0.05, np.nan, 0.1, 0.6, 0.1],
-        'p_other': [0.1, 0.05, np.nan, 0.1, 0.1, 0.1],
-        'ethnicity': ['white', 'asian', 'unknown', 'asian', 'white', 'unknown'],
+        'p_race_asian': [0.1, 0.8, np.nan, 0.6, 0.1, 0.3], 'p_race_black': [0.1, 0.05, np.nan, 0.1, 0.1, 0.3],
+        'p_race_hispanic': [0.1, 0.05, np.nan, 0.1, 0.1, 0.2], 'p_race_white': [0.6, 0.05, np.nan, 0.1, 0.6, 0.1],
+        'p_race_other': [0.1, 0.05, np.nan, 0.1, 0.1, 0.1],
+        'race': ['white', 'asian', 'unknown', 'asian', 'white', 'unknown'],
+        **{f'p_eth_{c}': [np.nan if e is None else 0.9 if c == e else 0.01 for e in ['british', 'east_asian', None, 'japanese', 'germanic', 'muslim']]
+           for c in cons.RACEBERT_ETHNICITY_LABELS.values()},
+        'ethnicity': ['british', 'east_asian', 'unknown', 'japanese', 'germanic', 'muslim'],
         'country': ['US', 'DE', 'US', 'US', None, 'JP'],
         'last_known_country': ['US', 'DE', 'FR', 'US', 'DE', 'JP'],
     })
     authors.to_parquet(folder / 'gt_authors.parquet')
     members = authors.explode('fields').rename(columns={'fields': 'field'})[
-        ['author_id', 'field', 'seniority', 'gender', 'ethnicity']].reset_index(drop=True)
+        ['author_id', 'field', 'seniority', 'gender', 'race', 'ethnicity']].reset_index(drop=True)
     # Physics: 1 L, 2 L, 3 H, 4 M, 5 H | Biology: 4 L, 5 H, 6 M; author 5 is the top group everywhere
     members['productivity'] = ['L', 'L', 'H', 'M', 'L', 'H', 'H', 'M']
     members['influence'] = members['productivity']
@@ -65,7 +68,7 @@ def synthetic_gt(folder: Path) -> None:
     a1.to_parquet(folder / 'authors' / 'bucket-00.parquet')
     members['country'] = ['US', 'DE', 'FR', 'unknown', 'US', 'unknown', 'US', 'JP']
     shares = []
-    for attribute in ['gender', 'ethnicity', 'country', 'productivity', 'influence', 'collaboration']:
+    for attribute in ['gender', 'race', 'ethnicity', 'country', 'productivity', 'influence', 'collaboration']:
         for keys, scope in [(['field', 'seniority'], 'field_x_seniority'), (['seniority'], 'seniority')]:
             for key, g in members.groupby(keys):
                 field, seniority = key if len(keys) == 2 else (None, key[0])
@@ -170,9 +173,12 @@ class GTStatsTest(unittest.TestCase):
         self.assertEqual(clipped['n'].tolist(), [3, 3])
         by = gs.histogram(self.con, self.dir, 'p_female', 0, 1, 2, by_field=True)
         self.assertEqual(by.groupby('field')['n'].sum().to_dict(), {'Physics': 4, 'Biology': 2})   # NaN left out
-        eth = gs.histogram(self.con, self.dir, 'p_ethnicity_max', 0, 1, 10)
+        top = gs.histogram(self.con, self.dir, 'p_race_max', 0, 1, 10)
+        self.assertEqual(top['n'].sum(), 5)
+        eth = gs.histogram(self.con, self.dir, 'p_eth_max', 0, 1, 10)
         self.assertEqual(eth['n'].sum(), 5)
-        asian = gs.histogram(self.con, self.dir, 'p_asian', 0, 1, 10)
+        self.assertEqual(eth.loc[eth['n'] > 0, 'bin'].tolist(), [9])            # all 0.9
+        asian = gs.histogram(self.con, self.dir, 'p_race_asian', 0, 1, 10)
         self.assertEqual(asian.loc[asian['n'] > 0, 'bin'].tolist(), [1, 3, 6, 8])   # 0.1 (x2), 0.3, 0.6, 0.8
         self.assertEqual(asian['n'].sum(), 5)
         with self.assertRaises(ValueError):

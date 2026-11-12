@@ -1,30 +1,33 @@
 """
-Step A.3 (demographics) in four resumable stages. Both models depend on the name only, and names recur across buckets
-(40.4M authors, 31.3M distinct full names), so every distinct name is inferred ONCE, over all buckets: the first name
-for nomquamgender, the full name for raceBERT (the slow part; sorted by length: batches of similar length need little
-padding).
+Step A.3 (demographics) in five resumable stages. The models depend on the name only, and names recur across buckets
+(40.4M authors, 31.3M distinct full names), so every distinct name is inferred ONCE per model, over all buckets: the
+first name for nomquamgender, the full name for the raceBERT race and ethnicity models (the slow part; each with its
+own normalised name, MODELS; sorted by length: batches of similar length need little padding).
 
     keys       per author bucket:  <demographics_dir>/keys/bucket-<bb>.parquet
-                   author_id, gender_first_name, gender_name (lower-case first name), racebert_name, shard
-               (population: people with >= 1 work in a prompt field; shard = crc32(racebert_name) % n_shards)
+                   author_id, gender_first_name, gender_name (lower-case first name),
+                   race_name, race_shard, ethnicity_name, ethnicity_shard
+               (population: people with >= 1 work in a prompt field; <model>_shard = crc32(<model>_name) % n_shards)
     gender     one process (needs every keys bucket; a lookup table, ~1 min): <demographics_dir>/gender/first_names.parquet
                    gender_name, p_female
+    race       per name shard (needs every keys bucket): <demographics_dir>/race/shard-<ss>.parquet
+                   race_name, p_race_asian, p_race_black, p_race_hispanic, p_race_white, p_race_other    (CPU)
     ethnicity  per name shard (needs every keys bucket): <demographics_dir>/ethnicity/shard-<ss>.parquet
-                   racebert_name, p_asian, p_black, p_hispanic, p_white, p_other
-               checkpointed every chunk_names names in shard-<ss>.parts/ (a crash resumes after the last part)
-    merge      per author bucket (needs gender + every shard): <demographics_dir>/bucket-<bb>.parquet
-                   author_id, gender_first_name, p_female, p_asian, p_black, p_hispanic, p_white, p_other
-               (the A.4 input; same columns as before the redesign)
+                   ethnicity_name, p_eth_<13 classes>                                              (GPU if any)
+               both checkpointed every chunk_names names in shard-<ss>.parts/ (a crash resumes after the last part)
+    merge      per author bucket (needs gender + every shard of both models): <demographics_dir>/bucket-<bb>.parquet
+                   author_id, gender_first_name, p_female, p_race_<5 classes>, p_eth_<13 classes>   (the A.4 input)
 
 Each output is written to a temporary name and renamed when complete; <demographics_dir>/_params.json records the
 bucket / shard counts (runs with other counts are refused).
 
-Cache: probabilities computed earlier can be reused (one or more folders; cache_files()); only the names not in the
-cache go through raceBERT. Two kinds of files are recognised:
-    name level    ethnicity/shard-<ss>.parquet (+ unfinished shard-<ss>.parts/part-*.parquet) of an earlier run of
-                  this stage: racebert_name + probabilities, matched by the exact name (preferred)
-    author level  any previous demographics output (bucket-<bb>.parquet + unfinished bucket-<bb>.parts/), e.g. the first
-                  one-pass run: author_id + probabilities, matched through the keys (author_id -> name)
+Cache (race / ethnicity stages): probabilities computed earlier can be reused (one or more folders; cache_files());
+only the names not in the cache go through the model. Two kinds of files are recognised, each used only if it has
+the model's columns:
+    name level    <model>/shard-<ss>.parquet (+ unfinished shard-<ss>.parts/part-*.parquet) of an earlier run:
+                  <model>_name + probabilities, matched by the exact name (preferred)
+    author level  a previous demographics output (bucket-<bb>.parquet + unfinished bucket-<bb>.parts/):
+                  author_id + probabilities, matched through the keys (author_id -> name)
 A name whose text changed since (e.g. text clean-up) is not found by name and is inferred again.
 """
 
@@ -34,30 +37,58 @@ import json
 import math
 import shutil
 import zlib
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import duckdb
 import pandas as pd
+import pyarrow.parquet as pq
 
-from demographics.ethnicity import PROB_COLUMNS, racebert_name
+from demographics import ethnicity, race
 from demographics.gender import first_name_of
 from groundtruth import db
 from groundtruth.authorships import check_params
 from groundtruth.fields import FieldMapping
 from utils import ios
 
-LAYOUT = 'global_names_v2'
-KEYS_DIR, GENDER_DIR, ETHNICITY_DIR = 'keys', 'gender', 'ethnicity'
+LAYOUT = 'global_names_v3'
+KEYS_DIR, GENDER_DIR = 'keys', 'gender'
 GENDER_FILE = 'first_names.parquet'
-KEY_COLUMNS = ['author_id', 'gender_first_name', 'gender_name', 'racebert_name', 'shard']
-OUTPUT_COLUMNS = ['author_id', 'gender_first_name', 'p_female', *PROB_COLUMNS]
-ProbabilityFn = Callable[[List[str]], List[Dict[str, float]]]   # EthnicityInferrer.probabilities
+ProbabilityFn = Callable[[List[str]], List[Dict[str, float]]]   # RaceInferrer / EthnicityInferrer.probabilities
+
+
+@dataclass(frozen=True)
+class NameModel:
+    """A full-name model of A.3: its folder of name shards (<demographics_dir>/<name>/), key columns and outputs."""
+    name: str
+    normalise: Callable[[Optional[str]], Optional[str]]
+    prob_columns: Tuple[str, ...]
+
+    @property
+    def name_column(self) -> str:
+        return f"{self.name}_name"
+
+    @property
+    def shard_column(self) -> str:
+        return f"{self.name}_shard"
+
+
+RACE = NameModel('race', race.race_name, tuple(race.PROB_COLUMNS))
+ETHNICITY = NameModel('ethnicity', ethnicity.ethnicity_name, tuple(ethnicity.PROB_COLUMNS))
+MODELS = {m.name: m for m in (RACE, ETHNICITY)}
+KEY_COLUMNS = ['author_id', 'gender_first_name', 'gender_name',
+               *[c for m in MODELS.values() for c in (m.name_column, m.shard_column)]]
+OUTPUT_COLUMNS = ['author_id', 'gender_first_name', 'p_female', *[c for m in MODELS.values() for c in m.prob_columns]]
 
 
 # --- layout / parameters -----------------------------------------------------------------------------------------
 def shard_file(folder: Path | str, shard: int) -> Path:
     return Path(folder) / f"shard-{shard:02d}.parquet"
+
+
+def model_dir(demographics_dir: Path | str, model: NameModel) -> Path:
+    return Path(demographics_dir) / model.name
 
 
 def name_shard(name: str, n_shards: int) -> int:
@@ -87,16 +118,17 @@ def population(authors_file: Path | str, fields: List[FieldMapping], limit_autho
 
 
 def build_keys(authors: pd.DataFrame, n_shards: int) -> pd.DataFrame:
-    """Per author: the first name for nomquamgender (and its lower-case lookup key) and the normalised raceBERT name
-    with its shard."""
+    """Per author: the first name for nomquamgender (and its lower-case lookup key) and, per full-name model, the
+    normalised name with its shard."""
     names = authors['display_name'].tolist()
     first = [first_name_of(n) for n in names]
     keys = pd.DataFrame({'author_id': authors['author_id'].to_numpy(), 'gender_first_name': first,
                          'gender_name': [f.lower() if f else None for f in first],
-                         'racebert_name': [racebert_name(n) for n in names]})
+                         **{m.name_column: [m.normalise(n) for n in names] for m in MODELS.values()}})
     keys = ios.replace_surrogates(keys)          # what is written is what is sharded (never two shards for a name)
-    keys['shard'] = pd.array([name_shard(n, n_shards) if isinstance(n, str) else None for n in keys['racebert_name']],
-                             dtype='Int32')
+    for m in MODELS.values():
+        keys[m.shard_column] = pd.array([name_shard(n, n_shards) if isinstance(n, str) else None
+                                         for n in keys[m.name_column]], dtype='Int32')
     return keys[KEY_COLUMNS]
 
 
@@ -127,12 +159,16 @@ def write_gender_table(names: List[str], output_file: Path | str, p_female_fn: C
     return df
 
 
-# --- stage 3: raceBERT once per distinct full name, per shard ---------------------------------------------------------
-def shard_names(con: duckdb.DuckDBPyConnection, keys_dir: Path | str, shard: int) -> List[str]:
+# --- stages 3-4: a full-name model once per distinct name, per shard ----------------------------------------------
+def _shard_names_sql(keys_dir: Path | str, shard: int, model: NameModel) -> str:
+    return (f"SELECT DISTINCT {model.name_column} FROM read_parquet({db.sql_path(Path(keys_dir) / 'bucket-*.parquet')}) "
+            f"WHERE {model.shard_column} = {int(shard)} AND {model.name_column} IS NOT NULL")
+
+
+def shard_names(con: duckdb.DuckDBPyConnection, keys_dir: Path | str, shard: int, model: NameModel) -> List[str]:
     """Distinct names of one shard over all buckets, sorted by (length, name): deterministic, and batches of
     similar length need little padding."""
-    rows = con.execute(f"SELECT DISTINCT racebert_name FROM read_parquet({db.sql_path(Path(keys_dir) / 'bucket-*.parquet')}) "
-                       f"WHERE shard = {int(shard)} AND racebert_name IS NOT NULL").fetchall()
+    rows = con.execute(_shard_names_sql(keys_dir, shard, model)).fetchall()
     return sorted((r[0] for r in rows), key=lambda n: (len(n), n))
 
 
@@ -154,39 +190,51 @@ def cache_files(cache_dirs: Optional[Path | str | Sequence[Path | str]]) -> List
 
 
 def is_name_level(file: str) -> bool:
-    """A name-level cache file (ethnicity shard or its part), else author level."""
+    """A name-level cache file (a model's shard or its part), else author level."""
     path = Path(file)
     return (path.parent.name if path.parent.name.endswith('.parts') else path.name).startswith('shard-')
 
 
-def cached_probabilities(con: duckdb.DuckDBPyConnection, keys_dir: Path | str, shard: int,
-                         files: List[str]) -> pd.DataFrame:
+def model_cache_files(files: Sequence[str], model: NameModel) -> Tuple[List[str], List[str]]:
+    """(name-level, author-level) cache files that hold the model's columns (other files are ignored)."""
+    by_name, by_author = [], []
+    for f in files:
+        columns = set(pq.read_schema(f).names)
+        if not set(model.prob_columns) <= columns:
+            continue
+        if is_name_level(f) and model.name_column in columns:
+            by_name.append(f)
+        elif not is_name_level(f) and 'author_id' in columns:
+            by_author.append(f)
+    return by_name, by_author
+
+
+def cached_probabilities(con: duckdb.DuckDBPyConnection, keys_dir: Path | str, shard: int, files: List[str],
+                         model: NameModel) -> pd.DataFrame:
     """Probabilities of the shard's names found in the cache: by exact name in the name-level files, else through
     the keys (author_id -> name) in the author-level files; a name cached several times takes the name-level row
     first, then the row of the smallest author_id (deterministic)."""
-    empty = pd.DataFrame({'racebert_name': pd.Series(dtype=object), **{c: pd.Series(dtype=float) for c in PROB_COLUMNS}})
-    if not files:
+    name, cols = model.name_column, list(model.prob_columns)
+    empty = pd.DataFrame({name: pd.Series(dtype=object), **{c: pd.Series(dtype=float) for c in cols}})
+    by_name, by_author = model_cache_files(files, model)
+    if not by_name and not by_author:
         return empty
-    names_sql = (f"SELECT DISTINCT racebert_name FROM read_parquet({db.sql_path(Path(keys_dir) / 'bucket-*.parquet')}) "
-                 f"WHERE shard = {int(shard)} AND racebert_name IS NOT NULL")
-    complete = ' AND '.join(f"c.{col} IS NOT NULL" for col in PROB_COLUMNS)
-    probs = ', '.join(f"c.{c}" for c in PROB_COLUMNS)
+    complete = ' AND '.join(f"c.{col} IS NOT NULL" for col in cols)
+    probs = ', '.join(f"c.{c}" for c in cols)
     parts = []
-    by_name = [f for f in files if is_name_level(f)]
-    by_author = [f for f in files if not is_name_level(f)]
     if by_name:
-        parts.append(f"""SELECT c.racebert_name, {probs}, 0 AS priority, 0 AS author_id
+        parts.append(f"""SELECT c.{name}, {probs}, 0 AS priority, 0 AS author_id
             FROM read_parquet({'[' + ', '.join(db.sql_path(f) for f in by_name) + ']'}, union_by_name = true) c
-            WHERE c.racebert_name IN ({names_sql}) AND {complete}""")
+            WHERE c.{name} IN ({_shard_names_sql(keys_dir, shard, model)}) AND {complete}""")
     if by_author:
-        parts.append(f"""SELECT k.racebert_name, {probs}, 1 AS priority, c.author_id
+        parts.append(f"""SELECT k.{name}, {probs}, 1 AS priority, c.author_id
             FROM read_parquet({db.sql_path(Path(keys_dir) / 'bucket-*.parquet')}) k
             JOIN read_parquet({'[' + ', '.join(db.sql_path(f) for f in by_author) + ']'}, union_by_name = true) c
               USING (author_id)
-            WHERE k.shard = {int(shard)} AND k.racebert_name IS NOT NULL AND {complete}""")
+            WHERE k.{model.shard_column} = {int(shard)} AND k.{name} IS NOT NULL AND {complete}""")
     return con.execute(f"""
-        SELECT racebert_name, {', '.join(PROB_COLUMNS)} FROM (
-            SELECT *, row_number() OVER (PARTITION BY racebert_name ORDER BY priority, author_id) AS rn
+        SELECT {name}, {', '.join(cols)} FROM (
+            SELECT *, row_number() OVER (PARTITION BY {name} ORDER BY priority, author_id) AS rn
             FROM ({' UNION ALL '.join(parts)})
         ) WHERE rn = 1
     """).df()
@@ -210,13 +258,14 @@ def _parts_dir(output_file: Path, settings: Dict, overwrite: bool) -> Path:
 
 
 def infer_shard(names: List[str], output_file: Path | str, probabilities_fn: ProbabilityFn, chunk_names: int,
-                overwrite: bool = False, log: Callable[[str], None] = ios.printf,
+                model: NameModel, overwrite: bool = False, log: Callable[[str], None] = ios.printf,
                 cached: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     """Probabilities of every name: cached ones are taken as they are, the others are inferred in checkpointed parts
     of chunk_names names. Returns the merged frame (one row per name, in the order of ``names``)."""
     output_file = Path(output_file)
-    cached = cached[cached['racebert_name'].isin(set(names))] if cached is not None else None
-    known = set(cached['racebert_name']) if cached is not None else set()
+    name_column, prob_columns = model.name_column, list(model.prob_columns)
+    cached = cached[cached[name_column].isin(set(names))] if cached is not None else None
+    known = set(cached[name_column]) if cached is not None else set()
     todo = [n for n in names if n not in known]                        # keeps the (length, name) order
     digest = hashlib.md5('\n'.join(todo).encode('utf-8')).hexdigest()
     parts_dir = _parts_dir(output_file, {'n_names': len(todo), 'chunk_names': chunk_names, 'md5': digest}, overwrite)
@@ -229,47 +278,52 @@ def infer_shard(names: List[str], output_file: Path | str, probabilities_fn: Pro
         probs = probabilities_fn(chunk) if chunk else []
         if len(probs) != len(chunk):
             raise RuntimeError(f"Model returned {len(probs)} results for {len(chunk)} names")
-        df = pd.DataFrame(probs, columns=PROB_COLUMNS, dtype=float)
-        df.insert(0, 'racebert_name', pd.Series(chunk, dtype=object))
+        df = pd.DataFrame(probs, columns=prob_columns, dtype=float)
+        df.insert(0, name_column, pd.Series(chunk, dtype=object))
         db.write_parquet_atomic(df, part_file)
-        log(f"[{output_file.stem}] part {part + 1}/{n_parts} stored ({len(known)} names cached)")
+        log(f"[{model.name} {output_file.stem}] part {part + 1}/{n_parts} stored ({len(known)} names cached)")
     inferred = pd.concat([ios.load_parquet(f) for f in sorted(parts_dir.glob('part-*.parquet'))], ignore_index=True)
-    if inferred['racebert_name'].tolist() != todo:
+    if inferred[name_column].tolist() != todo:
         raise RuntimeError(f"{parts_dir}: parts do not match the names to infer ({len(inferred)} vs {len(todo)})")
-    frames = [inferred] if cached is None or cached.empty else [cached[['racebert_name', *PROB_COLUMNS]], inferred]
-    df = pd.concat(frames, ignore_index=True).set_index('racebert_name').loc[names].reset_index()
-    if len(df) != len(names) or df[PROB_COLUMNS].isna().any().any():
+    frames = [inferred] if cached is None or cached.empty else [cached[[name_column, *prob_columns]], inferred]
+    df = pd.concat(frames, ignore_index=True).set_index(name_column).loc[names].reset_index()
+    if len(df) != len(names) or df[prob_columns].isna().any().any():
         raise RuntimeError(f"{output_file.name}: {len(df)} rows for {len(names)} names, or missing probabilities")
     db.write_parquet_atomic(df, output_file)
     shutil.rmtree(parts_dir)
     return df
 
 
-# --- stage 4: merge per author bucket ----------------------------------------------------------------------------
+# --- stage 5: merge per author bucket ----------------------------------------------------------------------------
 def write_merged_bucket(con: duckdb.DuckDBPyConnection, keys_file: Path | str, gender_file: Path | str,
-                        ethnicity_dir: Path | str, output_file: Path | str) -> int:
-    """Keys of one bucket joined with the probabilities of their names; checks that no author is lost or duplicated
-    and that every name was found in its lookup table."""
+                        demographics_dir: Path | str, output_file: Path | str) -> int:
+    """Keys of one bucket joined with the probabilities of their names (gender table + the shards of every model);
+    checks that no author is lost or duplicated and that every name was found in its lookup table."""
     output_file = Path(output_file)
     tmp = output_file.with_name(output_file.name + '.tmp')
-    probs = ', '.join(f"e.{c}" for c in PROB_COLUMNS)
+    aliases = {m.name: f"m{i}" for i, m in enumerate(MODELS.values())}
+    probs = ', '.join(f"{aliases[m.name]}.{c}" for m in MODELS.values() for c in m.prob_columns)
+    joins = '\n'.join(f"LEFT JOIN read_parquet({db.sql_path(model_dir(demographics_dir, m) / 'shard-*.parquet')}) "
+                      f"{aliases[m.name]} ON {aliases[m.name]}.{m.name_column} = k.{m.name_column}"
+                      for m in MODELS.values())
     joined = f"""
         FROM read_parquet({db.sql_path(keys_file)}) k
         LEFT JOIN read_parquet({db.sql_path(gender_file)}) g ON g.gender_name = k.gender_name
-        LEFT JOIN read_parquet({db.sql_path(Path(ethnicity_dir) / 'shard-*.parquet')}) e
-               ON e.racebert_name = k.racebert_name
+        {joins}
     """
     con.execute(f"COPY (SELECT k.author_id, k.gender_first_name, g.p_female, {probs} {joined} ORDER BY k.author_id) "
                 f"TO {db.sql_path(tmp)} (FORMAT parquet, COMPRESSION zstd)")
-    n_keys, lost_gender, lost_ethnicity = con.execute(
-        f"SELECT count(*), count(*) FILTER (k.gender_name IS NOT NULL AND g.gender_name IS NULL), "
-        f"count(*) FILTER (k.racebert_name IS NOT NULL AND e.racebert_name IS NULL) {joined}").fetchone()
+    lost = ', '.join(f"count(*) FILTER (k.{m.name_column} IS NOT NULL AND {aliases[m.name]}.{m.name_column} IS NULL)"
+                     for m in MODELS.values())
+    n_keys, lost_gender, *lost_models = con.execute(
+        f"SELECT count(*), count(*) FILTER (k.gender_name IS NOT NULL AND g.gender_name IS NULL), {lost} {joined}"
+    ).fetchone()
     n_out, n_ids = con.execute(f"SELECT count(*), count(DISTINCT author_id) FROM read_parquet({db.sql_path(tmp)})").fetchone()
     n_authors = con.execute(f"SELECT count(*) FROM read_parquet({db.sql_path(keys_file)})").fetchone()[0]
-    if not (n_out == n_ids == n_keys == n_authors and lost_gender == 0 and lost_ethnicity == 0):
+    if not (n_out == n_ids == n_keys == n_authors and lost_gender == 0 and not any(lost_models)):
         tmp.unlink()
+        missing = '; '.join(f"names missing in the {m} shards: {n}" for m, n in zip(MODELS, lost_models))
         raise RuntimeError(f"{output_file.name}: {n_authors} authors -> {n_out} rows, {n_ids} distinct ids; "
-                           f"first names missing in the gender table: {lost_gender}; "
-                           f"full names missing in the ethnicity shards: {lost_ethnicity}")
+                           f"first names missing in the gender table: {lost_gender}; {missing}")
     tmp.replace(output_file)
     return n_out

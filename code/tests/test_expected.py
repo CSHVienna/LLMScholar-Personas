@@ -126,7 +126,7 @@ class TestAdjusted(unittest.TestCase):
         gt = root / 'population' / 'main'
         gt.mkdir(parents=True)
         members = pd.DataFrame([{'author_id': a, 'field': 'Physics', 'seniority': 'senior', 'gender': g,
-                                 'ethnicity': 'white', 'country': 'DE', 'productivity': b, 'influence': b,
+                                 'race': 'white', 'ethnicity': 'british', 'country': 'DE', 'productivity': b, 'influence': b,
                                  'collaboration': b, 'is_top_productivity': a == 1, 'is_top_influence': False}
                                 for a, g, b in [(1, 'female', 'H'), (2, 'female', 'L'), (3, 'male', 'L'), (4, 'unknown', 'M')]])
         members.to_parquet(gt / 'gt_members.parquet')

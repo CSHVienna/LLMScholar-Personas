@@ -19,7 +19,8 @@ import duckdb                                                            # noqa:
 import numpy as np                                                       # noqa: E402
 import pandas as pd                                                      # noqa: E402
 
-from demographics.ethnicity import racebert_name                         # noqa: E402
+from demographics.ethnicity import PROB_COLUMNS as ETH_PROB_COLUMNS, ethnicity_name    # noqa: E402
+from demographics.race import PROB_COLUMNS as RACE_PROB_COLUMNS, race_name             # noqa: E402
 from demographics.gender import first_name_of                            # noqa: E402
 from demographics import stages                                          # noqa: E402
 from groundtruth import db                                               # noqa: E402
@@ -252,9 +253,14 @@ class GroundTruthPipeline(unittest.TestCase):
         nan = float('nan')   # probabilities only (A.3); labels are derived in A.4
         demo = pd.DataFrame({'author_id': [1, 2, 3, 4], 'gender_first_name': ['Jose', 'Ada', 'Wei', None],
                              'p_female': [0.05, 0.95, 0.02, nan],
-                             'p_asian': [0.02, 0.05, 0.99, 0.45], 'p_black': [0.03, 0.05, 0.0, 0.30],
-                             'p_hispanic': [0.90, 0.10, 0.0, 0.05], 'p_white': [0.05, 0.80, 0.01, 0.15],
-                             'p_other': [0.0, 0.0, 0.0, 0.05]})
+                             'p_race_asian': [0.02, 0.05, 0.99, 0.45], 'p_race_black': [0.03, 0.05, 0.0, 0.30],
+                             'p_race_hispanic': [0.90, 0.10, 0.0, 0.05], 'p_race_white': [0.05, 0.80, 0.01, 0.15],
+                             'p_race_other': [0.0, 0.0, 0.0, 0.05],
+                             **{c: [0.02] * 4 for c in ETH_PROB_COLUMNS}})
+        demo.loc[0, 'p_eth_hispanic'] = 0.76                       # author 1: hispanic
+        demo.loc[1, 'p_eth_british'] = 0.76                        # author 2: british
+        demo.loc[2, 'p_eth_east_asian'] = 0.3                      # author 3: east_asian below min_prob -> unknown
+        demo.loc[3, ETH_PROB_COLUMNS] = np.nan                     # author 4: no name
         (self.root / 'demo').mkdir(exist_ok=True)
         demo.to_parquet(self.root / 'demo' / 'bucket-00.parquet', index=False)
         con = duckdb.connect()
@@ -277,15 +283,18 @@ class GroundTruthPipeline(unittest.TestCase):
         self.assertEqual(math_junior.loc[4, 'collaboration'], cons.BIN_LOW)    # 2 vs 3 coauthors
         self.assertAlmostEqual(authors.loc[1, 'share_computer_science'], 2 / 3)
         self.assertEqual(tuple(authors.loc[[1, 2, 3, 4], 'gender']), ('male', 'female', 'male', 'unknown'))
-        self.assertEqual(tuple(authors.loc[[1, 2, 3, 4], 'ethnicity']), ('hispanic', 'white', 'asian', 'unknown'))
+        self.assertEqual(tuple(authors.loc[[1, 2, 3, 4], 'race']), ('hispanic', 'white', 'asian', 'unknown'))
+        self.assertEqual(tuple(authors.loc[[1, 2, 3, 4], 'ethnicity']), ('hispanic', 'british', 'unknown', 'unknown'))
+        self.assertEqual(set(members.columns) & {'gender', 'race', 'ethnicity'}, {'gender', 'race', 'ethnicity'})
+        self.assertEqual({'race', 'ethnicity'} <= set(shares['attribute']), True)
 
         con = duckdb.connect()   # a field-share threshold applied later: Sociology is 1/3 of author 1's works
         create_views(con, str(self.root / 'authors' / 'bucket-*.parquet'), None, self.fields, min_field_share=0.5,
                      reference_year=2025, junior_max=10, senior_min=20, single_cutoff=15, bin_edges=[1 / 3, 2 / 3],
-                     top_percentile=50, ethnicity_min_prob=0.4)
-        a1 = con.execute("SELECT fields, ethnicity FROM gt_authors WHERE author_id = 1").fetchone()
+                     top_percentile=50, race_min_prob=0.4, ethnicity_min_prob=0.2)
+        a1 = con.execute("SELECT fields, race, ethnicity FROM gt_authors WHERE author_id = 1").fetchone()
         self.assertEqual(a1[0], ['Computer Science'])
-        self.assertEqual(a1[1], 'unknown')                          # no demographics given
+        self.assertEqual(a1[1:], ('unknown', 'unknown'))            # no demographics given
 
         con = duckdb.connect()   # any number of prominence classes (here 4)
         create_views(con, str(self.root / 'authors' / 'bucket-*.parquet'), None, self.fields, min_field_share=0.0,
@@ -306,7 +315,8 @@ class GroundTruthPipeline(unittest.TestCase):
 
 
 class TestDemographicsStages(unittest.TestCase):
-    """A.3 keys -> ethnicity (each distinct name once, sorted by length, resumable) -> merge, with a fake model."""
+    """A.3 keys -> gender -> race / ethnicity (each distinct name once per model, sorted by length, resumable) -> merge,
+    with fake models."""
     N_SHARDS = 3
 
     def setUp(self):
@@ -323,17 +333,22 @@ class TestDemographicsStages(unittest.TestCase):
                                 'works_computer_science': w} for a, n, p, w in rows if a % N_BUCKETS == bucket])
             ios_to_parquet(df, db.bucket_file(self.authors_dir, bucket))
         self.out = self.root / 'demographics'
-        self.keys_dir, self.eth_dir = self.out / stages.KEYS_DIR, self.out / stages.ETHNICITY_DIR
+        self.keys_dir = self.out / stages.KEYS_DIR
+        self.race_dir, self.eth_dir = stages.model_dir(self.out, stages.RACE), stages.model_dir(self.out, stages.ETHNICITY)
         self.gender_file = self.out / stages.GENDER_DIR / stages.GENDER_FILE
         self.calls, self.gender_calls = [], []
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def fake_probs(self, names):
+    def fake_race(self, names):
         self.calls.append(list(names))
-        return [{'p_asian': len(n) / 100, 'p_black': 0.1, 'p_hispanic': 0.1, 'p_white': 0.2, 'p_other': 0.0}
-                for n in names]
+        return [{'p_race_asian': len(n) / 100, 'p_race_black': 0.1, 'p_race_hispanic': 0.1, 'p_race_white': 0.2,
+                 'p_race_other': 0.0} for n in names]
+
+    def fake_ethnicity(self, names):
+        self.calls.append(list(names))
+        return [{c: (len(n) / 100 if i == 0 else 0.01) for i, c in enumerate(ETH_PROB_COLUMNS)} for n in names]
 
     def fake_gender(self, first_names):
         self.gender_calls.append(list(first_names))
@@ -347,42 +362,57 @@ class TestDemographicsStages(unittest.TestCase):
         stages.write_gender_table(stages.gender_names(duckdb.connect(), self.keys_dir), self.gender_file, self.fake_gender)
         return keys
 
-    def run_ethnicity(self, chunk_names=100):
+    def run_model(self, model, fn, chunk_names=100, cached=None):
         con = duckdb.connect()
         for s in range(self.N_SHARDS):
-            stages.infer_shard(stages.shard_names(con, self.keys_dir, s), stages.shard_file(self.eth_dir, s),
-                               self.fake_probs, chunk_names, log=lambda m: None)
+            stages.infer_shard(stages.shard_names(con, self.keys_dir, s, model),
+                               stages.shard_file(stages.model_dir(self.out, model), s), fn, chunk_names, model,
+                               log=lambda m: None, cached=cached(con, s) if cached else None)
+
+    def run_models(self):
+        self.run_model(stages.RACE, self.fake_race)
+        self.run_model(stages.ETHNICITY, self.fake_ethnicity)
 
     def run_merge(self):
         con = duckdb.connect()
-        return pd.concat([pd.read_parquet(f) for f in [
-            (stages.write_merged_bucket(con, db.bucket_file(self.keys_dir, b), self.gender_file, self.eth_dir,
-                                        db.bucket_file(self.out, b)), db.bucket_file(self.out, b))[1]
-            for b in range(N_BUCKETS)]]).set_index('author_id')
+        for b in range(N_BUCKETS):
+            stages.write_merged_bucket(con, db.bucket_file(self.keys_dir, b), self.gender_file, self.out,
+                                       db.bucket_file(self.out, b))
+        return pd.concat([pd.read_parquet(db.bucket_file(self.out, b)) for b in range(N_BUCKETS)]).set_index('author_id')
 
     def test_end_to_end(self):
         keys = self.run_keys()
+        self.assertEqual(list(keys.reset_index().columns), stages.KEY_COLUMNS)
         self.assertEqual(sorted(keys.index), [1, 2, 3, 4, 5, 6, 10])         # no organisation, no field-less author
-        self.assertEqual(keys.loc[1, 'racebert_name'], keys.loc[2, 'racebert_name'])   # 'maria GARCIA'
-        self.assertTrue(pd.isna(keys.loc[6, 'racebert_name']) and pd.isna(keys.loc[6, 'shard']))
+        self.assertEqual(keys.loc[1, 'race_name'], keys.loc[2, 'race_name'])   # 'maria GARCIA'
+        self.assertEqual(keys.loc[1, 'ethnicity_name'], 'maria_garcia')      # the ethnicity model's own key
+        self.assertTrue(pd.isna(keys.loc[6, 'race_name']) and pd.isna(keys.loc[6, 'race_shard']))
+        self.assertTrue(pd.isna(keys.loc[6, 'ethnicity_name']) and pd.isna(keys.loc[6, 'ethnicity_shard']))
         self.assertEqual((keys.loc[1, 'gender_first_name'], keys.loc[2, 'gender_first_name']), ('Maria', 'maria'))
         self.assertEqual(self.gender_calls, [['ada', 'maria', 'wei']])        # once per distinct first name, globally
-        self.assertEqual(int(keys.loc[3, 'shard']), stages.name_shard('wei ZHANG', self.N_SHARDS))
+        self.assertEqual(int(keys.loc[3, 'race_shard']), stages.name_shard('wei ZHANG', self.N_SHARDS))
+        self.assertEqual(int(keys.loc[3, 'ethnicity_shard']), stages.name_shard('wei_zhang', self.N_SHARDS))
 
-        self.run_ethnicity()
+        self.run_model(stages.RACE, self.fake_race)
         inferred = [n for call in self.calls for n in call]
         self.assertEqual(sorted(inferred), sorted({'maria GARCIA', 'wei ZHANG', 'j. SMITH', 'ada LOVELACE'}))  # once each
         for call in self.calls:
             self.assertEqual(call, sorted(call, key=lambda n: (len(n), n)))   # by length
-        self.assertEqual(sum(1 for _ in self.eth_dir.glob('*.parts')), 0)
+        self.calls.clear()
+        self.run_model(stages.ETHNICITY, self.fake_ethnicity)
+        self.assertEqual(sorted(n for c in self.calls for n in c),
+                         sorted({'maria_garcia', 'wei_zhang', 'j._smith', 'ada_lovelace'}))
+        self.assertEqual(sum(1 for _ in self.out.rglob('*.parts')), 0)
 
         merged = self.run_merge()
         self.assertEqual(list(merged.columns), stages.OUTPUT_COLUMNS[1:])
+        self.assertEqual(len(ETH_PROB_COLUMNS), 13)
         self.assertEqual(sorted(merged.index), [1, 2, 3, 4, 5, 6, 10])
-        self.assertAlmostEqual(merged.loc[1, 'p_asian'], len('maria GARCIA') / 100)
-        self.assertEqual(merged.loc[1, 'p_asian'], merged.loc[2, 'p_asian'])
-        self.assertEqual(merged.loc[3, 'p_asian'], merged.loc[4, 'p_asian'])
-        self.assertTrue(merged.loc[6, stages.PROB_COLUMNS].isna().all())       # no name -> unknown later
+        self.assertAlmostEqual(merged.loc[1, 'p_race_asian'], len('maria GARCIA') / 100)
+        self.assertAlmostEqual(merged.loc[1, ETH_PROB_COLUMNS[0]], len('maria_garcia') / 100)
+        self.assertEqual(merged.loc[1, 'p_race_asian'], merged.loc[2, 'p_race_asian'])
+        self.assertEqual(merged.loc[3, 'p_race_asian'], merged.loc[4, 'p_race_asian'])
+        self.assertTrue(merged.loc[6, [*RACE_PROB_COLUMNS, *ETH_PROB_COLUMNS]].isna().all())   # no name -> unknown later
         self.assertEqual((merged.loc[1, 'p_female'], merged.loc[2, 'p_female']), (0.95, 0.95))
         self.assertEqual((merged.loc[1, 'gender_first_name'], merged.loc[2, 'gender_first_name']), ('Maria', 'maria'))
         self.assertTrue(pd.isna(merged.loc[10, 'p_female']))                   # not in the reference -> unknown later
@@ -392,95 +422,104 @@ class TestDemographicsStages(unittest.TestCase):
     def test_resume_after_crash(self):
         self.run_keys()
         con = duckdb.connect()
-        shard = next(s for s in range(self.N_SHARDS) if len(stages.shard_names(con, self.keys_dir, s)) >= 2)
-        names = stages.shard_names(con, self.keys_dir, shard)
-        out = stages.shard_file(self.eth_dir, shard)
+        model = stages.RACE
+        shard = next(s for s in range(self.N_SHARDS) if len(stages.shard_names(con, self.keys_dir, s, model)) >= 2)
+        names = stages.shard_names(con, self.keys_dir, shard, model)
+        out = stages.shard_file(self.race_dir, shard)
 
         def crash_on_second(chunk):
             if len(self.calls) == 1:
                 raise RuntimeError('killed')
-            return self.fake_probs(chunk)
+            return self.fake_race(chunk)
         with self.assertRaises(RuntimeError):
-            stages.infer_shard(names, out, crash_on_second, 1, log=lambda m: None)
+            stages.infer_shard(names, out, crash_on_second, 1, model, log=lambda m: None)
         self.assertEqual(len(list(out.with_name(out.stem + '.parts').glob('part-*.parquet'))), 1)
-        df = stages.infer_shard(names, out, self.fake_probs, 1, log=lambda m: None)
+        df = stages.infer_shard(names, out, self.fake_race, 1, model, log=lambda m: None)
         self.assertEqual(len(self.calls), len(names))                         # the stored part was not redone
-        self.assertEqual(df['racebert_name'].tolist(), names)
+        self.assertEqual(df['race_name'].tolist(), names)
         self.assertFalse(out.with_name(out.stem + '.parts').exists())
 
         self.calls.clear()                                                    # parts of another chunk size are discarded
         with self.assertRaises(RuntimeError):
-            stages.infer_shard(names, out, crash_on_second, 1, log=lambda m: None)
+            stages.infer_shard(names, out, crash_on_second, 1, model, log=lambda m: None)
         self.calls.clear()
-        stages.infer_shard(names, out, self.fake_probs, 2, log=lambda m: None)
+        stages.infer_shard(names, out, self.fake_race, 2, model, log=lambda m: None)
         self.assertEqual([n for c in self.calls for n in c], names)
 
     def test_merge_refuses_missing_names(self):
         self.run_keys()
-        self.run_ethnicity()
+        self.run_models()
         con = duckdb.connect()
         bucket = 3 % N_BUCKETS                                                # holds author 3 ('Wei Zhang')
-        args = (db.bucket_file(self.keys_dir, bucket), self.gender_file, self.eth_dir, db.bucket_file(self.out, bucket))
+        args = (db.bucket_file(self.keys_dir, bucket), self.gender_file, self.out, db.bucket_file(self.out, bucket))
         gender = pd.read_parquet(self.gender_file)                            # a first name missing in the gender table
         gender[gender['gender_name'] != 'wei'].to_parquet(self.gender_file, index=False)
         with self.assertRaises(RuntimeError):
             stages.write_merged_bucket(con, *args)
         gender.to_parquet(self.gender_file, index=False)
-        for s in range(self.N_SHARDS):                                        # a full name missing in its shard
-            f = stages.shard_file(self.eth_dir, s)
-            df = pd.read_parquet(f)
-            if 'wei ZHANG' in set(df['racebert_name']):
-                df[df['racebert_name'] != 'wei ZHANG'].to_parquet(f, index=False)
-        with self.assertRaises(RuntimeError):
-            stages.write_merged_bucket(con, *args)
-        self.assertFalse(db.bucket_file(self.out, bucket).exists())
-        self.assertFalse(db.bucket_file(self.out, bucket).with_suffix('.parquet.tmp').exists())
+        stages.write_merged_bucket(con, *args)                                # complete again: fine
+        for model, name in ((stages.RACE, 'wei ZHANG'), (stages.ETHNICITY, 'wei_zhang')):   # a name missing in a shard
+            for s in range(self.N_SHARDS):
+                f = stages.shard_file(stages.model_dir(self.out, model), s)
+                df = pd.read_parquet(f)
+                if name in set(df[model.name_column]):
+                    df.to_parquet(f.with_suffix('.bak'), index=False)
+                    df[df[model.name_column] != name].to_parquet(f, index=False)
+                    db.bucket_file(self.out, bucket).unlink(missing_ok=True)
+                    with self.assertRaises(RuntimeError):
+                        stages.write_merged_bucket(con, *args)
+                    self.assertFalse(db.bucket_file(self.out, bucket).exists())
+                    self.assertFalse(db.bucket_file(self.out, bucket).with_suffix('.parquet.tmp').exists())
+                    f.with_suffix('.bak').replace(f)
 
     def test_cache_reused_by_name(self):
         """Author-level probabilities of an earlier run (final file + unfinished parts) are reused for every author
-        with the same name; only the other names are inferred."""
+        with the same name; only the other names are inferred; files without the model's columns are ignored."""
         self.run_keys()
         cache = self.root / 'cache'
-        row = {'p_asian': 0.7, 'p_black': 0.1, 'p_hispanic': 0.1, 'p_white': 0.05, 'p_other': 0.05}
+        row = {'p_race_asian': 0.7, 'p_race_black': 0.1, 'p_race_hispanic': 0.1, 'p_race_white': 0.05,
+               'p_race_other': 0.05}
         ios_to_parquet(pd.DataFrame([{'author_id': 1, 'gender_first_name': 'Maria', 'p_female': 0.9, **row},
                                      {'author_id': 6, 'gender_first_name': None, 'p_female': np.nan,
                                       **{c: np.nan for c in row}}]), cache / 'bucket-00.parquet')
         ios_to_parquet(pd.DataFrame([{'author_id': 3, 'gender_first_name': 'Wei', 'p_female': 0.3, **row,
-                                      'p_asian': 0.8}]), cache / 'bucket-01.parts' / 'part-00000.parquet')
+                                      'p_race_asian': 0.8}]), cache / 'bucket-01.parts' / 'part-00000.parquet')
         (cache / 'bucket-01.parts' / 'part-00001.parquet.tmp').write_text('unfinished write')
         files = stages.cache_files(cache)
         self.assertEqual(len(files), 2)
-        con = duckdb.connect()
-        for s in range(self.N_SHARDS):
-            stages.infer_shard(stages.shard_names(con, self.keys_dir, s), stages.shard_file(self.eth_dir, s),
-                               self.fake_probs, 100, log=lambda m: None,
-                               cached=stages.cached_probabilities(con, self.keys_dir, s, files))
+        self.assertEqual(stages.model_cache_files(files, stages.ETHNICITY), ([], []))   # no ethnicity columns
+        self.run_model(stages.RACE, self.fake_race,
+                       cached=lambda con, s: stages.cached_probabilities(con, self.keys_dir, s, files, stages.RACE))
         self.assertEqual(sorted(n for c in self.calls for n in c), ['ada LOVELACE', 'j. SMITH'])
+        self.run_model(stages.ETHNICITY, self.fake_ethnicity,
+                       cached=lambda con, s: stages.cached_probabilities(con, self.keys_dir, s, files, stages.ETHNICITY))
         merged = self.run_merge()
-        self.assertEqual(merged.loc[2, 'p_asian'], 0.7)          # author 2 shares author 1's (cached) name
-        self.assertEqual(merged.loc[4, 'p_asian'], 0.8)          # from the unfinished part
-        self.assertAlmostEqual(merged.loc[10, 'p_asian'], len('ada LOVELACE') / 100)
+        self.assertEqual(merged.loc[2, 'p_race_asian'], 0.7)     # author 2 shares author 1's (cached) name
+        self.assertEqual(merged.loc[4, 'p_race_asian'], 0.8)     # from the unfinished part
+        self.assertAlmostEqual(merged.loc[10, 'p_race_asian'], len('ada LOVELACE') / 100)
         self.assertEqual(stages.cache_files(None), [])
         with self.assertRaises(FileNotFoundError):
             stages.cache_files(self.root / 'nope')
 
     def test_cache_name_level_and_several_folders(self):
-        """Ethnicity shards of an earlier run are matched by exact name and win over the author-level cache; a name
-        not in any cache (e.g. changed by the text clean-up) is inferred."""
+        """Shards of an earlier run are matched by exact name and win over the author-level cache; a name not in any
+        cache (e.g. changed by the text clean-up) is inferred."""
         self.run_keys()
-        old_shards, old_buckets = self.root / 'old_ethnicity', self.root / 'old_demographics'
-        row = {'p_asian': 0.1, 'p_black': 0.1, 'p_hispanic': 0.1, 'p_white': 0.6, 'p_other': 0.1}
-        ios_to_parquet(pd.DataFrame([{'racebert_name': 'wei ZHANG', **row, 'p_asian': 0.9},
-                                     {'racebert_name': 'stale NAME', **row}]), old_shards / 'shard-00.parquet')
-        ios_to_parquet(pd.DataFrame([{'racebert_name': 'maria GARCIA', **row, 'p_asian': 0.2}]),
+        old_shards, old_buckets = self.root / 'old_race', self.root / 'old_demographics'
+        row = {'p_race_asian': 0.1, 'p_race_black': 0.1, 'p_race_hispanic': 0.1, 'p_race_white': 0.6,
+               'p_race_other': 0.1}
+        ios_to_parquet(pd.DataFrame([{'race_name': 'wei ZHANG', **row, 'p_race_asian': 0.9},
+                                     {'race_name': 'stale NAME', **row}]), old_shards / 'shard-00.parquet')
+        ios_to_parquet(pd.DataFrame([{'race_name': 'maria GARCIA', **row, 'p_race_asian': 0.2}]),
                        old_shards / 'shard-01.parts' / 'part-00000.parquet')
         ios_to_parquet(pd.DataFrame([{'author_id': 3, 'gender_first_name': 'Wei', 'p_female': 0.3, **row,
-                                      'p_asian': 0.5}]), old_buckets / 'bucket-00.parquet')
+                                      'p_race_asian': 0.5}]), old_buckets / 'bucket-00.parquet')
         files = stages.cache_files([old_shards, old_buckets])
         self.assertEqual([stages.is_name_level(f) for f in files], [True, True, False])
         con = duckdb.connect()
-        cached = pd.concat([stages.cached_probabilities(con, self.keys_dir, s, files) for s in range(self.N_SHARDS)])
-        cached = cached.set_index('racebert_name')['p_asian']
+        cached = pd.concat([stages.cached_probabilities(con, self.keys_dir, s, files, stages.RACE)
+                            for s in range(self.N_SHARDS)])
+        cached = cached.set_index('race_name')['p_race_asian']
         self.assertEqual(cached['wei ZHANG'], 0.9)                 # name level wins over author 3's row
         self.assertEqual(cached['maria GARCIA'], 0.2)              # from an unfinished shard's part
         self.assertNotIn('stale NAME', cached.index)               # not a current name
@@ -521,19 +560,34 @@ class TestNameHelpers(unittest.TestCase):
         self.assertIsNone(first_name_of('H. W. Raadsma'))
         self.assertIsNone(first_name_of(''))
 
-    def test_racebert_name(self):
-        self.assertEqual(racebert_name('Maria García'), 'maria GARCÍA')
-        self.assertEqual(racebert_name('Smith, John'), 'john SMITH')
-        self.assertEqual(racebert_name('김민수'), 'minsu GIM')
-        self.assertEqual(racebert_name('Караваев Алексей'), 'karavaev ALEKSEI')
-        self.assertIsNone(racebert_name(' '))
-        self.assertIsNone(racebert_name(','))
+    def test_race_name(self):
+        self.assertEqual(race_name('Maria García'), 'maria GARCÍA')
+        self.assertEqual(race_name('Smith, John'), 'john SMITH')
+        self.assertEqual(race_name('김민수'), 'minsu GIM')
+        self.assertEqual(race_name('Караваев Алексей'), 'karavaev ALEKSEI')
+        self.assertIsNone(race_name(' '))
+        self.assertIsNone(race_name(','))
+
+    def test_ethnicity_name(self):
+        """raceBERT 'first_last' (lower case, '_'), original script (no transliteration)."""
+        self.assertEqual(ethnicity_name('Maria García'), 'maria_garcía')
+        self.assertEqual(ethnicity_name('Smith, John'), 'john_smith')
+        self.assertEqual(ethnicity_name('Караваев  Алексей'), 'караваев_алексей')
+        self.assertEqual(ethnicity_name('田中 博'), '田中_博')
+        self.assertEqual(ethnicity_name('김민수'), '민수_김')
+        self.assertIsNone(ethnicity_name(' '))
+        self.assertIsNone(ethnicity_name(','))
+
+    def test_labels(self):
+        from demographics.race import labels
+        probs = pd.DataFrame({'p_eth_east_asian': [0.7, 0.4, np.nan], 'p_eth_british': [0.3, 0.6, np.nan]})
+        self.assertEqual(labels(probs, ['p_eth_east_asian', 'p_eth_british'], 0.5), ['east_asian', 'british', 'unknown'])
 
     def test_names_are_cleaned_first(self):
         """The shared text clean-up (utils.text.clean_text) runs before the demographic name helpers and the name keys."""
         self.assertEqual(first_name_of('Tarcí\xadsio Gonçalves de Brito'), 'Tarcísio')       # soft hyphen
-        self.assertEqual(racebert_name('Claudia Y. Wilson-GarcÃ\xada'), 'claudia y. WILSON-GARCÍA')   # mojibake
-        self.assertEqual(racebert_name('Richard Smith\ufeff'), 'richard SMITH')
+        self.assertEqual(race_name('Claudia Y. Wilson-GarcÃ\xada'), 'claudia y. WILSON-GARCÍA')   # mojibake
+        self.assertEqual(race_name('Richard Smith\ufeff'), 'richard SMITH')
         self.assertEqual(name_keys('Jin-\xadJu Jung'), ('jin ju jung', 'jin jung'))
 
 

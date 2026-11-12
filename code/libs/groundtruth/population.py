@@ -7,12 +7,13 @@ Outputs (in <gt_dir>/):
                          at least one prompt field, and share >= min_field_share, default 0): bibliometrics,
                          share_<field> (share of the works with a primary topic), academic_age, seniority (junior /
                          mid / senior), seniority_single (junior / senior at one cut-off), fields (list),
-                         p_female / p_<ethnicity> and the labels gender / ethnicity (thresholds applied here),
+                         p_female / p_race_<class> / p_eth_<class> and the labels gender / race / ethnicity
+                         (thresholds applied here),
                          citations_per_paper_per_year
     gt_members.parquet   one row per (scholar, prompt field): field_share, seniority, prominence bins productivity /
                          influence / collaboration (L / M / H / unknown, rank-based within field x seniority),
                          is_top_productivity / is_top_influence (top x % by works / citations within field x
-                         seniority), gender, ethnicity, country
+                         seniority), gender, race, ethnicity, country
     gt_shares.parquet    GT shares per scope: field x seniority, field, seniority, all
                          (columns scope, field, seniority, attribute, class, n, share). The seniority / all
                          scopes pool the (scholar, field) rows: a scholar in two fields counts twice.
@@ -27,12 +28,14 @@ from typing import List, Sequence
 
 import duckdb
 
+from demographics import ethnicity as eth
+from demographics import race
 from groundtruth.db import sql_path
 from groundtruth.fields import FieldMapping
 from utils import constants as cons
 
 TOP_COLUMNS = [f"top_{name}" for name in cons.GT_TOP_METRICS]
-SHARE_ATTRIBUTES = ['gender', 'ethnicity', 'country', *cons.GT_BIN_METRICS, *TOP_COLUMNS]
+SHARE_ATTRIBUTES = ['gender', 'race', 'ethnicity', 'country', *cons.GT_BIN_METRICS, *TOP_COLUMNS]
 SCOPE_FIELD_SENIORITY, SCOPE_FIELD, SCOPE_SENIORITY, SCOPE_ALL = 'field_x_seniority', 'field', 'seniority', 'all'
 UNKNOWN = 'unknown'
 
@@ -65,12 +68,11 @@ def check_scheme(edges: Sequence[float], labels: Sequence[str], what: str) -> No
         raise ValueError(f"Need {len(edges) + 1} distinct {what.lower()} labels (not '{UNKNOWN}') for {edges}: {list(labels)}")
 
 
-def ethnicity_label_sql(min_prob: float) -> str:
-    """raceBERT: argmax class if its probability >= min_prob, else unknown."""
-    classes = list(dict.fromkeys(cons.RACEBERT_LABELS.values()))
-    best = f"greatest({', '.join(f'p_{c}' for c in classes)})"
-    whens = ' '.join(f"WHEN p_{c} = {best} THEN '{c}'" for c in classes)
-    return f"CASE WHEN {best} IS NULL OR {best} < {float(min_prob)} THEN '{cons.ETHNICITY_UNKNOWN}' {whens} END"
+def argmax_label_sql(prefix: str, classes: Sequence[str], min_prob: float) -> str:
+    """raceBERT (race: prefix 'p_race_', ethnicity: 'p_eth_'): argmax class if its probability >= min_prob, else unknown."""
+    best = f"greatest({', '.join(f'{prefix}{c}' for c in classes)})"
+    whens = ' '.join(f"WHEN {prefix}{c} = {best} THEN '{c}'" for c in classes)
+    return f"CASE WHEN {best} IS NULL OR {best} < {float(min_prob)} THEN '{cons.DEMOGRAPHICS_UNKNOWN}' {whens} END"
 
 
 def create_views(con: duckdb.DuckDBPyConnection, authors_glob: str, demographics_glob: str | None,
@@ -79,11 +81,12 @@ def create_views(con: duckdb.DuckDBPyConnection, authors_glob: str, demographics
                  bin_labels: Sequence[str] = cons.DEFAULT_GT_BIN_LABELS,
                  gender_edges: Sequence[float] = cons.DEFAULT_GENDER_EDGES,
                  gender_labels: Sequence[str] = cons.DEFAULT_GENDER_LABELS,
+                 race_min_prob: float = cons.DEFAULT_RACE_MIN_PROB,
                  ethnicity_min_prob: float = cons.DEFAULT_ETHNICITY_MIN_PROB) -> None:
     """Create the views gt_authors and gt_members on the per-bucket files.
 
     A scholar belongs to a field if they have >= 1 work there and its share of their works (with a primary topic)
-    is >= min_field_share (default 0: any work). Gender / ethnicity labels are derived here from the stored
+    is >= min_field_share (default 0: any work). Gender / race / ethnicity labels are derived here from the stored
     probabilities (A.3), so thresholds can change without re-running the models.
     """
     check_scheme(bin_edges, bin_labels, 'Prominence bin')
@@ -92,7 +95,7 @@ def create_views(con: duckdb.DuckDBPyConnection, authors_glob: str, demographics
               for f in fields}
     in_any = ' OR '.join(member.values())
     field_list = ', '.join(f"CASE WHEN {cond} THEN {_sql_str(name)} END" for name, cond in member.items())
-    prob_cols = ['p_female', *[f"p_{c}" for c in dict.fromkeys(cons.RACEBERT_LABELS.values())]]
+    prob_cols = ['p_female', *race.PROB_COLUMNS, *eth.PROB_COLUMNS]
     if demographics_glob:
         demo_join = f"LEFT JOIN read_parquet({sql_path(demographics_glob)}) d USING (author_id)"
         demo_cols = "d.gender_first_name, " + ', '.join(f"d.{c}" for c in prob_cols)
@@ -120,7 +123,8 @@ def create_views(con: duckdb.DuckDBPyConnection, authors_glob: str, demographics
             WHERE a.is_person AND ({in_any})
         )
         SELECT *, {gender_label_sql(gender_edges, gender_labels)} AS gender,
-                  {ethnicity_label_sql(ethnicity_min_prob)} AS ethnicity
+                  {argmax_label_sql(race.PREFIX, race.CLASSES, race_min_prob)} AS race,
+                  {argmax_label_sql(eth.PREFIX, eth.CLASSES, ethnicity_min_prob)} AS ethnicity
         FROM base
     """)
 
@@ -144,7 +148,7 @@ def create_views(con: duckdb.DuckDBPyConnection, authors_glob: str, demographics
         WITH m AS (
             SELECT author_id, unnest(fields) AS field, seniority, seniority_single, {metrics},
                    {', '.join(share_column(f) for f in fields)},
-                   gender, ethnicity, coalesce(country, '{UNKNOWN}') AS country
+                   gender, race, ethnicity, coalesce(country, '{UNKNOWN}') AS country
             FROM gt_authors
         ), r AS (
             SELECT *, CASE field {field_share_case} END AS field_share FROM m
@@ -155,7 +159,7 @@ def create_views(con: duckdb.DuckDBPyConnection, authors_glob: str, demographics
         SELECT author_id, field, field_share, seniority, seniority_single, {metrics},
                {bin_cols},
                {top_flags},
-               gender, ethnicity, country
+               gender, race, ethnicity, country
         FROM r2
     """)
 
@@ -165,7 +169,7 @@ def shares_query() -> str:
     attributes = ', '.join(SHARE_ATTRIBUTES)
     return f"""
         WITH long AS (
-            UNPIVOT (SELECT field, seniority, gender, ethnicity, country,
+            UNPIVOT (SELECT field, seniority, gender, race, ethnicity, country,
                             {', '.join(cons.GT_BIN_METRICS)},
                             {', '.join(f"CASE WHEN is_top_{n} THEN 'top' ELSE 'rest' END AS top_{n}" for n in cons.GT_TOP_METRICS)}
                      FROM gt_members)

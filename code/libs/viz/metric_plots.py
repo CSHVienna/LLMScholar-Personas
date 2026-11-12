@@ -80,8 +80,7 @@ def row_colors(rows: Sequence[RowGroup]) -> List[str]:
 def plot_metric_bars(table: pd.DataFrame, rows: Sequence[RowGroup], metrics: Sequence[Metric],
                      title: Optional[str] = None, width: float = viscons.PAPER_TEXT_WIDTH_IN,
                      label_width: Optional[float] = None, arrows: bool = True,
-                     ci_linewidth: float = viscons.METRIC_CI_LINEWIDTH,
-                     ci_capsize: float = viscons.METRIC_CI_CAPSIZE, tick_size: Optional[str] = None) -> plt.Figure:
+                     tick_size: Optional[str] = None) -> plt.Figure:
     """One panel per metric; rows in the order of `rows` (estimate() output in `table`). arrows: the metric's
     direction (higher / lower is better) next to its name. Rows of the persona / context families get their labels in
     the family colour (viscons.FAMILY_COLORS), as in the RQ heatmaps."""
@@ -128,8 +127,8 @@ def plot_metric_bars(table: pd.DataFrame, rows: Sequence[RowGroup], metrics: Seq
             v = values[has_ci]
             ax.errorbar(v['mean'], positions[has_ci], xerr=[(v['mean'] - v['ci_low']).clip(lower=0),
                                                             (v['ci_high'] - v['mean']).clip(lower=0)],
-                        fmt='none', ecolor=viscons.METRIC_CI_COLOR, elinewidth=ci_linewidth,
-                        capsize=ci_capsize, capthick=ci_linewidth)
+                        fmt='none', ecolor=viscons.CI_COLOR, elinewidth=viscons.CI_LINEWIDTH,
+                        capsize=viscons.CI_CAPSIZE, capthick=viscons.CI_CAPTHICK)
         span = high_limit - low_limit
         for y, (mean, low, high), is_bold in zip(positions, values[['mean', 'ci_low', 'ci_high']].to_numpy(), bold):
             if not np.isnan(mean) and mean < 0:                            # negative bar: value on its left end

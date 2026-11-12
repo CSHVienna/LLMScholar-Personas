@@ -1,4 +1,4 @@
-# Analysis config, written by configure_analysis.py on 2026-11-06 21:32.
+# Analysis config, written by configure_analysis.py on 2026-11-09 01:14.
 # Edit with:  python code/scripts/configure_analysis.py --config <this file> [--phase early|late]
 
 # late settings (marked [late]) reviewed after the metrics? (no = provisional defaults; RQs refuse to run)
@@ -26,7 +26,11 @@ gender:
   p_female_edges: [0.1, 0.9]    # [late] cut points on p_female, increasing, in (0, 1)
   labels: [male, neutral, female]    # [late] one label per interval, from p_female = 0 to 1
 
-# Perceived ethnicity (raceBERT on the full name)
+# Perceived race (raceBERT race model on the full name, 5 classes)
+race:
+  min_prob: 0.5    # [late] label = top class if its probability >= this, else 'unknown'
+
+# Perceived ethnicity (raceBERT ethnicity model on the full name, 13 classes)
 ethnicity:
   min_prob: 0.5    # [late] label = top class if its probability >= this, else 'unknown'
 
@@ -41,6 +45,11 @@ social:
   include_unknown: true    # [late] count 'unknown' (no usable name / country) as a class in parity and diversity
   parity_target: field_x_seniority    # [late] GT target of parity (scope of the GT shares)
   top_countries: 2    # [late] popularity by country: top countries = the k countries with the most GT scholars
+
+# Study choices of the figures and research questions (the metrics are computed for every option)
+study:
+  ethnicity_attribute: ethnicity    # [late] perceived ethnicity of the figures and RQs: ethnicity (13 classes) | race (5 classes) | both
+  rq3_ceilings: true    # [late] RQ3 absolute views: mark each model's own social maximum (adjusted metrics: it differs by model)
 
 # Author matching (recommended name -> OpenAlex person)
 matching:

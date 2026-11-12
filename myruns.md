@@ -5,7 +5,11 @@
 conda activate py311_llmscholar
 export PYTHONPATH="$PYTHONPATH:code/libs" LOGS=logs; MODELS=data/models/models.txt
 ```
-## Collect responses (3 prompts, 1 run, English, into tmp/smoke/responses)
+
+## LLMCaller
+
+### Collect responses 
+(3 prompts, 1 run, English, into tmp/smoke/responses)
 
 ``` bash
 python code/scripts/batch_input_prompts.py
@@ -27,7 +31,24 @@ python code/scripts/batch_collect_cloud_retrieve.py --models gpt-4_1-nano-2025-0
 python code/scripts/batch_collect_local.py --models gemma3-4b-it-q4_K_M --languages english --repetitions 1 --limit_prompts 3 --responses_dir tmp/smoke/responses --log_dir tmp/smoke/logs
 ```
 
-## Sample GT
+### Parse responses
+
+``` bash
+printf "deepseek-r1-8b-0528-qwen3-q4_K_M\ngemma3-4b-it-q4_K_M\nphi4-reasoning-14b-q4_K_M\n" > tmp/smoke/models.txt
+```
+
+``` bash
+bash code/scripts/run_responses_pipeline.sh -M tmp/smoke/models.txt -r tmp/smoke -l tmp/smoke/logs -x "--overwrite"
+```
+
+``` bash
+bash code/scripts/check_eval_runs.sh -M tmp/smoke/models.txt -r tmp/smoke -l tmp/smoke/logs -v
+```
+
+
+## GTBuilder
+
+### Sample GT
 
 ``` bash
 python code/scripts/configure_analysis.py --config config/analysis_smoke.yaml
@@ -42,52 +63,51 @@ bash code/scripts/run_gt_pipeline.sh -s names,demographics,population -o tmp/smo
 ```
 
 
-## Parse responses
+### Inference
+Infer demographics (gender, race, ethnicity) and bibliometrics
 
 ``` bash
-printf "deepseek-r1-8b-0528-qwen3-q4_K_M\ngemma3-4b-it-q4_K_M\nphi4-reasoning-14b-q4_K_M\n" > tmp/smoke/models.txt
+mkdir -p tmp/smoke/groundtruth/archive && mv tmp/smoke/groundtruth/demographics tmp/smoke/groundtruth/archive/demographics_v2
 ```
 
 ``` bash
-bash code/scripts/run_responses_pipeline.sh -M tmp/smoke/models.txt -r tmp/smoke -l tmp/smoke/logs -x "--overwrite"
+bash code/scripts/run_gt_pipeline.sh -s demographics,population -o tmp/smoke/mini_openalex.duckdb -n 4 -S 3 -r tmp/smoke -y config/analysis_smoke.yaml -l tmp/smoke/logs -a "--overwrite"
 ```
 
 ``` bash
-bash code/scripts/check_eval_runs.sh -M tmp/smoke/models.txt -r tmp/smoke -l tmp/smoke/logs -v
+bash code/scripts/run_gt_pipeline.sh -s population -v smoke_pf02 -r tmp/smoke -l tmp/smoke/logs -a "--overwrite"
 ```
 
-## Find name-author matches
+### Audit
+
+#### Find name-author matches
 
 ``` bash 
 bash code/scripts/run_matching_pipeline.sh -n 4 -S 4 -t 4 -m 8GB -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs
 ```
 
-## Compute metrics
+#### Raw metrics stats
 
 ``` bash
+# Technical?
 bash code/scripts/run_metrics_pipeline.sh -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs
 ```
 
-## Address RQs
-
 ``` bash
-bash code/scripts/run_metrics_pipeline.sh -s flows -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs
+# Socials
+bash code/scripts/run_metrics_pipeline.sh -s expected,social,flows -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs -x "--overwrite"
 ```
 
-``` bash
-bash code/scripts/run_metrics_pipeline.sh -s rq1 -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs
-```
+#### RQs
 
 ``` bash
-bash code/scripts/run_metrics_pipeline.sh -s rq2 -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs
+bash code/scripts/run_metrics_pipeline.sh -s rq1,rq2,interactions -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs -x "--overwrite" -q "--n_boot 50"
 ```
 
-``` bash
-bash code/scripts/run_metrics_pipeline.sh -s flows -r tmp/smoke -M tmp/smoke/models.txt -y config/analysis_smoke.yaml -l tmp/smoke/logs
-```
+### Audit (variant)
 
-
-## Variant (smoke: p_female 0.2 / 0.8 -> own GT population, main's matching)
+#### Variant 
+(smoke: p_female 0.2 / 0.8 -> own GT population, main's matching)
 
 ``` bash
 python code/scripts/configure_variant.py create smoke_pf02 --base config/analysis_smoke.yaml --set pf=0.2,0.8
@@ -105,6 +125,7 @@ bash code/scripts/run_matching_pipeline.sh -s authors -v smoke_pf02 -r tmp/smoke
 bash code/scripts/run_metrics_pipeline.sh -v smoke_pf02 -r tmp/smoke -M tmp/smoke/models.txt -l tmp/smoke/logs
 ```
 
+---------------------------------------------
 
 # Inputs and LLM responses
 
@@ -165,7 +186,8 @@ export PYTHONPATH="$PYTHONPATH:code/libs" LOGS=logs; MODELS=data/models/models.t
 systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 bash code/scripts/run_gt_pipeline.sh -s authorships,pairs,edges,bibliometrics
 ```
 
-## 3. Analysis config, early settings (seniority, field share, L/M/H bins, matching candidates); the rest stays provisional
+## 3. Analysis config, early settings 
+(seniority, field share, L/M/H bins, matching candidates)
 - [x] done | date: 2026-11-06
 ``` bash
 python code/scripts/configure_analysis.py --config config/analysis.yaml --phase early
@@ -175,6 +197,44 @@ python code/scripts/configure_analysis.py --config config/analysis.yaml --phase 
 - [x] done | date: 2026-11-06
 ``` bash
 systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 bash code/scripts/run_gt_pipeline.sh -s names,demographics,population -C _old/ethnicity,_old/demographics
+```
+
+## 4b. Ethnicity (switch between race and ethnicity)
+- [ ] done | date:
+
+Dry run: checks the old run is complete and prints what would be written to results/groundtruth/demographics.new/
+``` bash
+python tmp/migrate_demographics.py prepare
+```
+
+Build demographics.new/ (keys joined, race shards renamed, gender / ethnicity shards hard-linked)
+``` bash
+python tmp/migrate_demographics.py prepare --apply
+```
+
+The new merge stage on demographics.new/ (reads the race and ethnicity shards for every bucket)
+``` bash
+systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 python code/scripts/batch_gt_demographics.py --stage merge --output_dir results/groundtruth/demographics.new --threads 12 --memory_limit 40GB
+```
+
+Compare every new bucket with the old files, and recompute the keys of bucket 0 with the current code
+``` bash
+python tmp/migrate_demographics.py verify
+```
+
+Move the old folder to results/groundtruth/archive/demographics_v2/ (kept) and demographics.new/ into its place
+``` bash
+python tmp/migrate_demographics.py swap --apply
+```
+
+A.4 again: race and ethnicity labels and shares (thresholds from the config: race / ethnicity min_prob)
+``` bash
+systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 bash code/scripts/run_gt_pipeline.sh -s population -a "--overwrite"
+```
+
+Demographics annotation key: ethnicity -> race, + the inferred ethnicity (original kept as .v2)
+``` bash
+python tmp/migrate_demographics.py annotation_key --apply
 ```
 
 
@@ -228,6 +288,7 @@ python code/scripts/serve_annotation_tool.py
 ```
 
 ##### Stop the server with Ctrl+C when you're done
+
 
 ##### Compare results: responses
 - [...] in-progress | date: 2026-11-05 - 2026-11-xx
@@ -302,7 +363,13 @@ python code/scripts/batch_annotation_evaluate.py --task demographics
 bash code/scripts/run_metrics_pipeline.sh -s technical,expected,social,flows
 ```
 
-## 4. Research questions (RQ1, RQ2; RQ3 in the notebook)
+Again after D.7.14 (race + ethnicity): expected, social and flows only (technical unchanged)
+- [ ] done | date:
+``` bash
+systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 bash code/scripts/run_metrics_pipeline.sh -s expected,social,flows -x "--overwrite"
+```
+
+## 4. Research questions (RQ1, RQ2 & interactions; RQ3)
 
 ### Setup thresholds
 - [x] done | date: 2026-11-06
@@ -314,5 +381,50 @@ python code/scripts/configure_analysis.py --config config/analysis.yaml --phase 
 - [x] done | date: 2026-11-06
 ``` bash
 bash code/scripts/run_metrics_pipeline.sh -s rq1,rq2
+```
+
+Again after D.7.14 (metrics of config study.ethnicity_attribute)
+- [ ] done | date:
+``` bash
+systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 bash code/scripts/run_metrics_pipeline.sh -s rq1,rq2 -x "--overwrite"
+```
+
+### Interactions (D.7.3; ~27 min per metric at 1000 replicates, 45 metrics; study.ethnicity_attribute both: 49)
+- [ ] done | date:
+``` bash
+systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 bash code/scripts/run_metrics_pipeline.sh -s interactions -j 7 -c 2
+```
+
+## 5. Notebooks (paper main-text figures -> plots/main/, the rest -> plots/main/si/; outputs saved in the notebooks)
+- [ ] done | date:
+
+GT descriptives and composition (race and ethnicity)
+``` bash
+systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 code/notebooks/0_gt.ipynb
+```
+
+response / recommendation tags
+``` bash
+systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 code/notebooks/1_responses_tags.ipynb
+```
+
+author matching
+``` bash
+systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 code/notebooks/2_matching_stats.ipynb
+```
+
+metric bars (sets of config study.ethnicity_attribute)
+``` bash
+systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 code/notebooks/3_metrics.ipynb
+```
+
+RQ1, RQ2, RQ3 (study.rq3_ceilings), interactions (needs the interactions run)
+``` bash
+systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 code/notebooks/4_research_questions.ipynb
+```
+
+flows (ethnicity panels: study.ethnicity_attribute)
+``` bash
+systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=-1 code/notebooks/5_flows.ipynb
 ```
 

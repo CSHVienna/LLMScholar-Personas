@@ -19,11 +19,15 @@ def save_figure(fig: plt.Figure, name: str, plots_dir: Path | str = cons.DEFAULT
                 formats: List[str] = viscons.FIGURE_FORMATS) -> List[Path]:
     """Save ``fig`` as <plots_dir>/<name>.<format> for every format; returns the paths.
 
+    Rule: only the paper's main-text figures (``viscons.PAPER_MAIN_FIGURES``) go to <plots_dir>/; all others go to
+    <plots_dir>/si/ (``viscons.SI_SUBDIR``).
     Rule: titles are kept in ``viscons.FORMATS_WITH_TITLES`` (PNG); other formats (PDFs for the paper) drop the
     figure title (suptitle) and, for a figure with a single subplot, that subplot's title. Subplot titles of
     multi-panel figures are kept (they name the panels).
     """
     plots_dir = Path(plots_dir)
+    if name not in viscons.PAPER_MAIN_FIGURES:
+        plots_dir = plots_dir / viscons.SI_SUBDIR
     plots_dir.mkdir(parents=True, exist_ok=True)
     titles = []
     if getattr(fig, '_suptitle', None) is not None:          # figure-level title (suptitle)

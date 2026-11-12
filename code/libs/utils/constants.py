@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Dict, List
 
 INSTRUCTIONS = [
     {
@@ -453,13 +454,13 @@ DEFAULT_GT_AUTHORS_DIR = f'{DEFAULT_GT_DIR}/authors'              # bucket-<bb>.
 DEFAULT_GT_PAIRS_DIR = f'{DEFAULT_GT_DIR}/coauthor_pairs'         # chunk=<c>/bucket=<b>/*.parquet (A.0b, intermediate)
 DEFAULT_GT_EDGES_DIR = f'{DEFAULT_GT_DIR}/coauthor_edges'         # bucket-<bb>.parquet (A.1a, the edge list)
 DEFAULT_GT_NAMES_DIR = f'{DEFAULT_GT_DIR}/names'                  # bucket-<bb>.parquet
-DEFAULT_GT_DEMOGRAPHICS_DIR = f'{DEFAULT_GT_DIR}/demographics'    # bucket-<bb>.parquet (+ keys/, ethnicity/)
+DEFAULT_GT_DEMOGRAPHICS_DIR = f'{DEFAULT_GT_DIR}/demographics'    # bucket-<bb>.parquet (+ keys/, gender/, race/, ethnicity/)
 
 # Authors are split into buckets (author id % n) so that every step runs one bucket per process (GNU parallel)
 DEFAULT_GT_N_BUCKETS = 64
 DEFAULT_GT_WORKS_CHUNK_SIZE = 2_000_000    # works rows per A.0 chunk (~240 resumable chunks)
-DEFAULT_GT_DEMOGRAPHICS_CHUNK = 20_000     # names per raceBERT checkpoint (part file)
-DEFAULT_GT_NAME_SHARDS = 64                # distinct raceBERT names split by crc32(name) % n (one job per shard)
+DEFAULT_GT_DEMOGRAPHICS_CHUNK = 20_000     # names per raceBERT checkpoint (part file; race and ethnicity)
+DEFAULT_GT_NAME_SHARDS = 64                # distinct names per model split by crc32(name) % n (one job per shard)
 
 # Works counted (works x authorships): no paratext, no retracted works, publication year in [min, max]
 GT_MIN_YEAR = 1900
@@ -484,7 +485,7 @@ GT_BIN_METRICS = {'productivity': 'n_works', 'influence': 'n_citations', 'collab
 DEFAULT_GT_TOP_PERCENTILE = 5.0          # popularity bias: top x % within field x seniority, by each GT_TOP_METRICS metric
 GT_TOP_METRICS = {'productivity': 'n_works', 'influence': 'n_citations'}   # -> is_top_<name>, shares top_<name>
 
-# Perceived gender (nomquamgender, on the first name) and ethnicity (raceBERT, on the full name)
+# Perceived gender (nomquamgender, on the first name), race and ethnicity (raceBERT race / ethnicity models, full name)
 GENDER_FEMALE, GENDER_MALE, GENDER_NEUTRAL, GENDER_UNKNOWN = 'female', 'male', 'neutral', 'unknown'
 GENDER_CLASSES = [GENDER_FEMALE, GENDER_MALE, GENDER_UNKNOWN]
 # Perceived gender labels from p_female (A.4): cut points e_1 < ... < e_k in (0, 1) and k + 1 labels for the
@@ -493,33 +494,59 @@ GENDER_CLASSES = [GENDER_FEMALE, GENDER_MALE, GENDER_UNKNOWN]
 DEFAULT_GENDER_EDGES = [0.1, 0.9]
 DEFAULT_GENDER_LABELS = [GENDER_MALE, GENDER_NEUTRAL, GENDER_FEMALE]
 DEFAULT_GENDER_UNCERTAINTY = 0.1         # nomquamgender default: classify only if uncertainty <= threshold
-ETHNICITY_ASIAN, ETHNICITY_BLACK, ETHNICITY_HISPANIC, ETHNICITY_WHITE = 'asian', 'black', 'hispanic', 'white'
-ETHNICITY_OTHER, ETHNICITY_UNKNOWN = 'other', 'unknown'
-ETHNICITY_CLASSES = [ETHNICITY_ASIAN, ETHNICITY_BLACK, ETHNICITY_HISPANIC, ETHNICITY_WHITE, ETHNICITY_OTHER,
-                     ETHNICITY_UNKNOWN]
-RACEBERT_LABELS = {'api': ETHNICITY_ASIAN, 'nh_black': ETHNICITY_BLACK, 'hispanic': ETHNICITY_HISPANIC,
-                   'nh_white': ETHNICITY_WHITE, 'aian': ETHNICITY_OTHER}   # AIAN merged into Other
+DEMOGRAPHICS_UNKNOWN = 'unknown'         # no name, or no class probable enough (race / ethnicity)
+# Perceived race: raceBERT race model (US census categories, Florida voters); model label -> class (p_race_<class>)
+RACE_ASIAN, RACE_BLACK, RACE_HISPANIC, RACE_WHITE, RACE_OTHER = 'asian', 'black', 'hispanic', 'white', 'other'
+RACE_UNKNOWN = DEMOGRAPHICS_UNKNOWN
+RACE_CLASSES = [RACE_ASIAN, RACE_BLACK, RACE_HISPANIC, RACE_WHITE, RACE_OTHER, RACE_UNKNOWN]
+RACEBERT_RACE_LABELS = {'api': RACE_ASIAN, 'nh_black': RACE_BLACK, 'hispanic': RACE_HISPANIC,
+                        'nh_white': RACE_WHITE, 'aian': RACE_OTHER}   # AIAN merged into Other
+DEFAULT_RACE_MIN_PROB = 0.5              # label = argmax class if its probability >= this, else unknown
+# Perceived ethnicity: raceBERT ethnicity model (13 Wikipedia name classes, Ambekar et al. 2009 taxonomy);
+# model label -> class (p_eth_<class>), in this order (European ones first), and each class's broad group
+RACEBERT_ETHNICITY_LABELS = {
+    'GreaterEuropean,British': 'british', 'GreaterEuropean,WestEuropean,French': 'french',
+    'GreaterEuropean,WestEuropean,Italian': 'italian', 'GreaterEuropean,WestEuropean,Hispanic': 'hispanic',
+    'GreaterEuropean,Jewish': 'jewish', 'GreaterEuropean,EastEuropean': 'east_european',
+    'GreaterEuropean,WestEuropean,Nordic': 'nordic', 'GreaterEuropean,WestEuropean,Germanic': 'germanic',
+    'Asian,IndianSubContinent': 'indian_subcontinent', 'Asian,GreaterEastAsian,Japanese': 'japanese',
+    'Asian,GreaterEastAsian,EastAsian': 'east_asian', 'GreaterAfrican,Muslim': 'muslim',
+    'GreaterAfrican,Africans': 'africans'}
+ETHNICITY_UNKNOWN = DEMOGRAPHICS_UNKNOWN
+ETHNICITY_CLASSES = [*RACEBERT_ETHNICITY_LABELS.values(), ETHNICITY_UNKNOWN]
+ETHNICITY_GROUPS = {cls: label.split(',')[0].replace('GreaterEuropean', 'greater_european')
+                    .replace('GreaterAfrican', 'greater_african').replace('Asian', 'asian')
+                    for label, cls in RACEBERT_ETHNICITY_LABELS.items()}
 DEFAULT_ETHNICITY_MIN_PROB = 0.5         # label = argmax class if its probability >= this, else unknown
 # Demographics annotation (perceived, from the name): the classes the annotator picks from (+ 'unknown' = cannot tell).
-# Ethnicity is annotated in finer, origin-based classes (disjoint, defined by the language / region a name comes from)
-# and mapped onto the raceBERT classes for the evaluation: 'main' follows the US census (OMB 1997) convention raceBERT
-# was trained on (Florida voters); the other mappings are robustness checks, never chosen by fit.
+# Ethnicity is annotated in origin-based classes (disjoint, defined by the language / region a name comes from) and
+# mapped for the evaluation (annotation/demographics.py) onto the inferred RACE classes ('main' follows the US census
+# (OMB 1997) convention raceBERT was trained on, Florida voters; the others are robustness checks, never chosen by fit)
+# and, the other way round, the inferred ETHNICITY classes onto the annotated ones (ANNOTATION_FROM_ETHNICITY).
 ANNOTATION_GENDER_CLASSES = [GENDER_MALE, GENDER_FEMALE, GENDER_NEUTRAL, GENDER_UNKNOWN]
 ANN_EUROPEAN, ANN_HISPANIC, ANN_PORTUGUESE_BRAZILIAN, ANN_MENA = 'european', 'hispanic', 'portuguese_brazilian', 'mena'
 ANN_EAST_ASIAN, ANN_SOUTH_ASIAN, ANN_BLACK, ANN_AIAN = 'east_asian', 'south_asian', 'black', 'aian'
 ANNOTATION_ETHNICITY_CLASSES = [ANN_EUROPEAN, ANN_HISPANIC, ANN_PORTUGUESE_BRAZILIAN, ANN_MENA, ANN_EAST_ASIAN,
-                                ANN_SOUTH_ASIAN, ANN_BLACK, ANN_AIAN, ETHNICITY_UNKNOWN]
+                                ANN_SOUTH_ASIAN, ANN_BLACK, ANN_AIAN, DEMOGRAPHICS_UNKNOWN]
 ANNOTATION_MAPPING_MAIN = 'main'
-_ETHNICITY_MAIN = {ANN_EUROPEAN: ETHNICITY_WHITE, ANN_HISPANIC: ETHNICITY_HISPANIC, ANN_PORTUGUESE_BRAZILIAN: ETHNICITY_WHITE,
-                   ANN_MENA: ETHNICITY_WHITE, ANN_EAST_ASIAN: ETHNICITY_ASIAN, ANN_SOUTH_ASIAN: ETHNICITY_ASIAN,
-                   ANN_BLACK: ETHNICITY_BLACK, ANN_AIAN: ETHNICITY_OTHER, ETHNICITY_UNKNOWN: ETHNICITY_UNKNOWN}
-ANNOTATION_ETHNICITY_MAPPINGS = {
-    ANNOTATION_MAPPING_MAIN: _ETHNICITY_MAIN,
-    'portuguese_brazilian_hispanic': {**_ETHNICITY_MAIN, ANN_PORTUGUESE_BRAZILIAN: ETHNICITY_HISPANIC},
-    'mena_asian': {**_ETHNICITY_MAIN, ANN_MENA: ETHNICITY_ASIAN},
-    'mena_other': {**_ETHNICITY_MAIN, ANN_MENA: ETHNICITY_OTHER},
+_RACE_MAIN = {ANN_EUROPEAN: RACE_WHITE, ANN_HISPANIC: RACE_HISPANIC, ANN_PORTUGUESE_BRAZILIAN: RACE_WHITE,
+              ANN_MENA: RACE_WHITE, ANN_EAST_ASIAN: RACE_ASIAN, ANN_SOUTH_ASIAN: RACE_ASIAN,
+              ANN_BLACK: RACE_BLACK, ANN_AIAN: RACE_OTHER, DEMOGRAPHICS_UNKNOWN: RACE_UNKNOWN}
+ANNOTATION_RACE_MAPPINGS = {                 # annotated ethnicity class -> inferred race class
+    ANNOTATION_MAPPING_MAIN: _RACE_MAIN,
+    'portuguese_brazilian_hispanic': {**_RACE_MAIN, ANN_PORTUGUESE_BRAZILIAN: RACE_HISPANIC},
+    'mena_asian': {**_RACE_MAIN, ANN_MENA: RACE_ASIAN},
+    'mena_other': {**_RACE_MAIN, ANN_MENA: RACE_OTHER},
 }
-ANNOTATION_MAPPING_FINE = 'fine'      # no mapping: the annotated fine classes vs the inferred ones (where each group lands)
+ANNOTATION_MAPPING_FINE = 'fine'      # no mapping: the annotated classes vs the inferred ones (where each group lands)
+# inferred ethnicity class -> annotated class (the 13 classes are finer for Europe, coarser elsewhere: Hispanic
+# includes Portuguese / Brazilian names, Muslim ~ MENA, Africans ~ Black; no counterpart for AIAN)
+ANNOTATION_FROM_ETHNICITY = {
+    'british': ANN_EUROPEAN, 'french': ANN_EUROPEAN, 'italian': ANN_EUROPEAN, 'jewish': ANN_EUROPEAN,
+    'east_european': ANN_EUROPEAN, 'nordic': ANN_EUROPEAN, 'germanic': ANN_EUROPEAN, 'hispanic': ANN_HISPANIC,
+    'indian_subcontinent': ANN_SOUTH_ASIAN, 'japanese': ANN_EAST_ASIAN, 'east_asian': ANN_EAST_ASIAN,
+    'muslim': ANN_MENA, 'africans': ANN_BLACK, ETHNICITY_UNKNOWN: DEMOGRAPHICS_UNKNOWN}
+ANNOTATION_ETHNICITY_MERGE = {ANN_PORTUGUESE_BRAZILIAN: ANN_HISPANIC}   # annotated classes the model cannot separate
 DEFAULT_RACEBERT_BATCH_SIZE = 256
 
 # GT descriptives (groundtruth/stats.py, notebook 0_gt.ipynb): DuckDB aggregations over the A.1 / A.4 outputs with
@@ -576,47 +603,106 @@ MATCH_SENIORITY_SINGLE = 'single'    # junior <= DEFAULT_SENIORITY_SINGLE_CUTOFF
 # Benchmark metrics (plan §2.3; code in libs/metrics/): <dir>/config/<model>.parquet, <dir>/response/<model>.parquet
 DEFAULT_METRICS_DIR = f'{DEFAULT_RESULTS_DIR}/metrics/main'          # robustness checks: metrics/robustness/<check>/
 
-# Ways to choose the metric COLUMNS of a figure (metrics/summary.select_metrics; notebooks: 'technical', ...).
-# Keys are metric keys of metrics/summary.METRICS; any of these names, a subgroup or a list of keys can be passed.
+# Which perceived-ethnicity attribute the figures and the research questions use (analysis config: study.ethnicity_attribute;
+# the social metrics are always computed for both): 'ethnicity' (raceBERT, 13 classes), 'race' (5 US census classes) or
+# 'both' (every *_ethnicity metric followed by its *_race twin). The sets below are written with 'ethnicity'.
+STUDY_ETHNICITY_ETHNICITY, STUDY_ETHNICITY_RACE, STUDY_ETHNICITY_BOTH = 'ethnicity', 'race', 'both'
+STUDY_ETHNICITY_CHOICES = [STUDY_ETHNICITY_ETHNICITY, STUDY_ETHNICITY_RACE, STUDY_ETHNICITY_BOTH]
+DEFAULT_STUDY_ETHNICITY = STUDY_ETHNICITY_ETHNICITY
+DEFAULT_RQ3_CEILINGS = True          # RQ3 absolute views: each model's own social maximum (analysis config: study.rq3_ceilings)
 _SOCIAL_ATTRIBUTES = ['gender', 'ethnicity', 'location', 'productivity', 'influence', 'collaboration']
-METRIC_COLUMN_SETS = {
-    'technical': ['refusals', 'validity', 'behaviour_consistency', 'recommendation_consistency', 'duplicates'],
-    'factuality': ['factuality_name', 'factuality_name_field', 'factuality_name_seniority', 'factuality_author'],
-    'parity': [f"parity_{a}" for a in _SOCIAL_ATTRIBUTES],
-    'diversity': [f"diversity_{a}" for a in _SOCIAL_ATTRIBUTES],
-    'popularity': ['popularity_productivity', 'popularity_influence', 'popularity_location'],
-    'cohesion': ['connectedness', 'similarity'],
-    'locality': ['locality'],
-    'consistency': ['behaviour_consistency', 'recommendation_consistency'],
-}
-METRIC_COLUMN_SETS['technical_factuality'] = METRIC_COLUMN_SETS['technical'] + METRIC_COLUMN_SETS['factuality']
-METRIC_COLUMN_SETS['popularity_cohesion'] = METRIC_COLUMN_SETS['popularity'] + METRIC_COLUMN_SETS['cohesion']
-METRIC_COLUMN_SETS['popularity_cohesion_locality'] = (METRIC_COLUMN_SETS['popularity_cohesion']
-                                                      + METRIC_COLUMN_SETS['locality'])
-METRIC_COLUMN_SETS['social'] = (METRIC_COLUMN_SETS['parity'] + METRIC_COLUMN_SETS['diversity']
-                                + METRIC_COLUMN_SETS['popularity'] + METRIC_COLUMN_SETS['cohesion']
-                                + METRIC_COLUMN_SETS['locality'])
-METRIC_COLUMN_SETS['all'] = METRIC_COLUMN_SETS['technical_factuality'] + METRIC_COLUMN_SETS['social']
-# The columns of the paper's figures (one per metric family; the full sets go to the appendix)
-METRIC_COLUMN_SETS['paper'] = ['refusals', 'validity', 'recommendation_consistency', 'factuality_author',
-                               'parity_gender', 'diversity_gender', 'popularity_influence', 'similarity', 'locality']
-# Size-adjusted social metrics (<key>_adj = observed - expected under a random recommender, metrics/expected.py):
-# '<set>_adj' = the set with its social metrics adjusted, e.g. 'parity_adj', 'social_adj', 'paper_adj'
-for _name in list(METRIC_COLUMN_SETS):
-    _keys = METRIC_COLUMN_SETS[_name]
-    if any(k.startswith(('parity_', 'diversity_', 'popularity_')) or k in ('connectedness', 'similarity', 'locality')
-           for k in _keys):
-        METRIC_COLUMN_SETS[_name + '_adj'] = [k + '_adj' if k.startswith(('parity_', 'diversity_', 'popularity_'))
-                                              or k in ('connectedness', 'similarity', 'locality') else k for k in _keys]
+_SOCIAL_KEYS = ('parity_', 'diversity_', 'popularity_')
+_SOCIAL_NAMES = ('connectedness', 'similarity', 'locality')
+
+
+def study_ethnicity_attributes(attribute: str = DEFAULT_STUDY_ETHNICITY) -> List[str]:
+    """The person attributes of a study choice: ['ethnicity'], ['race'] or ['ethnicity', 'race'] ('both')."""
+    if attribute not in STUDY_ETHNICITY_CHOICES:
+        raise ValueError(f"study ethnicity attribute must be one of {STUDY_ETHNICITY_CHOICES} (got {attribute!r})")
+    return {STUDY_ETHNICITY_ETHNICITY: ['ethnicity'], STUDY_ETHNICITY_RACE: ['race'],
+            STUDY_ETHNICITY_BOTH: ['ethnicity', 'race']}[attribute]
+
+
+def _study_keys(keys: List[str], attributes: List[str]) -> List[str]:
+    """Every '<metric>_ethnicity' key replaced by '<metric>_<a>' for each study attribute a, in order."""
+    out = []
+    for k in keys:
+        out += [k.removesuffix('_ethnicity') + f"_{a}" for a in attributes] if k.endswith('_ethnicity') else [k]
+    return out
+
+
+def metric_column_sets(attribute: str = DEFAULT_STUDY_ETHNICITY) -> Dict[str, List[str]]:
+    """The named metric sets for one study choice (study_ethnicity_attributes); 'race' always holds the race metrics."""
+    attributes = study_ethnicity_attributes(attribute)
+    sets = {
+        'technical': ['refusals', 'validity', 'behaviour_consistency', 'recommendation_consistency', 'duplicates'],
+        'factuality': ['factuality_name', 'factuality_name_field', 'factuality_name_seniority', 'factuality_author'],
+        'parity': [f"parity_{a}" for a in _SOCIAL_ATTRIBUTES],
+        'diversity': [f"diversity_{a}" for a in _SOCIAL_ATTRIBUTES],
+        'popularity': ['popularity_productivity', 'popularity_influence', 'popularity_location'],
+        'cohesion': ['connectedness', 'similarity'],
+        'locality': ['locality'],
+        'consistency': ['behaviour_consistency', 'recommendation_consistency'],
+    }
+    sets['social'] = sets['parity'] + sets['diversity'] + sets['popularity'] + sets['cohesion'] + sets['locality']
+    sets['all'] = sets['technical'] + sets['factuality'] + sets['social']
+    # The columns of the paper's figures (one per metric family; the full sets go to the appendix)
+    sets['paper'] = ['refusals', 'validity', 'recommendation_consistency', 'factuality_author',
+                     'parity_gender', 'diversity_gender', 'popularity_influence', 'similarity', 'locality']
+    # RQ2 paper figures: technical + factuality (raw EMM, bars) and social (size-adjusted EMM, dots: paper_social_adj);
+    # per group, the metrics with the highest RQ1 R^2, in that order (user 2026-11-07)
+    sets['paper_technical'] = ['validity', 'behaviour_consistency', 'refusals', 'factuality_author',
+                               'factuality_name', 'factuality_name_field']
+    sets['paper_social'] = ['parity_ethnicity', 'locality', 'parity_gender', 'diversity_location',
+                            'diversity_ethnicity', 'parity_location']
+    sets = {name: _study_keys(keys, attributes) for name, keys in sets.items()}
+    sets['race'] = ['parity_race', 'diversity_race']
+    sets['ethnicity'] = ['parity_ethnicity', 'diversity_ethnicity']
+    # Size-adjusted social metrics (<key>_adj = observed - expected under a random recommender, metrics/expected.py):
+    # '<set>_adj' = the set with its social metrics adjusted, e.g. 'parity_adj', 'social_adj', 'paper_adj'
+    for name in list(sets):
+        if any(k.startswith(_SOCIAL_KEYS) or k in _SOCIAL_NAMES for k in sets[name]):
+            sets[name + '_adj'] = [k + '_adj' if k.startswith(_SOCIAL_KEYS) or k in _SOCIAL_NAMES else k
+                                   for k in sets[name]]
+    return sets
+
+
+# Ways to choose the metric COLUMNS of a figure (metrics/summary.select_metrics; notebooks: 'technical', ...).
+# Keys are metric keys of metrics/summary.METRICS. A selection is one of these names, a subgroup, a metric key, or a
+# list mixing them (e.g. ['technical', 'factuality', 'parity_gender']); combinations of groups are lists, not sets.
+# Default study choice; summary.use_study_ethnicity(attribute) rebuilds this dict (and RQ3_SOCIAL_METRICS) in place.
+METRIC_COLUMN_SETS = metric_column_sets()
 
 # RQ3: socio-technical trade-off (analysis/tradeoff.py). Per model, the sum of the metrics of each axis; metrics where
 # lower is better (refusals, duplicates) enter as complements (1 - x), so larger is better on both axes.
 RQ3_TECHNICAL_METRICS = ['validity', 'refusals', 'duplicates', 'factuality_name', 'factuality_name_field',
                          'factuality_name_seniority', 'factuality_author']            # max 7
-RQ3_MODES = ['relative', 'absolute']   # quadrant split: per-axis medians of the models | half of each axis maximum
-RQ3_SOCIAL_METRICS = list(METRIC_COLUMN_SETS['parity'])                                    # all 6 parities: max 6
+RQ3_MODES = ['relative', 'absolute']   # quadrant split: per-axis medians of the models | 1/2 per raw metric, 0 per adjusted one
+RQ3_SOCIAL_METRICS = list(METRIC_COLUMN_SETS['parity'])     # all parities of the study attributes: max 6 (both: 7)
 
 # RQ2 contrasts (analysis/deviations.py): reference value per variable; not listed = the first value of
 # VARIABLE_VALUES. A nested variable (subfield) uses, within each parent, the listed value if it belongs to the
 # parent, else the parent's first value.
 RQ2_REFERENCE_LEVELS = {VAR_LOCATION: 'Germany', VAR_FIELD: 'Physics'}
+
+# Interactions (analysis/interactions.py; plan D.7.3): two-way blocks added to the additive RQ1 model, one at a time.
+# Screening: every pair of INTERACTION_VARIABLES (subfield left out: too sparse) + the LLM x each of them.
+INTERACTION_VARIABLES = [VAR_LANGUAGE, VAR_ROLE, VAR_LOCATION, VAR_SENIORITY, VAR_K, VAR_FIELD]
+INTERACTION_PRESPECIFIED = [(VAR_LANGUAGE, VAR_LOCATION), (VAR_ROLE, VAR_SENIORITY), (VAR_SENIORITY, VAR_K),
+                            (COL_MODEL, VAR_K), (COL_MODEL, VAR_LANGUAGE), (COL_MODEL, VAR_LOCATION)]
+# model characteristic x variable -> the LLM x variable block it decomposes (reported only if that block is flagged)
+INTERACTION_DECOMPOSITIONS = {('size', VAR_K): (COL_MODEL, VAR_K), ('origin', VAR_LANGUAGE): (COL_MODEL, VAR_LANGUAGE),
+                              ('origin', VAR_LOCATION): (COL_MODEL, VAR_LOCATION)}
+# Flag rule (every estimate is stored; these only decide what is flagged / plotted): adjusted p < alpha (Holm for the
+# pre-specified blocks and the global check, BY over the screening) AND large enough: partial omega^2 >= OMEGA2_MIN
+# (screening, global; Cohen 1988 "small") / max |cell deviation from the additive prediction| >= SESOI in metric
+# units (pre-specified; smallest effect size of interest, Lakens et al. 2018).
+INTERACTION_ALPHA = 0.05
+INTERACTION_OMEGA2_MIN = 0.01
+INTERACTION_SESOI = 0.05                        # metrics on [0, 1] and their _adj versions
+INTERACTION_SESOI_BY_METRIC = {'k_ratio': 0.10}  # other scales (k ratio: 0-2)
+# Heatmaps (RQ1, RQ2, interaction cells): a value is faded unless significant after this correction over all rows of
+# its results table (analysis/multiple_testing.py; Wald p from the bootstrap SE): 'by' (FDR under any dependence),
+# 'bh', 'holm', or None (uncorrected: the 95% percentile CI includes 0)
+HEATMAP_CORRECTION = 'by'
+HEATMAP_ALPHA = 0.05

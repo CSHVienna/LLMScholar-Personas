@@ -7,7 +7,7 @@ back, 'q' quits without saving. At the end all values are shown for review befor
 existing config is edited, the steps to re-run because of the changes are listed.
 
 Phases: --phase early asks only what the ground truth and the matching candidates need (seniority, field share,
-L/M/H bins, candidate settings); the late settings (valid tags, gender / ethnicity thresholds, social settings,
+L/M/H bins, candidate settings); the late settings (valid tags, gender / race / ethnicity thresholds, social settings,
 Jaro-Winkler thresholds) keep PROVISIONAL defaults until --phase late, after the metrics. The RQs need them reviewed.
 
 Usage (from the project root):

@@ -5,7 +5,7 @@ People table (batch_flows.py, one file per model): one row per (valid response, 
 people are the matched authors (B.6 author_id) of the unique valid names of a valid response (metrics/social.py
 response_people; a person named twice in a response counts once, a person recommended in several responses counts
 each time). Each row carries the configuration (prompt variables, model) and the person's attributes from the GT:
-perceived gender, perceived ethnicity, country (last known affiliation), the person's own seniority class
+perceived gender, race, ethnicity, country (last known affiliation), the person's own seniority class
 (author_seniority), productivity / influence / collaboration classes and the top-group flags, taken from the gt_members row of the REQUESTED field (another field's row if the person is not a member of it).
 
     flow_table(people, source, target)   counts and shares of target classes per source value (source: a prompt
@@ -26,13 +26,24 @@ from utils import constants as cons
 
 UNKNOWN = so.UNKNOWN
 AUTHOR_SENIORITY = 'author_seniority'   # the person's own seniority class (A.4), not the prompt's 'seniority'
-PERSON_ATTRIBUTES = ['gender', 'ethnicity', 'country', AUTHOR_SENIORITY, 'productivity', 'influence', 'collaboration',
+PERSON_ATTRIBUTES = ['gender', 'race', 'ethnicity', 'country', AUTHOR_SENIORITY, 'productivity', 'influence', 'collaboration',
                      'is_top_productivity', 'is_top_influence']
-CLASS_ATTRIBUTES = ['gender', 'ethnicity', 'country', AUTHOR_SENIORITY, 'productivity', 'influence', 'collaboration']
+CLASS_ATTRIBUTES = ['gender', 'race', 'ethnicity', 'country', AUTHOR_SENIORITY, 'productivity', 'influence', 'collaboration']
 TARGETS = ['gender', 'ethnicity', 'country', AUTHOR_SENIORITY, 'productivity', 'influence']   # default panels
 OTHER = 'other'
 LOCATION_COUNTRY = cons.LOCATION_COUNTRY        # prompt location -> ISO country code
-ETHNICITY_ORDER = ['asian', 'black', 'hispanic', 'white', 'other']
+RACE_ORDER = [c for c in cons.RACE_CLASSES if c != cons.RACE_UNKNOWN]              # asian ... white, other
+ETHNICITY_ORDER = [c for c in cons.ETHNICITY_CLASSES if c != cons.ETHNICITY_UNKNOWN]  # the 13 model classes
+
+
+def study_targets(attribute: str = cons.DEFAULT_STUDY_ETHNICITY, targets=None) -> List[str]:
+    """targets (default TARGETS) with 'ethnicity' replaced by the study attributes (analysis config
+    study.ethnicity_attribute: ethnicity | race | both -> ethnicity, race)."""
+    out = []
+    for t in TARGETS if targets is None else targets:
+        out += cons.study_ethnicity_attributes(attribute) if t == 'ethnicity' else [t]
+    return out
+
 
 # --- people ------------------------------------------------------------------------------------------------------
 def people_table(responses: pd.DataFrame, recs: pd.DataFrame, matches: pd.DataFrame, gt: so.GroundTruth,

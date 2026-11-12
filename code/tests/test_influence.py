@@ -177,5 +177,18 @@ class TestRq1Heatmap(unittest.TestCase):
         self.assertNotIn('Residual', texts(rq_plots.plot_rq1_heatmap(self.results, 'omega2')))
 
 
+class TestSolverFallback(unittest.TestCase):
+    """numpy's SVD solver can fail to converge on near-singular designs (some bootstrap replicates): gelsy fallback."""
+
+    def test_fallback_on_linalg_error(self):
+        from unittest import mock
+        G = np.array([[2., 1.], [1., 2.]])
+        c = np.array([3., 3.])
+        with mock.patch('numpy.linalg.lstsq', side_effect=np.linalg.LinAlgError('SVD did not converge')):
+            np.testing.assert_allclose(inf.lstsq(G, c), [1., 1.])
+        with mock.patch('numpy.linalg.matrix_rank', side_effect=np.linalg.LinAlgError('SVD did not converge')):
+            self.assertEqual(inf.matrix_rank(np.array([[1., 1.], [1., 1.]])), 1)
+
+
 if __name__ == '__main__':
     unittest.main()

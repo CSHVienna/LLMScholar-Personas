@@ -86,22 +86,60 @@ class TestTradeoff(unittest.TestCase):
 
 
 class TestTradeoffAdjusted(unittest.TestCase):
-    """Size-adjusted social metrics (<key>_adj in [-1, 1]): axis -n..n, absolute split at 0, _adj label / file name."""
+    """Size-adjusted social metrics (<key>_adj = observed - E in [-E, 1 - E]): axis from the expected values,
+    absolute split at 0, _adj label / file name."""
     def setUp(self):
         from metrics import summary
         self.social = summary.adjusted_keys(SOCIAL)
-        frame = configs()
+        self.frame = configs()
         for raw, adj in zip(SOCIAL, self.social):
-            frame[adj] = frame[raw] - 0.5                                        # observed - expected, can be < 0
-        self.scores = tr.model_scores(frame, TECH, self.social)
+            self.frame[adj] = self.frame[raw] - 0.5                              # observed - expected, can be < 0
+            self.frame[raw + '_expected'] = 0.5
+        self.scores = tr.model_scores(self.frame, TECH, self.social)
 
     def test_range_and_split(self):
         self.assertEqual(self.social, ['parity_gender_adj', 'parity_ethnicity_adj'])
-        self.assertEqual(tr.axis_range(self.scores, 'social'), (-2.0, 2.0))
+        self.assertEqual(tr.axis_range(self.scores, 'social'), (-1.0, 1.0))     # 2 x [-0.5, 0.5]
         self.assertEqual(tr.axis_range(self.scores, 'technical'), (0.0, 3.0))
         self.assertEqual(tr.splits(self.scores, 'absolute'), (1.5, 0.0))
         d = self.scores.set_index(cons.COL_MODEL).loc['d', 'social']
         self.assertAlmostEqual(d, -0.8)
+
+    def test_range_per_model_from_expected(self):
+        frame = self.frame.copy()
+        a = frame[cons.COL_MODEL] == 'a'
+        frame.loc[a, 'parity_gender_expected'] = 0.8                       # model a: longer lists, E higher
+        frame.loc[a, 'parity_gender_adj'] = frame.loc[a, 'parity_gender'] - 0.8
+        scores = tr.model_scores(frame, TECH, self.social).set_index(cons.COL_MODEL)
+        self.assertAlmostEqual(scores.loc['a', 'social_min'], -1.3)          # -(0.8 + 0.5)
+        self.assertAlmostEqual(scores.loc['a', 'social_max'], 0.7)           # 2 - 1.3
+        self.assertAlmostEqual(scores.loc['b', 'social_max'], 1.0)
+        self.assertEqual(tr.axis_range(scores.reset_index(), 'social'), (-1.3, 1.0))
+        self.assertEqual(tr.splits(scores.reset_index(), 'absolute'), (1.5, 0.0))   # still 0, not the middle
+        self.assertTrue((scores['social'] <= scores['social_max'] + 1e-12).all())
+        self.assertTrue((scores['social'] >= scores['social_min'] - 1e-12).all())
+
+    def test_lower_is_better_adjusted(self):
+        from metrics import summary
+        metric = summary.Metric('x_adj', 'x', summary.LOWER, 'social', 'x_adj')
+        frame = pd.DataFrame({cons.COL_MODEL: ['a', 'a'], 'x_adj': [0.1, 0.2], 'x_expected': [0.3, 0.5]})
+        r = tr.metric_range(frame, metric).loc['a']
+        self.assertAlmostEqual(r['low'], -0.6)                                # E - 1, E = 0.4
+        self.assertAlmostEqual(r['high'], 0.4)
+
+    def test_fallback_without_expected(self):
+        frame = self.frame.drop(columns=[k + '_expected' for k in SOCIAL])
+        with self.assertWarns(UserWarning):
+            scores = tr.model_scores(frame, TECH, self.social)
+        self.assertEqual(tr.axis_range(scores, 'social'), (-2.0, 2.0))
+
+    def test_ceilings_drawn(self):
+        import matplotlib.pyplot as plt
+        from viz import rq_plots
+        for fig in (rq_plots.plot_rq3(self.scores, 'absolute', technical=TECH, social=self.social, ceilings=True),
+                    rq_plots.plot_rq3_inset(self.scores, technical=TECH, social=self.social, ceilings=True)):
+            self.assertGreaterEqual(len(fig.axes[0].lines), 2 + 2 * len(self.scores))   # splits + line and tick per model
+            plt.close(fig)
 
     def test_warning_when_mixed(self):
         import warnings
@@ -111,6 +149,7 @@ class TestTradeoffAdjusted(unittest.TestCase):
             if key not in frame:
                 frame[key] = frame['parity_gender']
             frame[key + '_adj'] = frame[key] - 0.5
+            frame[key + '_expected'] = 0.5
         for social in (['parity_gender_adj', 'parity_ethnicity'],              # raw + adj mixed
                        ['parity_gender_adj', 'similarity_adj'], ['parity_gender', 'similarity']):   # no direction
             with self.assertWarns(UserWarning):
@@ -132,10 +171,10 @@ class TestTradeoffAdjusted(unittest.TestCase):
         self.assertEqual(rq_plots.rq3_figure_name('relative', TECH, self.social),
                          'rq3_relative_validity-refusals-duplicates_parity_gender-parity_ethnicity_adj')
         fig = rq_plots.plot_rq3(self.scores, 'absolute', technical=TECH, social=self.social)
-        self.assertEqual(fig.axes[0].get_ylim(), (-2.0, 2.0))
+        self.assertEqual(fig.axes[0].get_ylim(), (-1.0, 1.0))
         self.assertIn('parity$^{adj}$', fig.axes[0].get_ylabel())
         fig = rq_plots.plot_rq3_inset(self.scores, technical=TECH, social=self.social)
-        self.assertEqual(fig.axes[0].get_ylim(), (-2.0, 2.0))
+        self.assertEqual(fig.axes[0].get_ylim(), (-1.0, 1.0))
 
 
 class TestLabelPlacement(unittest.TestCase):

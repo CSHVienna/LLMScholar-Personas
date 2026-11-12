@@ -27,12 +27,14 @@ TMP_ROOT = Path(cons.DEFAULT_TMP_DIR) / 'tests'
 
 
 def synthetic(folder: Path) -> None:
-    """20 GT scholars: 12 male|white, 6 female|asian, 2 neutral|unknown; authors 1, 2 and 13 were recommended."""
+    """20 GT scholars: 12 male|white, 6 female|asian, 2 neutral|unknown (race; ethnicity british / east_asian /
+    unknown); authors 1, 2 and 13 were recommended."""
     gender = ['male'] * 12 + ['female'] * 6 + ['neutral'] * 2
-    ethnicity = ['white'] * 12 + ['asian'] * 6 + ['unknown'] * 2
+    race = ['white'] * 12 + ['asian'] * 6 + ['unknown'] * 2
+    ethnicity = ['british'] * 12 + ['east_asian'] * 6 + ['unknown'] * 2
     pd.DataFrame({'author_id': range(1, 21), 'display_name': [f"Name{i} Middle Last{i}" for i in range(1, 21)],
-                  'gender': gender, 'ethnicity': ethnicity, 'p_female': np.linspace(0, 1, 20),
-                  **{f'p_{c}': 0.2 for c in ['asian', 'black', 'hispanic', 'white', 'other']}}
+                  'gender': gender, 'race': race, 'ethnicity': ethnicity, 'p_female': np.linspace(0, 1, 20),
+                  **{c: 0.2 for c in dm.PROBABILITIES if c != 'p_female'}}
                  ).to_parquet(folder / 'gt_authors.parquet')
     matching = folder / 'matching'
     matching.mkdir()
@@ -68,9 +70,11 @@ class DemographicsTest(unittest.TestCase):
         self.assertEqual(len(ids), 13)                                     # the tool has 18 keyboard keys
         self.assertIn('ethnicity_mena', ids)
         self.assertNotIn('ethnicity_white', ids)                           # european replaces white
-        for mapping in cons.ANNOTATION_ETHNICITY_MAPPINGS.values():          # every fine class is mapped
+        for mapping in cons.ANNOTATION_RACE_MAPPINGS.values():               # every annotated class is mapped
             self.assertEqual(set(mapping), set(cons.ANNOTATION_ETHNICITY_CLASSES))
-            self.assertTrue(set(mapping.values()) <= set(cons.ETHNICITY_CLASSES))
+            self.assertTrue(set(mapping.values()) <= set(cons.RACE_CLASSES))
+        self.assertEqual(set(cons.ANNOTATION_FROM_ETHNICITY), set(cons.ETHNICITY_CLASSES))   # every inferred class
+        self.assertTrue(set(cons.ANNOTATION_FROM_ETHNICITY.values()) <= set(cons.ANNOTATION_ETHNICITY_CLASSES))
 
     def test_sample_strata_and_sides(self):
         s = self.sample()
@@ -96,7 +100,7 @@ class DemographicsTest(unittest.TestCase):
         self.assertEqual([sec['title'] for sec in item['sections']], ['Name'])
         self.assertIn(item['sections'][0]['text'], {f"Name{i} Middle Last{i}" for i in range(1, 21)})   # one line
         key = dm.key_table(cons.ANNOTATION_TASK_DEMOGRAPHICS, s)
-        self.assertIn('gender', key)
+        self.assertTrue({'gender', 'race', 'ethnicity', 'p_race_asian', 'p_eth_british'} <= set(key.columns))
         self.assertIn(dm.STRATUM_SIZE, key)
 
     def test_without_matching(self):
@@ -106,7 +110,8 @@ class DemographicsTest(unittest.TestCase):
     def test_evaluation(self):
         key = pd.DataFrame({ITEM_ID: ['a', 'b', 'c', 'd'], 'side': 'gt',
                             'gender': ['male', 'male', 'female', 'neutral'],
-                            'ethnicity': ['white', 'white', 'asian', 'unknown'],
+                            'race': ['white', 'white', 'asian', 'unknown'],
+                            'ethnicity': ['british', 'muslim', 'japanese', 'unknown'],
                             dm.STRATUM: ['gt|male|white', 'gt|male|white', 'gt|female|asian', 'gt|neutral|unknown'],
                             dm.STRATUM_SIZE: [100, 100, 10, 1]})
         sep = cons.TAG_SEPARATOR
@@ -121,10 +126,12 @@ class DemographicsTest(unittest.TestCase):
         g = items[items['group'] == 'gender'].set_index(ITEM_ID)
         self.assertEqual(g.loc['a', 'annotated'], 'male')                  # both annotators agree
         self.assertAlmostEqual(g.loc['a', 'weight'], 50.0)                 # 100 people / 2 items answered
-        e = items[items['group'] == 'ethnicity'].set_index(ITEM_ID)
-        self.assertNotIn('a', e.index)                                     # european vs hispanic: tie, left out
-        self.assertEqual(e.loc['b', 'annotated'], 'mena')                  # fine class kept before mapping
-        self.assertNotIn('d', e.index)                                     # ethnicity not answered
+        for group in ('race', 'ethnicity'):                                # the annotated ethnicity, twice
+            e = items[items['group'] == group].set_index(ITEM_ID)
+            self.assertNotIn('a', e.index)                                 # european vs hispanic: tie, left out
+            self.assertEqual(e.loc['b', 'annotated'], 'mena')              # annotated class kept before mapping
+            self.assertNotIn('d', e.index)                                 # ethnicity not answered
+        self.assertEqual(items.set_index(['group', ITEM_ID]).loc[('ethnicity', 'b'), 'inferred'], 'muslim')
         summary = dm.summary(items).set_index('group')
         # gender: a right (w 50), b wrong (w 50), c right (w 10), d wrong (unknown vs neutral, w 1)
         self.assertAlmostEqual(summary.loc['gender', 'accuracy_weighted'], 60 / 111)
@@ -136,18 +143,21 @@ class DemographicsTest(unittest.TestCase):
         self.assertAlmostEqual(male['p_annotated_given_inferred'].sum(), 1.0)
 
     def test_mappings(self):
-        key = pd.DataFrame({ITEM_ID: ['a', 'b'], 'side': 'gt', 'gender': ['male', 'male'], 'ethnicity': ['white', 'asian'],
-                            dm.STRATUM: ['s1', 's2'], dm.STRATUM_SIZE: [10, 10]})
+        key = pd.DataFrame({ITEM_ID: ['a', 'b'], 'side': 'gt', 'gender': ['male', 'male'], 'race': ['white', 'asian'],
+                            'ethnicity': ['muslim', 'east_asian'], dm.STRATUM: ['s1', 's2'], dm.STRATUM_SIZE: [10, 10]})
         sep = cons.TAG_SEPARATOR
         annotations = pd.DataFrame({ITEM_ID: ['a', 'b'], 'annotator': 'x', 'unsure': False,
                                     'tags': [f'gender_male{sep}ethnicity_mena', f'gender_male{sep}ethnicity_south_asian']})
         gold = verification.adjudicate_groups(verification.group_answers_of(annotations, dm.groups()))
         out = dm.evaluate(key, gold)
-        acc = out['summary'][out['summary']['group'] == 'ethnicity'].set_index('mapping')['accuracy_weighted']
+        acc = out['summary'][out['summary']['group'] == 'race'].set_index('mapping')['accuracy_weighted']
         self.assertAlmostEqual(acc['main'], 1.0)                           # mena -> white, south_asian -> asian
         self.assertAlmostEqual(acc['mena_asian'], 0.5)                     # mena -> asian: item a now wrong
-        self.assertAlmostEqual(acc['fine'], 0.0)                           # unmapped: fine classes never equal
+        self.assertAlmostEqual(acc['fine'], 0.0)                           # unmapped: annotated classes never equal
         self.assertEqual(set(out['summary']['mapping']), set(dm.mappings()))
+        eth = out['summary'][out['summary']['group'] == 'ethnicity'].set_index('mapping')['accuracy_weighted']
+        self.assertEqual(set(eth.index), {'main', 'fine'})
+        self.assertAlmostEqual(eth['main'], 0.5)                           # muslim -> mena right; east_asian vs south_asian
         gender_rows = out['summary'][out['summary']['group'] == 'gender']
         self.assertEqual(gender_rows['mapping'].tolist(), ['main'])        # gender reported once
 
