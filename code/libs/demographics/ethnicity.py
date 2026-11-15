@@ -9,13 +9,11 @@ vowels, which loses the Japanese / Muslim signal). 'Last, First' and Hangul name
 put in first-last order. Label (A.4): argmax class if its probability >= min_prob, unknown otherwise.
 """
 
-from typing import Dict, Iterable, List, Optional
+from typing import Optional
 
-import numpy as np
-import pandas as pd
-
-from demographics.race import HANGUL_NAME, labels
+from demographics.racebert import RaceBertInferrer
 from utils import constants as cons
+from utils.names import first_last_order, hangul_family_last
 from utils.text import clean_text
 
 MODEL = 'pparasurama/raceBERT-ethnicity'
@@ -29,56 +27,14 @@ def ethnicity_name(full_name: Optional[str]) -> Optional[str]:
     full_name = clean_text(full_name)
     if not full_name or not full_name.strip():
         return None
-    name = ' '.join(f"{t[1:]} {t[0]}" if HANGUL_NAME.fullmatch(t) else t for t in full_name.split())
-    if ',' in name:
-        last, _, first = name.partition(',')
-        name = f"{first.strip()} {last.strip()}"
-    tokens = name.split()
+    tokens = first_last_order(hangul_family_last(full_name)).split()
     return '_'.join(tokens).lower() if tokens else None
 
 
-def gpu_device():
-    """The GPU for the pipeline's device= (CUDA 0, or Apple 'mps'), or None when there is none (CPU)."""
-    import torch
-    if torch.cuda.is_available():
-        return 0
-    mps = getattr(torch.backends, 'mps', None)
-    return 'mps' if mps is not None and mps.is_available() else None
-
-
-class EthnicityInferrer:
-    """All 13 class probabilities (PROB_COLUMNS) per normalised name (ethnicity_name); GPU if there is one."""
+class EthnicityInferrer(RaceBertInferrer):
+    """All 13 class probabilities (PROB_COLUMNS) and the ethnicity label per normalised name (ethnicity_name)."""
 
     def __init__(self, min_prob: float = cons.DEFAULT_ETHNICITY_MIN_PROB,
                  batch_size: int = cons.DEFAULT_RACEBERT_BATCH_SIZE, torch_threads: Optional[int] = None):
-        import torch   # imported lazily (heavy)
-        from transformers import AutoModelForSequenceClassification, AutoTokenizer, TextClassificationPipeline
-        if torch_threads:
-            torch.set_num_threads(torch_threads)
-        model = AutoModelForSequenceClassification.from_pretrained(MODEL)
-        tokenizer = AutoTokenizer.from_pretrained(MODEL, use_fast=True)
-        unknown = set(model.config.id2label.values()) ^ set(cons.RACEBERT_ETHNICITY_LABELS)
-        if unknown:
-            raise ValueError(f"raceBERT ethnicity labels differ from cons.RACEBERT_ETHNICITY_LABELS: {sorted(unknown)}")
-        device = gpu_device()
-        kwargs = {} if device is None else {'device': device}       # no GPU: device not passed (CPU)
-        self.device = device
-        self.pipeline = TextClassificationPipeline(model=model, tokenizer=tokenizer, **kwargs)
-        self.min_prob = min_prob
-        self.batch_size = batch_size
-
-    def probabilities(self, names: List[str]) -> List[Dict[str, float]]:
-        """All 13 class probabilities (p_eth_<class>) per normalised name; one pipeline call for the whole list."""
-        outputs = self.pipeline(names, top_k=None, batch_size=self.batch_size, truncation=True, max_length=64)
-        return [{f"{PREFIX}{cons.RACEBERT_ETHNICITY_LABELS[o['label']]}": float(o['score']) for o in output}
-                for output in outputs]
-
-    def infer(self, full_names: Iterable[Optional[str]]) -> pd.DataFrame:
-        """Columns: PROB_COLUMNS + ethnicity (label)."""
-        normalised = [ethnicity_name(n) for n in full_names]
-        unique = sorted({n for n in normalised if n})
-        lookup = dict(zip(unique, self.probabilities(unique))) if unique else {}
-        empty = {column: np.nan for column in PROB_COLUMNS}
-        df = pd.DataFrame([lookup.get(n, empty) if n else empty for n in normalised], columns=PROB_COLUMNS)
-        df['ethnicity'] = labels(df, PROB_COLUMNS, self.min_prob)
-        return df
+        super().__init__(MODEL, PREFIX, cons.RACEBERT_ETHNICITY_LABELS, ethnicity_name, 'ethnicity', min_prob,
+                         batch_size, torch_threads)

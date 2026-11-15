@@ -26,6 +26,11 @@ from utils.config import read_api_key
 
 
 def run_model(slug: str, args: argparse.Namespace) -> str:
+    """Submit every open batch of the model that is not submitted yet (all languages).
+
+    TO CHECK (code review 2026-11-13, D9): batch_collect_cloud_submit.py and batch_collect_cloud_retrieve.py walk the
+    open batches the same way (per language, cloud.open_batches, the API client made on first use); a shared
+    cloud.iter_open(store) could hold that loop. Left as is (both are short)."""
     model = lm.spec(lm.load_metadata(args.models_metadata_file), slug)
     if model.api not in cons.CLOUD_APIS:
         return f"[{slug}] skipped: api={model.api} (see batch_collect_local.py)"

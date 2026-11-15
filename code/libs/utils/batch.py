@@ -8,13 +8,18 @@ model never stops the others.
 """
 
 import argparse
+import json
+import os
+import zlib
 import traceback
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable, Dict, List
 
 from utils import constants as cons
 from utils import ios
 from utils import logs
+
+PARAMS_FILE = '_params.json'      # run parameters of an output folder (check_params)
 
 Job = Callable[[str, argparse.Namespace], str]
 
@@ -88,3 +93,85 @@ def run_jobs(items: List, job: Callable, args: argparse.Namespace) -> None:
     ios.printf(f"Done in {ios.datetime.now() - start} | failed: {failed or 'none'}")
     if failed:
         raise SystemExit(1)
+
+
+def check_params(output_dir: Path | str, params: Dict, overwrite: bool = False) -> None:
+    """Record the run parameters once (atomically); refuse to mix chunks written with different parameters.
+    overwrite: replace the stored parameters (the caller recomputes every output)."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / PARAMS_FILE
+    if overwrite:   # atomic replace; parallel jobs write the same content
+        tmp = output_dir / f".{PARAMS_FILE}.{os.getpid()}"
+        tmp.write_text(json.dumps(params, indent=1))
+        os.replace(tmp, path)
+        return
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)   # first process wins (GNU parallel safe)
+        with os.fdopen(fd, 'w') as f:
+            json.dump(params, f, indent=1)
+        return
+    except FileExistsError:
+        pass
+    stored = json.loads(path.read_text() or '{}')
+    if stored and stored != params:
+        raise ValueError(f"{path} was written with other parameters: {stored} != {params}. "
+                         f"Use another --output_dir or --overwrite (recomputes every output).")
+
+
+# --- per-model metric scripts (batch_metrics, batch_social_metrics, batch_flows) ----------------------------------
+def add_input_arguments(parser: argparse.ArgumentParser) -> None:
+    """The three per-model inputs: response metadata (B.1-B.2), recommendation metadata (B.3), author matching (B.6b)."""
+    parser.add_argument('--responses_metadata_dir', default=cons.DEFAULT_RESPONSES_METADATA_DIR, help='Output of B.1-B.2')
+    parser.add_argument('--recommendations_metadata_dir', default=cons.DEFAULT_RECOMMENDATIONS_METADATA_DIR,
+                        help='Output of B.3')
+    parser.add_argument('--matching_dir', default=cons.DEFAULT_MATCH_AUTHORS_DIR, help='Output of B.6b (a variant folder)')
+
+
+def load_model_inputs(model: str, args: argparse.Namespace, columns: Dict[str, List[str]],
+                      filter_recs: bool = False) -> tuple:
+    """(responses, recommendations, matches) of one model, with the given columns (keys 'responses',
+    'recommendations', 'matching'); only the languages of args.languages (responses; recommendations too if
+    filter_recs). Raises if an input file is missing."""
+    inputs = {'responses': model_file(args.responses_metadata_dir, model),
+              'recommendations': model_file(args.recommendations_metadata_dir, model),
+              'matching': model_file(args.matching_dir, model)}
+    missing = [f"{name}: {path}" for name, path in inputs.items() if not path.exists()]
+    if missing:
+        raise FileNotFoundError(f"[{model}] missing inputs: {missing}")
+    responses, recs, matches = (ios.load_parquet(inputs[name], columns=columns[name])
+                                for name in ('responses', 'recommendations', 'matching'))
+    if args.languages != cons.LANGUAGES:
+        responses = responses[responses[cons.VAR_LANGUAGE].isin(args.languages)]
+        if filter_recs:
+            recs = recs[recs[cons.VAR_LANGUAGE].isin(args.languages)]
+    return responses, recs, matches
+
+
+# Options the metrics runner passes to every per-model metric script (run_metrics_pipeline.sh -a / -x, e.g.
+# "--keep_duplicates"); a script without one accepts and ignores it (hidden from --help)
+RUNNER_FLAGS = ('--keep_duplicates', '--consistency_all_runs', '--order_sensitive_keys', '--include_unknown')
+RUNNER_OPTIONS = {'--parity_target': {}, '--top_countries': {}, '--valid_response_tags': {'nargs': '*'},
+                  '--valid_rec_tags': {'nargs': '*'}}
+
+
+def accept_runner_options(parser: argparse.ArgumentParser) -> None:
+    """Add the runner's options this parser does not have, as hidden no-ops. Call after the script's own options."""
+    known = parser._option_string_actions
+    for flag in RUNNER_FLAGS:
+        if flag not in known:
+            parser.add_argument(flag, action='store_true', help=argparse.SUPPRESS)
+    for option, kwargs in RUNNER_OPTIONS.items():
+        if option not in known:
+            parser.add_argument(option, default=None, help=argparse.SUPPRESS, **kwargs)
+
+
+# --- shards -------------------------------------------------------------------------------------------------------
+def crc32_shard(text: str, n_shards: int) -> int:
+    """Deterministic shard of a string: crc32 % n_shards (the same in every process and Python version)."""
+    return zlib.crc32(text.encode('utf-8')) % n_shards
+
+
+def shard_file(folder: Path | str, shard: int) -> Path:
+    """<folder>/shard-<ss>.parquet."""
+    return Path(folder) / f"shard-{shard:02d}.parquet"

@@ -4,8 +4,9 @@ author buckets and shared CLI arguments.
 """
 
 import argparse
+import shutil
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import duckdb
 
@@ -68,13 +69,15 @@ def authorships_glob(folder: Path | str, bucket: Optional[int] = None) -> str:
     return str(Path(folder) / 'chunk=*' / part / '*.parquet')
 
 
-def write_parquet_atomic(df, path: Path | str) -> None:
-    """Write a DataFrame to <path>.tmp, then rename: a crash never leaves a partial file that looks complete."""
-    from utils import ios
+def copy_parquet(con: duckdb.DuckDBPyConnection, query: str, path: Path | str) -> int:
+    """COPY a query to <path> (zstd parquet) via <path>.tmp, then rename (a crash never leaves a partial file that
+    looks complete); returns the number of rows written."""
     path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + '.tmp')
-    ios.to_parquet(df, tmp)
+    row = con.execute(f"COPY ({query}) TO {sql_path(tmp)} (FORMAT parquet, COMPRESSION zstd)").fetchone()
     tmp.replace(path)
+    return int(row[0]) if row else 0
 
 
 def is_person_sql(name_column: str = 'display_name', orcid_column: str = 'orcid') -> str:
@@ -101,3 +104,26 @@ def bucket_params(args: argparse.Namespace) -> str:
     if len(buckets) == args.n_buckets:
         return 'all'
     return f"bucket{buckets[0]:02d}" if len(buckets) == 1 else f"{len(buckets)}buckets"
+
+
+def copy_partitioned(con: duckdb.DuckDBPyConnection, query: Optional[str], folder: Path | str,
+                     partition_by: str) -> Optional[int]:
+    """COPY a query into <folder>/<partition_by>=<value>/*.parquet (zstd) via the temporary folder _tmp_<folder name>
+    (a leftover of a crashed run is removed), renamed to <folder> when complete. query None: an empty folder.
+    Returns the number of rows written (None if DuckDB reports none)."""
+    folder = Path(folder)
+    tmp = folder.with_name(f"_tmp_{folder.name}")
+    if tmp.exists():
+        shutil.rmtree(tmp)                                          # leftover of a crashed run
+    tmp.mkdir(parents=True)
+    row = None
+    if query is not None:
+        row = con.execute(f"COPY ({query}) TO {sql_path(tmp)} "
+                          f"(FORMAT parquet, PARTITION_BY ({partition_by}), OVERWRITE_OR_IGNORE, COMPRESSION zstd)").fetchone()
+    tmp.rename(folder)
+    return int(row[0]) if row else None
+
+
+def empty_query(columns: Dict[str, str]) -> str:
+    """A query with the given columns (name -> DuckDB type) and no rows: the schema of an empty output."""
+    return "SELECT " + ', '.join(f"NULL::{dtype} AS {name}" for name, dtype in columns.items()) + " WHERE false"

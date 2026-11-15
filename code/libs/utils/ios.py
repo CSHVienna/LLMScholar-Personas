@@ -1,9 +1,8 @@
 import os
 import logging
-import glob
 import json
 from pathlib import Path
-from typing import Dict, Iterator, List, Tuple, Any, Generator
+from typing import List, Any
 from datetime import datetime
 import re
 
@@ -96,6 +95,14 @@ def to_parquet(df: pd.DataFrame, file_path: Path | str, **kwargs) -> None:
     p = Path(file_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     replace_surrogates(df).to_parquet(p, index=False, **kwargs)
+
+
+def write_parquet_atomic(df: pd.DataFrame, path: Path | str) -> None:
+    """to_parquet via <path>.tmp, then rename: a crash never leaves a partial file that looks complete."""
+    path = Path(path)
+    tmp = path.with_name(path.name + '.tmp')
+    to_parquet(df, tmp)
+    tmp.replace(path)
 
 
 def replace_surrogates(df: pd.DataFrame) -> pd.DataFrame:

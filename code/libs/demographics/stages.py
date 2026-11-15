@@ -36,7 +36,6 @@ import hashlib
 import json
 import math
 import shutil
-import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
@@ -48,7 +47,7 @@ import pyarrow.parquet as pq
 from demographics import ethnicity, race
 from demographics.gender import first_name_of
 from groundtruth import db
-from groundtruth.authorships import check_params
+from utils.batch import check_params, crc32_shard
 from groundtruth.fields import FieldMapping
 from utils import ios
 
@@ -83,17 +82,8 @@ OUTPUT_COLUMNS = ['author_id', 'gender_first_name', 'p_female', *[c for m in MOD
 
 
 # --- layout / parameters -----------------------------------------------------------------------------------------
-def shard_file(folder: Path | str, shard: int) -> Path:
-    return Path(folder) / f"shard-{shard:02d}.parquet"
-
-
 def model_dir(demographics_dir: Path | str, model: NameModel) -> Path:
     return Path(demographics_dir) / model.name
-
-
-def name_shard(name: str, n_shards: int) -> int:
-    """Deterministic shard of a normalised name (the same in every process and Python version)."""
-    return zlib.crc32(name.encode('utf-8')) % n_shards
 
 
 def check_layout(demographics_dir: Path | str, n_buckets: int, n_shards: int, limit_authors: Optional[int]) -> None:
@@ -127,7 +117,7 @@ def build_keys(authors: pd.DataFrame, n_shards: int) -> pd.DataFrame:
                          **{m.name_column: [m.normalise(n) for n in names] for m in MODELS.values()}})
     keys = ios.replace_surrogates(keys)          # what is written is what is sharded (never two shards for a name)
     for m in MODELS.values():
-        keys[m.shard_column] = pd.array([name_shard(n, n_shards) if isinstance(n, str) else None
+        keys[m.shard_column] = pd.array([crc32_shard(n, n_shards) if isinstance(n, str) else None
                                          for n in keys[m.name_column]], dtype='Int32')
     return keys[KEY_COLUMNS]
 
@@ -137,7 +127,7 @@ def write_keys_bucket(authors_file: Path | str, keys_file: Path | str, fields: L
     if not Path(authors_file).exists():
         raise FileNotFoundError(f"No bibliometrics file (step A.1): {authors_file}")
     keys = build_keys(population(authors_file, fields, limit_authors), n_shards)
-    db.write_parquet_atomic(keys, keys_file)
+    ios.write_parquet_atomic(keys, keys_file)
     return keys
 
 
@@ -155,7 +145,7 @@ def write_gender_table(names: List[str], output_file: Path | str, p_female_fn: C
     if len(p_female) != len(names):
         raise RuntimeError(f"nomquamgender returned {len(p_female)} results for {len(names)} names")
     df = pd.DataFrame({'gender_name': pd.Series(names, dtype=object), 'p_female': pd.Series(p_female, dtype=float)})
-    db.write_parquet_atomic(df, output_file)
+    ios.write_parquet_atomic(df, output_file)
     return df
 
 
@@ -280,7 +270,7 @@ def infer_shard(names: List[str], output_file: Path | str, probabilities_fn: Pro
             raise RuntimeError(f"Model returned {len(probs)} results for {len(chunk)} names")
         df = pd.DataFrame(probs, columns=prob_columns, dtype=float)
         df.insert(0, name_column, pd.Series(chunk, dtype=object))
-        db.write_parquet_atomic(df, part_file)
+        ios.write_parquet_atomic(df, part_file)
         log(f"[{model.name} {output_file.stem}] part {part + 1}/{n_parts} stored ({len(known)} names cached)")
     inferred = pd.concat([ios.load_parquet(f) for f in sorted(parts_dir.glob('part-*.parquet'))], ignore_index=True)
     if inferred[name_column].tolist() != todo:
@@ -289,7 +279,7 @@ def infer_shard(names: List[str], output_file: Path | str, probabilities_fn: Pro
     df = pd.concat(frames, ignore_index=True).set_index(name_column).loc[names].reset_index()
     if len(df) != len(names) or df[prob_columns].isna().any().any():
         raise RuntimeError(f"{output_file.name}: {len(df)} rows for {len(names)} names, or missing probabilities")
-    db.write_parquet_atomic(df, output_file)
+    ios.write_parquet_atomic(df, output_file)
     shutil.rmtree(parts_dir)
     return df
 

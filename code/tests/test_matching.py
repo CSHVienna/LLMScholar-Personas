@@ -19,11 +19,12 @@ import pandas as pd                                                      # noqa:
 
 from matching import candidates as mc                                  # noqa: E402
 from matching import stats                                               # noqa: E402
-from matching.decide import REC_ID_COLUMNS, write_matches           # noqa: E402
+from matching.decide import write_matches           # noqa: E402
 from groundtruth import db                                               # noqa: E402
 from groundtruth.fields import load_field_mapping                        # noqa: E402
 from groundtruth.names import write_name_index                           # noqa: E402
 from utils import constants as cons                                      # noqa: E402
+from utils.batch import shard_file                                       # noqa: E402
 
 N_BUCKETS, N_SHARDS = 2, 3
 CS, PHYS, BIO, SOC, PSY = 'Computer Science', 'Physics', 'Biology', 'Sociology', 'Psychology'
@@ -89,7 +90,7 @@ class MatchingPipeline(unittest.TestCase):
         (root / 'authors').mkdir()
         for b in range(N_BUCKETS):
             authors[authors.author_id % N_BUCKETS == b].to_parquet(db.bucket_file(root / 'authors', b), index=False)
-        base = {c: 'x' for c in REC_ID_COLUMNS}
+        base = {c: 'x' for c in cons.REC_ID_COLUMNS}
         recs = pd.DataFrame([{**base, cons.COL_MODEL: 'm1', cons.COL_RUN_ID: 1, cons.COL_REC_INDEX: i,
                               'field': f, 'seniority': s, 'first_name': fn, 'last_name': ln}
                              for i, fn, ln, f, s in RECS])
@@ -109,7 +110,7 @@ class MatchingPipeline(unittest.TestCase):
                                       cls.cand / mc.OA_TOKENS_DIR, b)
         for s in range(N_SHARDS):
             mc.write_fuzzy_shard(con, cls.cand / mc.FUZZY_RECS_FILE, cls.cand / mc.OA_TOKENS_DIR,
-                                 mc.shard_file(cls.cand / mc.FUZZY_DIR, s), s, floor=0.90)
+                                 shard_file(cls.cand / mc.FUZZY_DIR, s), s, floor=0.90)
         for b in range(N_BUCKETS):
             mc.write_merged_bucket(con, db.bucket_file(cls.cand / mc.EXACT_DIR, b), cls.cand / mc.FUZZY_DIR,
                                    db.bucket_file(root / 'names', b), db.bucket_file(cls.cand, b))

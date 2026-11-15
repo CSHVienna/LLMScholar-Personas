@@ -25,12 +25,12 @@ P(annotated | inferred) (inputs of the Barron / Marshall correction, D.4) and th
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import duckdb
 import pandas as pd
 
-from annotation.tasks import ITEM_ID, Section
+from annotation.tasks import ITEM_ID, STRATUM, STRATUM_SIZE, Section, payload, quota_for
 from demographics import ethnicity as eth
 from demographics import race
 from groundtruth.db import sql_path
@@ -40,7 +40,6 @@ DEMOGRAPHICS = cons.ANNOTATION_TASK_DEMOGRAPHICS
 INFERRED = ['gender', 'race', 'ethnicity']                    # labels of A.4 kept in the key
 PROBABILITIES = ['p_female', *race.PROB_COLUMNS, *eth.PROB_COLUMNS]
 SIDE_GT, SIDE_RECOMMENDED = 'gt', 'recommended'
-STRATUM, STRATUM_SIZE = 'stratum', 'stratum_size'
 GROUPS = {'gender': list(cons.ANNOTATION_GENDER_CLASSES), 'ethnicity': list(cons.ANNOTATION_ETHNICITY_CLASSES)}
 GENDER_DEFINITIONS = {
     cons.GENDER_MALE: 'The name reads as a man\'s name.',
@@ -101,19 +100,13 @@ def groups(task: str = DEMOGRAPHICS) -> Dict[str, List[str]]:
 # -----------------------------------------------------------------------------
 # Sampling (DuckDB: gt_authors has tens of millions of rows)
 # -----------------------------------------------------------------------------
-def quota_for(sizes: pd.Series, per_stratum: int, max_items: int) -> int:
-    """Per-stratum quota, lowered until the sample fits max_items (as tasks.stratified_sample)."""
-    quota = per_stratum
-    while quota > 1 and sizes.clip(upper=quota).sum() > max_items:
-        quota -= 1
-    return quota
-
-
 def sample_demographics(gt_dir: Path | str, matching_dir: Optional[Path | str], per_stratum: int, max_items: int,
                         seed: int, threads: int = cons.GT_STATS_DUCKDB_THREADS,
                         memory_limit: str = cons.GT_STATS_DUCKDB_MEMORY) -> pd.DataFrame:
     """Stratified sample of people (side x inferred gender x inferred race) with their names and inferred
-    labels / probabilities. Without B.6 outputs (matching_dir missing), only the GT side is sampled."""
+    labels / probabilities. Without B.6 outputs (matching_dir missing), only the GT side is sampled. The draw orders
+    each stratum by md5(seed | author_id): the same sample for the same seed in every DuckDB version (DuckDB's hash()
+    is not guaranteed stable across versions)."""
     con = duckdb.connect(':memory:')
     con.execute(f"SET threads = {int(threads)}")
     con.execute(f"SET memory_limit = '{memory_limit}'")
@@ -132,8 +125,8 @@ def sample_demographics(gt_dir: Path | str, matching_dir: Optional[Path | str], 
     quota = quota_for(sizes['n'], per_stratum, max_items)
     drawn = con.execute(f"""
         WITH ranked AS (
-            SELECT *, row_number() OVER (PARTITION BY side, gender, race ORDER BY hash(author_id + {int(seed)}))
-                      AS r
+            SELECT *, row_number() OVER (PARTITION BY side, gender, race
+                                         ORDER BY md5('{int(seed)}|' || author_id::VARCHAR), author_id) AS r
             FROM pool)
         SELECT r.author_id, r.side, r.gender, r.race, a.ethnicity, a.display_name,
                {', '.join(f'a.{c}' for c in PROBABILITIES)}
@@ -151,8 +144,7 @@ def sample_demographics(gt_dir: Path | str, matching_dir: Optional[Path | str], 
 
 
 def items_payload(task: str, sample: pd.DataFrame) -> dict:
-    items = [{ITEM_ID: row[ITEM_ID], 'sections': [s.to_dict() for s in row['sections']]} for _, row in sample.iterrows()]
-    return {'codebook': codebook(task), 'items': items, 'tag_separator': cons.TAG_SEPARATOR}
+    return payload(codebook(task), sample[ITEM_ID], sample['sections'])
 
 
 def key_table(task: str, sample: pd.DataFrame) -> pd.DataFrame:

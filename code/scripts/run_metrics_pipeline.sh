@@ -2,7 +2,7 @@
 # =============================================================================
 # Benchmark metrics (plan §2.3). Works from any working directory.
 #   technical   steps 7-8, per model (GNU parallel): configuration metrics (validity, refusals, behaviour /
-#               recommendation consistency) and response metrics (duplicates, k ratio, factuality)
+#               recommendation consistency) and response metrics (duplicates, k balance, factuality)
 #   expected    step 9a, one process: expected social metrics under a random recommender per field x seniority x
 #               list size (-> DIR/metrics/<-V>/social_expected/), for the size-adjusted metrics <metric>_adj
 #   social      step 9, per model (GNU parallel): parity / diversity / unknown share per attribute, popularity,
@@ -13,7 +13,7 @@
 #               configuration variable, cluster-bootstrap CIs over models -> DIR/metrics/<-V>/rq1/<metric>.parquet
 #   rq2         RQ2, one process per metric (GNU parallel): EMM and deviation from the grand mean of every value of
 #               every configuration variable, cluster-bootstrap CIs over models -> DIR/metrics/<-V>/rq2/<metric>.parquet
-#   interactions  one process per metric (GNU parallel): two-way blocks added to the additive RQ1 model (screening,
+#   interactions  batch_rq1_interactions.py, one process per metric (GNU parallel): two-way blocks added to the additive RQ1 model (screening,
 #               pre-specified, size / origin decompositions, global check), cluster-bootstrap CIs over models
 #               -> DIR/metrics/<-V>/interactions/<metric>.parquet (+ cells/<metric>.parquet)
 # Needs B.1-B.3 and B.6 (social and flows need the GT; rq1, rq2 and interactions need technical and social). Valid tag sets come from the analysis config (-y). Folders are derived from the results
@@ -46,6 +46,7 @@
 set -euo pipefail
 
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPTS_DIR}/_pipeline_lib.sh"      # log, selected, ensure_config
 PROJECT_ROOT="$(cd "${SCRIPTS_DIR}/../.." && pwd)"
 LOGS_DIR="${PROJECT_ROOT}/logs"
 RESULTS_DIR="${PROJECT_ROOT}/results"
@@ -81,7 +82,6 @@ for s in ${STEP//,/ }; do
         echo "ERROR: unknown step '${s}' in -s ${STEP} (steps: ${ALL_STEPS// /,} or all)"; exit 1
     fi
 done
-selected() { [[ ",${STEP}," == *",all,"* || ",${STEP}," == *",$1,"* ]]; }
 mkdir -p "${LOGS_DIR}"
 # -v NAME: analysis variant (configure_variant.py): its config, and the variants whose GT population / author
 # matching it reads (its own if it changes their settings, else main's)
@@ -90,95 +90,62 @@ if [[ -n "${VARIANT_NAME}" ]]; then
     variant_lines="$("${PYTHON}" "${SCRIPTS_DIR}/configure_variant.py" paths "${VARIANT_NAME}" --results_dir "${RESULTS_DIR}" ${CONFIG_GIVEN:+--config "${CONFIG}"})" || exit 1
     eval "${variant_lines}"
     CONFIG="${VARIANT_CONFIG}"
-    echo "[$(date +%H:%M:%S)] variant ${VARIANT_NAME}: config ${CONFIG} | GT population: ${VARIANT_POPULATION} | author matching: ${VARIANT_AUTHORS}"
+    log "variant ${VARIANT_NAME}: config ${CONFIG} | GT population: ${VARIANT_POPULATION} | author matching: ${VARIANT_AUTHORS}"
 fi
 if [[ -n "${VARIANT_NAME}" ]]; then VARIANT="${VARIANT_METRICS}"; MATCHING_VARIANT="${VARIANT_AUTHORS}"; fi
 METRICS_DIR="${RESULTS_DIR}/metrics/${VARIANT}"
 GT_DIR="${GT_DIR:-${RESULTS_DIR}/groundtruth/population/${VARIANT_POPULATION}}"
 
-ensure_config() {   # the config must exist and be complete (settings added later): else the wizard, in a terminal
-    local problem
-    if problem="$("${PYTHON}" "${SCRIPTS_DIR}/configure_analysis.py" --config "${CONFIG}" --check)"; then
-        echo "[$(date +%H:%M:%S)] analysis config: ${CONFIG}"
-    elif [[ -t 0 && -t 1 ]]; then
-        echo "[$(date +%H:%M:%S)] ${problem}"
-        echo "[$(date +%H:%M:%S)] starting the wizard"
-        "${PYTHON}" "${SCRIPTS_DIR}/configure_analysis.py" --config "${CONFIG}" --phase early || { echo "No config written: stopping."; exit 1; }
-    else
-        echo "ERROR: ${problem}"
+
+per_model() {   # per_model <label> <script> [args]: the script once per model of MODELS_FILE (JOBS at a time) on
+                # the per-model inputs, -> METRICS_DIR; stops the pipeline if a model fails
+    local label="$1" script="$2"; shift 2
+    local stem="${script%.py}"
+    local joblog="${LOGS_DIR}/$(date +%Y-%m-%d-%H:%M)_${stem#batch_}_models.joblog"   # e.g. ..._social_metrics_models
+    log "${label} (${VARIANT}): models of ${MODELS_FILE}, ${JOBS} job(s) at a time, -> ${METRICS_DIR}, joblog ${joblog}"
+    if ! parallel -j "${JOBS}" --nice 10 --joblog "${joblog}" \
+            "${PYTHON}" "${SCRIPTS_DIR}/${script}" --config "${CONFIG}" --models {} \
+            --responses_metadata_dir "${RESULTS_DIR}/responses_metadata" \
+            --recommendations_metadata_dir "${RESULTS_DIR}/recommendations_metadata" \
+            --matching_dir "${RESULTS_DIR}/matching/authors/${MATCHING_VARIANT}" "$@" \
+            --output_dir "${METRICS_DIR}" --log_dir "${LOGS_DIR}" ${EXTRA_ARGS} ${SINGLE_ARGS} '>' /dev/null :::: "${MODELS_FILE}"; then
+        log "${label}: some models FAILED (see ${joblog}); re-run the same command (finished models are skipped)"
         exit 1
     fi
+    log "${label}: done"
 }
 
 ensure_config
-if selected technical; then
-    joblog="${LOGS_DIR}/$(date +%Y-%m-%d-%H:%M)_metrics_models.joblog"
-    echo "[$(date +%H:%M:%S)] metrics (${VARIANT}): models of ${MODELS_FILE}, ${JOBS} job(s) at a time, -> ${METRICS_DIR}, joblog ${joblog}"
-    if ! parallel -j "${JOBS}" --nice 10 --joblog "${joblog}" \
-            "${PYTHON}" "${SCRIPTS_DIR}/batch_metrics.py" --config "${CONFIG}" --models {} \
-            --responses_metadata_dir "${RESULTS_DIR}/responses_metadata" \
-            --recommendations_metadata_dir "${RESULTS_DIR}/recommendations_metadata" \
-            --matching_dir "${RESULTS_DIR}/matching/authors/${MATCHING_VARIANT}" --output_dir "${METRICS_DIR}" \
-            --log_dir "${LOGS_DIR}" ${EXTRA_ARGS} ${SINGLE_ARGS} '>' /dev/null :::: "${MODELS_FILE}"; then
-        echo "[$(date +%H:%M:%S)] metrics: some models FAILED (see ${joblog}); re-run the same command (finished models are skipped)"
-        exit 1
-    fi
-    echo "[$(date +%H:%M:%S)] metrics: done"
-fi
+if selected technical; then per_model metrics batch_metrics.py; fi
 if selected expected; then
-    echo "[$(date +%H:%M:%S)] social_expected (${VARIANT}): GT ${GT_DIR} -> ${METRICS_DIR}/social_expected"
+    log "social_expected (${VARIANT}): GT ${GT_DIR} -> ${METRICS_DIR}/social_expected"
     if ! nice -n 10 "${PYTHON}" "${SCRIPTS_DIR}/batch_social_expected.py" --config "${CONFIG}" --gt_dir "${GT_DIR}" \
             --output_dir "${METRICS_DIR}" --log_dir "${LOGS_DIR}" ${EXTRA_ARGS} > /dev/null; then
-        echo "[$(date +%H:%M:%S)] social_expected: FAILED (see its log in ${LOGS_DIR})"
+        log "social_expected: FAILED (see its log in ${LOGS_DIR})"
         exit 1
     fi
-    echo "[$(date +%H:%M:%S)] social_expected: done"
+    log "social_expected: done"
 fi
-if selected social; then
-    joblog="${LOGS_DIR}/$(date +%Y-%m-%d-%H:%M)_social_metrics_models.joblog"
-    echo "[$(date +%H:%M:%S)] social metrics (${VARIANT}): models of ${MODELS_FILE}, ${JOBS} job(s), GT ${GT_DIR}, joblog ${joblog}"
-    if ! parallel -j "${JOBS}" --nice 10 --joblog "${joblog}" \
-            "${PYTHON}" "${SCRIPTS_DIR}/batch_social_metrics.py" --config "${CONFIG}" --models {} \
-            --responses_metadata_dir "${RESULTS_DIR}/responses_metadata" \
-            --recommendations_metadata_dir "${RESULTS_DIR}/recommendations_metadata" \
-            --matching_dir "${RESULTS_DIR}/matching/authors/${MATCHING_VARIANT}" --gt_dir "${GT_DIR}" \
-            --output_dir "${METRICS_DIR}" --log_dir "${LOGS_DIR}" ${EXTRA_ARGS} ${SINGLE_ARGS} '>' /dev/null :::: "${MODELS_FILE}"; then
-        echo "[$(date +%H:%M:%S)] social metrics: some models FAILED (see ${joblog}); re-run the same command (finished models are skipped)"
-        exit 1
-    fi
-    echo "[$(date +%H:%M:%S)] social metrics: done"
-fi
-if selected flows; then
-    joblog="${LOGS_DIR}/$(date +%Y-%m-%d-%H:%M)_flows_models.joblog"
-    echo "[$(date +%H:%M:%S)] flows (${VARIANT}): models of ${MODELS_FILE}, ${JOBS} job(s), GT ${GT_DIR}, joblog ${joblog}"
-    if ! parallel -j "${JOBS}" --nice 10 --joblog "${joblog}" \
-            "${PYTHON}" "${SCRIPTS_DIR}/batch_flows.py" --config "${CONFIG}" --models {} \
-            --responses_metadata_dir "${RESULTS_DIR}/responses_metadata" \
-            --recommendations_metadata_dir "${RESULTS_DIR}/recommendations_metadata" \
-            --matching_dir "${RESULTS_DIR}/matching/authors/${MATCHING_VARIANT}" --gt_dir "${GT_DIR}" \
-            --output_dir "${METRICS_DIR}" --log_dir "${LOGS_DIR}" ${EXTRA_ARGS} ${SINGLE_ARGS} '>' /dev/null :::: "${MODELS_FILE}"; then
-        echo "[$(date +%H:%M:%S)] flows: some models FAILED (see ${joblog}); re-run the same command (finished models are skipped)"
-        exit 1
-    fi
-    echo "[$(date +%H:%M:%S)] flows: done"
-fi
+if selected social; then per_model "social metrics" batch_social_metrics.py --gt_dir "${GT_DIR}"; fi
+if selected flows; then per_model flows batch_flows.py --gt_dir "${GT_DIR}"; fi
 if selected rq1 || selected rq2 || selected interactions; then   # the RQs need the late settings (valid tags, thresholds) reviewed
     if ! problem="$("${PYTHON}" "${SCRIPTS_DIR}/configure_analysis.py" --config "${CONFIG}" --check --phase late)"; then
         echo "STOP before the research questions: ${problem}"
         exit 1
     fi
 fi
-for rq in rq1 rq2 interactions; do
+for step_script in rq1:batch_rq1.py rq2:batch_rq2.py interactions:batch_rq1_interactions.py; do   # step:script
+    rq="${step_script%%:*}"; script="${step_script#*:}"
     selected "${rq}" || continue
-    read -r -a RQ_METRICS <<< "$("${PYTHON}" "${SCRIPTS_DIR}/batch_${rq}.py" --list_metrics --config "${CONFIG}" ${RQ_ARGS})"   # metric sets: study.ethnicity_attribute
+    read -r -a RQ_METRICS <<< "$("${PYTHON}" "${SCRIPTS_DIR}/${script}" --list_metrics --config "${CONFIG}" ${RQ_ARGS})"   # metric sets: study.ethnicity_attribute
     joblog="${LOGS_DIR}/$(date +%Y-%m-%d-%H:%M)_${rq}_metrics.joblog"
-    echo "[$(date +%H:%M:%S)] ${rq} (${VARIANT}): ${#RQ_METRICS[@]} metrics, ${JOBS} job(s) x ${PY_THREADS} threads, -> ${METRICS_DIR}/${rq}, joblog ${joblog}"
+    log "${rq} (${VARIANT}): ${#RQ_METRICS[@]} metrics, ${JOBS} job(s) x ${PY_THREADS} threads, -> ${METRICS_DIR}/${rq}, joblog ${joblog}"
     if ! OMP_NUM_THREADS="${PY_THREADS}" OPENBLAS_NUM_THREADS="${PY_THREADS}" MKL_NUM_THREADS="${PY_THREADS}" \
             parallel -j "${JOBS}" --nice 10 --joblog "${joblog}" \
-            "${PYTHON}" "${SCRIPTS_DIR}/batch_${rq}.py" --metrics_dir "${METRICS_DIR}" ${RQ_ARGS} --metrics {} \
+            "${PYTHON}" "${SCRIPTS_DIR}/${script}" --metrics_dir "${METRICS_DIR}" ${RQ_ARGS} --metrics {} \
             --log_dir "${LOGS_DIR}" ${EXTRA_ARGS} '>' /dev/null ::: "${RQ_METRICS[@]}"; then
-        echo "[$(date +%H:%M:%S)] ${rq}: some metrics FAILED (see ${joblog}); re-run the same command (finished metrics are skipped)"
+        log "${rq}: some metrics FAILED (see ${joblog}); re-run the same command (finished metrics are skipped)"
         exit 1
     fi
-    echo "[$(date +%H:%M:%S)] ${rq}: done"
+    log "${rq}: done"
 done

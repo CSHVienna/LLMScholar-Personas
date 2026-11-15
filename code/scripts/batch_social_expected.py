@@ -20,10 +20,11 @@ import argparse
 from pathlib import Path
 
 from groundtruth import db
-from groundtruth.authorships import check_params
+from utils.batch import check_params
 from metrics import expected as ex
 from metrics import social as so
 from utils import analysis_config as ac
+from utils import batch
 from utils import constants as cons
 from utils import ios
 from utils import logs
@@ -34,14 +35,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--output_dir', default=cons.DEFAULT_METRICS_DIR, help='Metrics folder of the variant')
     parser.add_argument('--include_unknown', action=argparse.BooleanOptionalAction, default=False,
                         help="'unknown' as a class (as the social metrics)")
-    parser.add_argument('--parity_target', choices=so.SCOPES, default='field_x_seniority', help='GT target of parity')
+    parser.add_argument('--parity_target', choices=cons.SCOPES, default=cons.DEFAULT_PARITY_TARGET, help='GT target of parity')
     parser.add_argument('--n_max', type=int, default=ex.N_MAX, help='Longest list simulated (longer: the value at n_max)')
     parser.add_argument('--seed', type=int, default=cons.DEFAULT_SEED)
     parser.add_argument('--overwrite', action='store_true', help='Recompute an existing table')
-    for option in ('--valid_response_tags', '--valid_rec_tags', '--top_countries'):   # config options, no effect here
-        parser.add_argument(option, nargs='*', default=None, help=argparse.SUPPRESS)
-    for flag in ('--keep_duplicates', '--order_sensitive_keys', '--consistency_all_runs'):
-        parser.add_argument(flag, action='store_true', help=argparse.SUPPRESS)
+    batch.accept_runner_options(parser)
     db.add_resource_arguments(parser)
     logs.add_log_arguments(parser)
     ac.add_config_argument(parser)
@@ -63,12 +61,11 @@ def main() -> None:
     check_params(out.parent, params)
     start = ios.datetime.now()
     gt = so.GroundTruth(args.gt_dir, db.connect(args, ':memory:'))
-    shares = gt.shares[gt.shares['scope'] == 'field_x_seniority']
+    shares = gt.shares[gt.shares['scope'] == cons.SCOPE_FIELD_SENIORITY]
     groups = sorted(set(zip(shares['field'], shares['seniority'])))
     ios.printf(f"{len(groups)} field x seniority groups, n = 1..{args.n_max}, GT {args.gt_dir}")
     table = ex.expected_table(gt, groups, args.parity_target, args.include_unknown, args.seed, args.n_max)
-    ios.to_parquet(table, out.with_name(out.name + '.tmp'))
-    out.with_name(out.name + '.tmp').replace(out)
+    ios.write_parquet_atomic(table, out)
     summary = table[table['n'].isin([1, 2, 5, 10])].pivot_table(index='metric', columns='n', values='expected').round(3)
     ios.printf(f"Done in {ios.datetime.now() - start} | {len(table)} rows -> {out}\n"
                f"mean expected over the groups (n = 1, 2, 5, 10):\n{summary.to_string()}")

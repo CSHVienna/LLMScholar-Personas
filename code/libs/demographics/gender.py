@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from utils import constants as cons
+from utils.names import first_last_order
 from utils.text import clean_text
 
 _TOKEN = re.compile(r"[^\W\d_]", re.UNICODE)   # a letter
@@ -27,11 +28,7 @@ def first_name_of(full_name: Optional[str]) -> Optional[str]:
     full_name = clean_text(full_name)
     if not full_name or not full_name.strip():
         return None
-    name = full_name.strip()
-    if ',' in name:                                 # 'Last, First'
-        last, _, first = name.partition(',')
-        name = f"{first.strip()} {last.strip()}"
-    tokens = name.split()
+    tokens = first_last_order(full_name.strip()).split()          # 'Last, First' -> 'First Last'
     given = tokens[:-1] if len(tokens) > 1 else tokens
     for token in given:
         letters = ''.join(_TOKEN.findall(token))

@@ -222,3 +222,4 @@ tmp
 plan*
 data/responses
 data/*.duckdb
+data/hanzi_pinyin_gender

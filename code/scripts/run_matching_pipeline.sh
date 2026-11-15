@@ -43,6 +43,7 @@
 set -euo pipefail
 
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPTS_DIR}/_pipeline_lib.sh"      # log, selected, ensure_config
 PROJECT_ROOT="$(cd "${SCRIPTS_DIR}/../.." && pwd)"
 LOGS_DIR="${PROJECT_ROOT}/logs"
 RESULTS_DIR="${PROJECT_ROOT}/results"
@@ -84,7 +85,7 @@ if [[ -n "${VARIANT_NAME}" ]]; then
     variant_lines="$("${PYTHON}" "${SCRIPTS_DIR}/configure_variant.py" paths "${VARIANT_NAME}" --results_dir "${RESULTS_DIR}" ${CONFIG_GIVEN:+--config "${CONFIG}"})" || exit 1
     eval "${variant_lines}"
     CONFIG="${VARIANT_CONFIG}"
-    echo "[$(date +%H:%M:%S)] variant ${VARIANT_NAME}: config ${CONFIG} | GT population: ${VARIANT_POPULATION} | author matching: ${VARIANT_AUTHORS}"
+    log "variant ${VARIANT_NAME}: config ${CONFIG} | GT population: ${VARIANT_POPULATION} | author matching: ${VARIANT_AUTHORS}"
 fi
 [[ -n "${VARIANT_NAME}" ]] && VARIANT="${VARIANT_AUTHORS}"
 GT_DIR="${RESULTS_DIR}/groundtruth"
@@ -97,7 +98,6 @@ for s in ${STEP//,/ }; do
         echo "ERROR: unknown step '${s}' in -s ${STEP} (steps: ${ALL_STEPS// /,} or all)"; exit 1
     fi
 done
-selected() { [[ ",${STEP}," == *",all,"* || ",${STEP}," == *",$1,"* ]]; }
 mkdir -p "${LOGS_DIR}"
 if ! mkdir -p "${TEMP_DIR}" || [[ ! -w "${TEMP_DIR}" ]]; then
     echo "ERROR: DuckDB spill folder ${TEMP_DIR} cannot be created / written (-T)"; exit 1
@@ -109,37 +109,24 @@ CAND="${CAND} ${FLOOR:+--jw_floor ${FLOOR}} ${FUZZY_ALL}"
 CAND="${CAND} --recommendations_metadata_dir ${RECS_DIR} --names_dir ${GT_DIR}/names --output_dir ${CAND_DIR} --log_dir ${LOGS_DIR} ${EXTRA_ARGS}"
 
 # ensure_config: the analysis config must exist before the steps that read it; in a terminal the wizard creates it
-ensure_config() {   # the config must exist and be complete (settings added later): else the wizard, in a terminal
-    local problem
-    if problem="$("${PYTHON}" "${SCRIPTS_DIR}/configure_analysis.py" --config "${CONFIG}" --check)"; then
-        echo "[$(date +%H:%M:%S)] analysis config: ${CONFIG}"
-    elif [[ -t 0 && -t 1 ]]; then
-        echo "[$(date +%H:%M:%S)] ${problem}"
-        echo "[$(date +%H:%M:%S)] starting the wizard"
-        "${PYTHON}" "${SCRIPTS_DIR}/configure_analysis.py" --config "${CONFIG}" --phase early || { echo "No config written: stopping."; exit 1; }
-    else
-        echo "ERROR: ${problem}"
-        exit 1
-    fi
-}
 
 # parallel_stage <name> <jobs> <unit: buckets|shards> <count> <command>: GNU parallel, timestamped joblog
 parallel_stage() {
     local name="$1" jobs="$2" unit="$3" count="$4" command="$5"
     local joblog="${LOGS_DIR}/$(date +%Y-%m-%d-%H:%M)_${name}_${unit}.joblog"
-    echo "[$(date +%H:%M:%S)] ${name}: ${count} ${unit}, ${jobs} job(s) at a time, joblog ${joblog}"
+    log "${name}: ${count} ${unit}, ${jobs} job(s) at a time, joblog ${joblog}"
     if ! parallel -j "${jobs}" --nice 10 --joblog "${joblog}" ${command} --${unit} {} '>' /dev/null \
             ::: $(seq 0 $((count - 1))); then
-        echo "[$(date +%H:%M:%S)] ${name}: some ${unit} FAILED (see ${joblog}, column Exitval, and their logs in ${LOGS_DIR})"
+        log "${name}: some ${unit} FAILED (see ${joblog}, column Exitval, and their logs in ${LOGS_DIR})"
         echo "Re-run the same command: finished ${unit} are skipped."
         exit 1
     fi
-    echo "[$(date +%H:%M:%S)] ${name}: done"
+    log "${name}: done"
 }
 single_stage() {   # single_stage <name> <command>
-    echo "[$(date +%H:%M:%S)] $1: start"
+    log "$1: start"
     $2 > /dev/null
-    echo "[$(date +%H:%M:%S)] $1: done"
+    log "$1: done"
 }
 
 ensure_config
@@ -152,16 +139,16 @@ if selected candidates; then
     parallel_stage "matching_merge" "${JOBS}" buckets "${N_BUCKETS}" "${CAND} --stage merge ${SMALL}"
 fi
 if selected authors && [[ -n "${VARIANT_NAME}" && "${VARIANT_AUTHORS}" != "${VARIANT_NAME}" ]]; then
-    echo "[$(date +%H:%M:%S)] match_authors: skipped, variant ${VARIANT_NAME} changes no B.6b setting (reads ${AUTHORS_DIR})"
+    log "match_authors: skipped, variant ${VARIANT_NAME} changes no B.6b setting (reads ${AUTHORS_DIR})"
 elif selected authors; then
     joblog="${LOGS_DIR}/$(date +%Y-%m-%d-%H:%M)_match_authors_models.joblog"
-    echo "[$(date +%H:%M:%S)] match_authors (${VARIANT}): models of ${MODELS_FILE}, ${JOBS} job(s) at a time, -> ${AUTHORS_DIR}, joblog ${joblog}"
+    log "match_authors (${VARIANT}): models of ${MODELS_FILE}, ${JOBS} job(s) at a time, -> ${AUTHORS_DIR}, joblog ${joblog}"
     if ! parallel -j "${JOBS}" --nice 10 --joblog "${joblog}" \
             "${PYTHON}" "${SCRIPTS_DIR}/batch_match_authors.py" --config "${CONFIG}" --models {} ${SMALL} --candidates_dir "${CAND_DIR}" \
             --recommendations_metadata_dir "${RECS_DIR}" --authors_dir "${GT_DIR}/authors" --output_dir "${AUTHORS_DIR}" \
             --log_dir "${LOGS_DIR}" ${EXTRA_ARGS} ${SINGLE_ARGS} '>' /dev/null :::: "${MODELS_FILE}"; then
-        echo "[$(date +%H:%M:%S)] match_authors: some models FAILED (see ${joblog}); re-run the same command (finished models are skipped)"
+        log "match_authors: some models FAILED (see ${joblog}); re-run the same command (finished models are skipped)"
         exit 1
     fi
-    echo "[$(date +%H:%M:%S)] match_authors: done"
+    log "match_authors: done"
 fi

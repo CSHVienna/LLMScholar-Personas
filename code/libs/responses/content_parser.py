@@ -53,7 +53,8 @@ class ParsedContent:
 
 
 class ContentParser:
-    """Decode generated text into person-like objects (see module docstring)."""
+    """Decode generated text into person-like objects (see module docstring). Holds no state (kept as a class: the
+    reader's interface)."""
 
     def parse(self, text: Optional[str]) -> ParsedContent:
         """Decode ``text``; never raises."""

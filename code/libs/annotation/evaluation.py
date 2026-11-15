@@ -15,18 +15,18 @@ Evaluation of inferred tags against manual annotations (one or more annotators).
 """
 
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Tuple
 
-import krippendorff
 import numpy as np
 import pandas as pd
 
 from utils import constants as cons
 from utils import ios
 from annotation.tasks import EXTRA_MISSING, ITEM_ID, vocabulary
+from metrics import technical as tm
 from responses import tags as tag_utils
-from responses.recommendations import normalize_tokens
-from responses.tag_stats import is_valid
+from utils.names import normalize_tokens
+from responses.tags import is_valid
 
 ANSWER_FIELDS = ['first_name', 'last_name', 'n_recommendations', EXTRA_MISSING]   # free-text / number answers of the codebooks
 
@@ -59,6 +59,16 @@ def tag_matrix(annotations: pd.DataFrame, task: str) -> pd.DataFrame:
 # -----------------------------------------------------------------------------
 # 1. Agreement
 # -----------------------------------------------------------------------------
+def nominal_alpha(reliability: np.ndarray) -> Tuple[float, int]:
+    """Krippendorff's alpha (nominal) of an annotators x items matrix (NaN = not rated) and the number of items rated
+    by >= 2 annotators; alpha NaN without such items or without variation."""
+    import krippendorff   # imported lazily (optional: annotation evaluation only)
+    rated_twice = int(((~np.isnan(reliability)).sum(axis=0) >= 2).sum())
+    alpha = (krippendorff.alpha(reliability_data=reliability, level_of_measurement='nominal')
+             if rated_twice and np.nanstd(reliability) > 0 else np.nan)
+    return alpha, rated_twice
+
+
 def agreement(annotations: pd.DataFrame, task: str) -> pd.DataFrame:
     """Per tag: Krippendorff's alpha and number of items rated by >= 2 annotators (empty if one annotator)."""
     annotators = annotations['annotator'].unique()
@@ -68,9 +78,7 @@ def agreement(annotations: pd.DataFrame, task: str) -> pd.DataFrame:
     rows = []
     for tag in matrix.columns:
         reliability = matrix[tag].astype(float).unstack('annotator').reindex(columns=annotators).T.to_numpy()
-        rated_twice = int(((~np.isnan(reliability)).sum(axis=0) >= 2).sum())   # items with >= 2 ratings
-        alpha = (krippendorff.alpha(reliability_data=reliability, level_of_measurement='nominal')
-                 if rated_twice and np.nanstd(reliability) > 0 else np.nan)
+        alpha, rated_twice = nominal_alpha(reliability)
         rows.append({'tag': tag, 'krippendorff_alpha': alpha, 'n_items_multiple_annotators': rated_twice})
     return pd.DataFrame(rows)
 
@@ -185,24 +193,25 @@ def _same_name(df: pd.DataFrame) -> pd.Series:
                       for _, r in df.iterrows()], index=df.index)
 
 
-RESPONSE_MATCH = [cons.COL_MODEL, cons.VAR_LANGUAGE, cons.COL_PROMPT_ID, cons.COL_RUN_ID]
+def _attach(key: pd.DataFrame, table: pd.DataFrame, columns: List[str], ids: List[str]) -> pd.DataFrame:
+    """``key`` with ``columns`` of ``table`` (first row per id; NaN without one), rows matched on the id columns as
+    tm.row_id strings (the key file and the metadata may store them with different dtypes)."""
+    found = table.assign(_id=tm.row_id(table, ids)).drop_duplicates('_id').set_index('_id')
+    key_ids = tm.row_id(key, ids)
+    return key.assign(**{c: key_ids.map(found[c]).to_numpy() for c in columns})
 
 
 def add_missing_fields(key: pd.DataFrame, recommendations_metadata_dir: Path | str) -> pd.DataFrame:
     """``key`` with the pipeline's ``missing_fields`` of each recommendation (None / '' = complete)."""
-    match = RESPONSE_MATCH + [cons.COL_REC_INDEX]
+    ids = cons.RESPONSE_SHORT_KEY + [cons.COL_REC_INDEX]
     models = list(key[cons.COL_MODEL].astype(str).unique())
-    recs = ios.load_parquet_folder(recommendations_metadata_dir, match + ['missing_fields'], models)
-    as_text = lambda df: df.assign(**{c: df[c].astype(str) for c in match})
-    merged = as_text(key).merge(as_text(recs).drop_duplicates(match), on=match, how='left')
-    return merged.assign(**{c: key[c].values for c in match})
+    recs = ios.load_parquet_folder(recommendations_metadata_dir, ids + ['missing_fields'], models)
+    return _attach(key, recs, ['missing_fields'], ids)
 
 
 def add_person_counts(key: pd.DataFrame, responses_metadata_dir: Path | str) -> pd.DataFrame:
     """``key`` with the pipeline count of person records (``n_persons`` = k_returned) of each response."""
     models = list(key[cons.COL_MODEL].astype(str).unique())
-    summary = ios.load_parquet_folder(responses_metadata_dir, RESPONSE_MATCH + ['n_persons'], models)
-    as_text = lambda df: df.assign(**{c: df[c].astype(str) for c in RESPONSE_MATCH})   # same dtypes for the merge
-    merged = as_text(key).merge(as_text(summary), on=RESPONSE_MATCH, how='left')
-    return merged.assign(**{c: key[c].values for c in RESPONSE_MATCH})           # original identifier dtypes
+    summary = ios.load_parquet_folder(responses_metadata_dir, cons.RESPONSE_SHORT_KEY + ['n_persons'], models)
+    return _attach(key, summary, ['n_persons'], cons.RESPONSE_SHORT_KEY)
 

@@ -5,7 +5,7 @@ Heavy, run once; the decision (thresholds, levels, random pick) is B.6b (matchin
 Only OpenAlex PEOPLE are candidates (A.2 `is_person`), from ALL of OpenAlex (not only the field population A.4):
 a real person outside the field is "exists, not in the field", not "fabricated".
 
-Names are compared as normalised tokens (no case / accents, transliterated; responses.recommendations.normalize_tokens)
+Names are compared as normalised tokens (no case / accents, transliterated; utils.names.normalize_tokens)
 on both sides. The recommended first / last name come from the LLM (cleaned, B.3); OpenAlex names (display + every
 alternative name) are split by A.2 (groundtruth/names.py).
 
@@ -38,16 +38,16 @@ Stages (each resumable; outputs written to a temporary name and renamed when com
                 (NULL if no fuzzy pair >= floor)
 """
 
-import shutil
-import zlib
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import duckdb
 import pandas as pd
 
-from groundtruth.db import sql_path, write_parquet_atomic
-from responses.recommendations import is_initials, normalize_tokens
+from groundtruth.db import copy_parquet, copy_partitioned, empty_query, sql_path
+from utils.names import is_initials, normalize_tokens
+from utils import ios
+from utils.batch import crc32_shard
 
 REC_NAMES_FILE = 'rec_names.parquet'
 FUZZY_RECS_FILE = 'fuzzy_recs.parquet'
@@ -56,15 +56,6 @@ CANDIDATE_COLUMNS = ['rec_name', 'author_id', 'exact_display', 'exact_alternativ
                      'jw_full', 'jw_first', 'jw_last', 'jw_flipped', 'edit_first', 'jw_name', 'jw_is_display']
 _INDEX_COLUMNS = {'name_key', 'name_key_short', 'name_norm', 'first_norm', 'last_norm', 'initials_key',
                   'author_id', 'is_display_name', 'is_person'}
-
-
-def token_shard(token: str, n_shards: int) -> int:
-    """Deterministic shard of a surname token (same in every process and Python version)."""
-    return zlib.crc32(token.encode('utf-8')) % n_shards
-
-
-def shard_file(folder: Path | str, shard: int) -> Path:
-    return Path(folder) / f"shard-{shard:02d}.parquet"
 
 
 # --- rec_names ---------------------------------------------------------------------------------------------------
@@ -80,7 +71,7 @@ def rec_name_row(first_name: Optional[str], last_name: Optional[str], n_shards: 
             'name_key': ' '.join(sorted(tokens)),
             'name_key_short': ' '.join(sorted([tokens[0], tokens[-1]])) if len(tokens[0]) > 1 else None,
             'initials_key': f"{first_tokens[0][0]} {rec_last}" if is_initials(first_name) else None,
-            'block_token': block, 'shard': token_shard(block, n_shards) if block else None}
+            'block_token': block, 'shard': crc32_shard(block, n_shards) if block else None}
 
 
 def write_rec_names(con: duckdb.DuckDBPyConnection, recommendations_glob: str, output_file: Path | str,
@@ -96,7 +87,7 @@ def write_rec_names(con: duckdb.DuckDBPyConnection, recommendations_glob: str, o
     df = pd.DataFrame(rows, columns=['first_name', 'last_name', 'rec_name', 'rec_first', 'rec_last', 'name_key',
                                      'name_key_short', 'initials_key', 'block_token', 'shard'])
     df['shard'] = df['shard'].astype('Int32')
-    write_parquet_atomic(df, output_file)
+    ios.write_parquet_atomic(df, output_file)
     return df
 
 
@@ -105,7 +96,7 @@ def check_index(con: duckdb.DuckDBPyConnection, index_file: Path | str) -> None:
     columns = {row[0] for row in con.execute(f"DESCRIBE SELECT * FROM read_parquet({sql_path(index_file)})").fetchall()}
     missing = _INDEX_COLUMNS - columns
     if missing:
-        raise SystemExit(f"{index_file} lacks {sorted(missing)}: re-run A.2 (run_gt_pipeline.sh -s names)")
+        raise ValueError(f"{index_file} lacks {sorted(missing)}: re-run A.2 (run_gt_pipeline.sh -s names)")
 
 
 # --- exact (per OpenAlex bucket) ---------------------------------------------------------------------------------
@@ -134,7 +125,7 @@ def exact_query(rec_names_file: Path | str, index_file: Path | str) -> str:
 
 def write_exact_bucket(con: duckdb.DuckDBPyConnection, rec_names_file: Path | str, index_file: Path | str,
                        output_file: Path | str) -> int:
-    return _copy(con, exact_query(rec_names_file, index_file), output_file)
+    return copy_parquet(con, exact_query(rec_names_file, index_file), output_file)
 
 
 # --- fuzzy_recs ----------------------------------------------------------------------------------------------------
@@ -148,7 +139,7 @@ def write_fuzzy_recs(con: duckdb.DuckDBPyConnection, rec_names_file: Path | str,
         SELECT DISTINCT rec_name, rec_first, rec_last, block_token, shard
         FROM read_parquet({sql_path(rec_names_file)}) WHERE block_token IS NOT NULL {unmatched}
     """
-    return _copy(con, query, output_file)
+    return copy_parquet(con, query, output_file)
 
 
 # --- oa_tokens (per OpenAlex bucket) -------------------------------------------------------------------------------
@@ -165,15 +156,9 @@ def oa_tokens_query(index_file: Path | str, fuzzy_recs_file: Path | str) -> str:
 def write_oa_tokens_bucket(con: duckdb.DuckDBPyConnection, index_file: Path | str, fuzzy_recs_file: Path | str,
                            output_dir: Path | str, bucket: int) -> int:
     """<output_dir>/bucket=<b>/shard=<s>/*.parquet (via a temporary folder, renamed when complete)."""
-    final = Path(output_dir) / f"bucket={bucket}"
-    tmp = Path(output_dir) / f"_tmp_bucket={bucket}"
-    if tmp.exists():
-        shutil.rmtree(tmp)
-    tmp.mkdir(parents=True)
-    row = con.execute(f"COPY ({oa_tokens_query(index_file, fuzzy_recs_file)}) TO {sql_path(tmp)} "
-                      f"(FORMAT parquet, PARTITION_BY (shard), OVERWRITE_OR_IGNORE, COMPRESSION zstd)").fetchone()
-    tmp.rename(final)
-    return int(row[0]) if row else 0
+    n = copy_partitioned(con, oa_tokens_query(index_file, fuzzy_recs_file), Path(output_dir) / f"bucket={bucket}",
+                         'shard')
+    return 0 if n is None else n
 
 
 def oa_tokens_done(output_dir: Path | str, bucket: int) -> bool:
@@ -208,12 +193,11 @@ def write_fuzzy_shard(con: duckdb.DuckDBPyConnection, fuzzy_recs_file: Path | st
                       output_file: Path | str, shard: int, floor: float) -> int:
     oa_files = sorted(str(p) for p in Path(oa_tokens_dir).glob(f"bucket=*/shard={shard}/*.parquet"))
     if not oa_files:                                      # no OpenAlex name holds a surname token of this shard
-        query = ("SELECT NULL::VARCHAR AS rec_name, NULL::VARCHAR AS name_norm, NULL::DOUBLE AS jw_full, "
-                 "NULL::DOUBLE AS jw_first, NULL::DOUBLE AS jw_last, NULL::BOOLEAN AS jw_flipped, "
-                 "NULL::DOUBLE AS edit_first WHERE false")
+        query = empty_query({'rec_name': 'VARCHAR', 'name_norm': 'VARCHAR', 'jw_full': 'DOUBLE', 'jw_first': 'DOUBLE',
+                             'jw_last': 'DOUBLE', 'jw_flipped': 'BOOLEAN', 'edit_first': 'DOUBLE'})
     else:
         query = fuzzy_query(fuzzy_recs_file, oa_files, shard, floor)
-    return _copy(con, query, output_file)
+    return copy_parquet(con, query, output_file)
 
 
 # --- merge (per OpenAlex bucket) --------------------------------------------------------------------------------------
@@ -241,15 +225,4 @@ def merge_query(exact_file: Path | str, fuzzy_dir: Path | str, index_file: Path 
 
 def write_merged_bucket(con: duckdb.DuckDBPyConnection, exact_file: Path | str, fuzzy_dir: Path | str,
                         index_file: Path | str, output_file: Path | str) -> int:
-    return _copy(con, merge_query(exact_file, fuzzy_dir, index_file), output_file)
-
-
-def _copy(con: duckdb.DuckDBPyConnection, query: str, output_file: Path | str) -> int:
-    """COPY a query to <output_file> via a temporary file; returns the number of rows."""
-    output_file = Path(output_file)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    tmp = output_file.with_name(output_file.name + '.tmp')
-    row = con.execute(f"COPY ({query}) TO {sql_path(tmp)} (FORMAT parquet, COMPRESSION zstd)").fetchone()
-    tmp.replace(output_file)
-    return int(row[0]) if row else 0
-
+    return copy_parquet(con, merge_query(exact_file, fuzzy_dir, index_file), output_file)

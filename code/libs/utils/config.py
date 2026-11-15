@@ -7,11 +7,13 @@ Set them once in the conda environment (see README.md, *Setup*):
 """
 import os
 
-API_KEY_ENV_VARS = {'openai': 'OPENAI_API_KEY', 'gpt': 'OPENAI_API_KEY', 'gemini': 'GEMINI_API_KEY'}
+from utils import constants as cons
+
+API_KEY_ENV_VARS = {cons.SOURCE_GPT: 'OPENAI_API_KEY', cons.SOURCE_GEMINI: 'GEMINI_API_KEY'}   # api (source) -> variable
 
 
 def read_api_key(api: str) -> str:
-    """API key of ``api`` ('openai' / 'gpt' or 'gemini') from its environment variable."""
+    """API key of ``api`` (cons.SOURCE_GPT 'gpt' or cons.SOURCE_GEMINI 'gemini') from its environment variable."""
     var = API_KEY_ENV_VARS[api]
     key = os.environ.get(var, '').strip()
     if not key:

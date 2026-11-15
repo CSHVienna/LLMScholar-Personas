@@ -18,7 +18,7 @@ import numpy as np                                                       # noqa:
 import pandas as pd                                                      # noqa: E402
 
 from analysis import deviations as dv                                    # noqa: E402
-from viz import metric_plots as mp                                       # noqa: E402
+from viz import formatting, metric_plots as mp                                       # noqa: E402
 from utils import constants as cons                                      # noqa: E402
 
 PARENT = {'s1': 'A', 's2': 'A', 's3': 'B', 's4': 'B', 's5': 'B'}
@@ -111,9 +111,9 @@ class TestDeviations(unittest.TestCase):
 
 class TestFigures(unittest.TestCase):
     def test_format_signed(self):
-        self.assertEqual(mp.format_value(0.034, 2, signed=True), '+0.03')
-        self.assertEqual(mp.format_value(-0.12, 2, signed=True), '−0.12')
-        self.assertEqual(mp.format_value(-0.001, 2, signed=True), '−<0.01')
+        self.assertEqual(formatting.format_value(0.034, 2, signed=True), '+0.03')
+        self.assertEqual(formatting.format_value(-0.12, 2, signed=True), '−0.12')
+        self.assertEqual(formatting.format_value(-0.001, 2, signed=True), '−<0.01')
 
     def test_plots(self):
         from viz import rq_plots
@@ -126,15 +126,14 @@ class TestFigures(unittest.TestCase):
         self.assertEqual(rows[0].levels, [str(x) for x in cons.LANGUAGES])           # design order, not alphabetical
         rq_plots.plot_rq2(results)                                              # EMM only
         rq_plots.plot_rq2(results, ['validity'])
-        with self.assertRaises(TypeError):
-            rq_plots.plot_rq2(results, 'deviation')                              # old (results, value) call
         rq_plots.plot_rq2_heatmap(results)
         for value in ('contrast', 'deviation'):
             fig = rq_plots.plot_rq2_forest(results, value, ['validity', 'duplicates'])
             self.assertEqual(len(fig.axes), 2)
         labels = [t.get_text() for t in fig.axes[0].get_yticklabels()]
         self.assertIn('Language', labels)
-        self.assertEqual(rq_plots.rq2_figure_name('heatmap'), 'rq2_deviation_all_heatmap')
+        from viz.names import rq2_figure_name
+        self.assertEqual(rq2_figure_name('heatmap'), 'rq2_deviation_all_heatmap')
 
 
 if __name__ == '__main__':

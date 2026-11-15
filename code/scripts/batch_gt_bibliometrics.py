@@ -37,7 +37,7 @@ def run_bucket(bucket: int, args: argparse.Namespace) -> str:
     df = compute_bibliometrics(con, args.authorships_dir, args.edges_dir, bucket, args.n_buckets, args.fields,
                                log=ios.printf)
     con.close()
-    db.write_parquet_atomic(df, output_file)
+    ios.write_parquet_atomic(df, output_file)
     in_fields = {f.field: int((df[f.column] >= 1).sum()) for f in args.fields}
     return f"[bucket {bucket}] {len(df)} authors -> {output_file.name} | with >= 1 field work: {in_fields}"
 

@@ -24,22 +24,21 @@ Lists longer than N_MAX use the value at N_MAX. Random numbers are seeded per (s
 import json
 import zlib
 from pathlib import Path
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import Dict, Iterable, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 
 from groundtruth.db import sql_path
 from metrics import social as so
+from utils import constants as cons
 
 N_MAX = 40                  # longest list simulated (observed: <= 31)
 LABEL_DRAWS = 10_000        # random label lists per (field, seniority, attribute, n)
 PEOPLE_DRAWS = 1_000        # random people lists per (field, seniority) for connectedness
 SIMILARITY_SAMPLE = 5_000   # random members per (field, seniority) for similarity
 COLUMNS = ['field', 'seniority', 'metric', 'n', 'expected']
-ADJ_SUFFIX = '_adj'
-EXPECTED_SUFFIX = '_expected'
-SIMULATED = ([f"parity_{a}" for a in so.ATTRIBUTES] + [f"diversity_{a}" for a in so.ATTRIBUTES]
+SIMULATED = (cons.social_metric_keys(cons.PARITY) + cons.social_metric_keys(cons.DIVERSITY)
              + ['connectedness', 'similarity'])               # from the table (popularity, locality: in social.py)
 
 
@@ -56,8 +55,8 @@ def label_expectation(population: pd.Series, q: pd.Series, n: int, include_unkno
     classes = list(population.index)
     shares = population.to_numpy(dtype=float)
     counts = rng.multinomial(n, shares / shares.sum(), size=draws).astype(float)
-    if not include_unknown and so.UNKNOWN in classes:
-        keep = [i for i, c in enumerate(classes) if c != so.UNKNOWN]
+    if not include_unknown and cons.UNKNOWN in classes:
+        keep = [i for i, c in enumerate(classes) if c != cons.UNKNOWN]
         counts, classes = counts[:, keep], [classes[i] for i in keep]
     n_known = counts.sum(axis=1)
     with np.errstate(invalid='ignore', divide='ignore'):
@@ -84,7 +83,7 @@ def label_table(gt: 'so.GroundTruth', groups: Iterable[Tuple[str, str]], scope: 
     rows = []
     for field, seniority in groups:
         for name, column in so.ATTRIBUTES.items():
-            population = gt.target('field_x_seniority', field, seniority, column)   # who a random list is drawn from
+            population = gt.target(cons.SCOPE_FIELD_SENIORITY, field, seniority, column)   # who a random list is drawn from
             q = so.known(gt.target(scope, field, seniority, column), include_unknown)
             if population.empty or q.empty:
                 continue
@@ -123,17 +122,6 @@ def connectedness_curve(lists: np.ndarray, edges: Iterable[Tuple[int, int]], n_m
     return {n: float(np.mean(v)) if v else np.nan for n, v in values.items()}
 
 
-def mean_pairwise_cosine(vectors: np.ndarray) -> float:
-    """Mean cosine over all pairs (like social.similarity, zero vectors count as cosine 0), in closed form."""
-    if len(vectors) < 2:
-        return np.nan
-    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-    unit = np.divide(vectors, norms, out=np.zeros_like(vectors, dtype=float), where=norms > 0)
-    total = unit.sum(axis=0)
-    pairs_sum = float(total @ total - (unit * unit).sum())          # sum over i != j of u_i . u_j
-    return pairs_sum / (len(unit) * (len(unit) - 1))
-
-
 def people_table(gt: 'so.GroundTruth', groups: Sequence[Tuple[str, str]], seed: int, n_max: int = N_MAX,
                  draws: int = PEOPLE_DRAWS, sample: int = SIMILARITY_SAMPLE) -> pd.DataFrame:
     lists = {}
@@ -151,7 +139,7 @@ def people_table(gt: 'so.GroundTruth', groups: Sequence[Tuple[str, str]], seed: 
             rows.append((field, seniority, 'connectedness', n, value))
         sample_ids = sample_members(gt, field, seniority, sample, seed + 1)
         vectors = gt.features(sample_ids).to_numpy() if len(sample_ids) else np.empty((0, 0))
-        mu = mean_pairwise_cosine(vectors)
+        mu = so.similarity(vectors)
         rows += [(field, seniority, 'similarity', n, mu) for n in range(2, n_max + 1)]
     return pd.DataFrame(rows, columns=COLUMNS)
 
@@ -172,7 +160,7 @@ class Expected:
         self.values = {(r.metric, r.field, r.seniority, int(r.n)): float(r.expected) for r in table.itertuples()}
 
     def value(self, metric: str, field: str, seniority: str, n: int) -> float:
-        if not n or n < 1:
+        if n is None or not np.isfinite(n) or n < 1:      # no people (NaN n included)
             return np.nan
         return self.values.get((metric, field, seniority, min(int(n), self.n_max)), np.nan)
 
@@ -184,8 +172,8 @@ class Expected:
             if metric in out:
                 expected = [self.value(metric, f, s, n) for f, s, n in
                             zip(out['field'], out['seniority'], out['n_people'])]
-                out[metric + EXPECTED_SUFFIX] = np.array(expected, dtype=float)
-                out[metric + ADJ_SUFFIX] = out[metric] - out[metric + EXPECTED_SUFFIX]
+                out[metric + cons.EXPECTED_SUFFIX] = np.array(expected, dtype=float)
+                out[metric + cons.ADJ_SUFFIX] = out[metric] - out[metric + cons.EXPECTED_SUFFIX]
         return out
 
 

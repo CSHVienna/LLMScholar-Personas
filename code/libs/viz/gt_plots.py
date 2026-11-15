@@ -28,20 +28,21 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.colors import to_rgb
 from matplotlib.ticker import FuncFormatter, NullFormatter
 
 from groundtruth import stats as gs
+from utils import constants as cons
 from viz import constants as viscons
-from viz.figures import shades
-from viz.flow_plots import TARGET_TITLES, class_hatch, class_label, pool_shown, prompt_countries, target_order_colors
+from viz.figures import clean_axes, hide_unused, panel_grid, ramp, text_on
+from viz.palette import class_hatch, pool_shown, prompt_countries, target_order_colors
+from viz.labels import attribute_title, class_label
 
-METRIC_LABELS = {'academic_age': 'academic age (years)', 'n_works': '# works', 'n_citations': '# citations',
+METRIC_LABELS = {'academic_age': 'Academic age (years)', 'n_works': '# works', 'n_citations': '# citations',
                  'n_coauthors': '# unique coauthors', 'h_index': 'h-index',
-                 'citations_per_paper_per_year': 'citations per paper per year'}
+                 'citations_per_paper_per_year': 'Citations per paper per year'}
 LOG_METRICS = {'n_works': 1, 'n_citations': 1, 'n_coauthors': 1, 'h_index': 1,
                'citations_per_paper_per_year': 0.1}    # metric -> symlog linear threshold (0 and skewed counts)
-SENIORITY_COLORS = dict(zip(gs.SENIORITY_ORDER, shades(list(viscons.FLOW_SEQUENTIAL), len(gs.SENIORITY_ORDER))))
+SENIORITY_COLORS = dict(zip(cons.SENIORITY_CLASSES, ramp(viscons.FLOW_SEQUENTIAL, len(cons.SENIORITY_CLASSES))))
 
 
 # --- layout ------------------------------------------------------------------------------------------------------
@@ -61,7 +62,7 @@ def row_positions(cells: pd.DataFrame) -> Tuple[np.ndarray, List[Tuple[str, floa
 
 def _row_axes(ax: plt.Axes, cells: pd.DataFrame, positions: np.ndarray, titles, labels: bool = True) -> None:
     ax.set_yticks(positions)
-    ax.set_yticklabels(cells['seniority'] if labels else [])
+    ax.set_yticklabels([class_label('seniority', s) for s in cells['seniority']] if labels else [])
     ax.tick_params(axis='y', length=0)
     for field, y in titles:
         if labels:
@@ -69,8 +70,7 @@ def _row_axes(ax: plt.Axes, cells: pd.DataFrame, positions: np.ndarray, titles, 
                         xytext=(-2, 0), textcoords='offset points', ha='right', va='center', fontsize='x-small',
                         fontweight='bold', annotation_clip=False)
     ax.set_ylim(positions.max() + 0.75, -0.25)
-    for side in ('top', 'right', 'left'):
-        ax.spines[side].set_visible(False)
+    clean_axes(ax, hide=('top', 'right', 'left'))
 
 
 def _height(n_rows: int, n_groups: int) -> float:
@@ -87,11 +87,6 @@ def count_unit(n_max: float) -> Tuple[float, str]:
     return 1.0, ''
 
 
-def _text_color(color: str) -> str:
-    r, g, b = to_rgb(color)
-    return 'white' if 0.299 * r + 0.587 * g + 0.114 * b < 0.55 else viscons.COLOR_TEXT_SECONDARY
-
-
 def plot_gt_population(pop: pd.DataFrame, by: str = 'seniority', include_all: bool = False,
                        include_unknown: bool = True, normalize: bool = False, gender_labels=None,
                        title: Optional[str] = None) -> plt.Figure:
@@ -100,12 +95,12 @@ def plot_gt_population(pop: pd.DataFrame, by: str = 'seniority', include_all: bo
     in the segments. normalize=False: counts, unit (scholars /
     thousands / millions) chosen from the largest field; True: % of the field (each row sums to 100; without unknown,
     over the known classes)."""
-    pop = pop if include_all else pop[pop['field'] != gs.ALL_FIELDS]
+    pop = pop if include_all else pop[pop['field'] != cons.ALL_FIELDS]
     if not include_unknown:
-        pop = pop[pop[by] != gs.UNKNOWN]
+        pop = pop[pop[by] != cons.UNKNOWN]
     pop = pop.assign(**{by: pool_shown(pop[by].astype(str), by)})      # e.g. the smaller ethnicities -> other
     if by == 'seniority':
-        classes = [s for s in gs.SENIORITY_ORDER if s in set(pop[by])]
+        classes = [s for s in cons.SENIORITY_CLASSES if s in set(pop[by])]
         colors = SENIORITY_COLORS
     else:
         classes, colors = target_order_colors(by, pop[by].unique(), gender_labels)
@@ -123,12 +118,12 @@ def plot_gt_population(pop: pd.DataFrame, by: str = 'seniority', include_all: bo
     min_label = 0.04 * table.sum(axis=1).max() / divisor          # write a count if its segment is wide enough
     for c in table.columns:
         values = table[c].to_numpy() / divisor
-        ax.barh(y, values, left=left, height=0.7, color=colors[c], label=class_label(by, c) if by != 'seniority' else c,
+        ax.barh(y, values, left=left, height=0.7, color=colors[c], label=class_label(by, c),
                 **{'edgecolor': viscons.COLOR_BAR_EDGE, 'linewidth': 0.4, **class_hatch(c)})
         for yi, l, v in zip(y, left, values):
             if v >= min_label:
                 ax.text(l + v / 2, yi, f"{v:,.{decimals}f}{'%' if normalize else ''}", ha='center', va='center',
-                        fontsize=viscons.VALUE_FONT_SIZE, color=_text_color(colors[c]))
+                        fontsize=viscons.VALUE_FONT_SIZE, color=text_on(colors[c]))
         left += values
     ax.set_yticks(y)
     ax.set_yticklabels(table.index)
@@ -137,14 +132,10 @@ def plot_gt_population(pop: pd.DataFrame, by: str = 'seniority', include_all: bo
         ax.set_xlim(0, 100)
         ax.set_xlabel('% of the field\'s scholars')
     else:
-        ax.set_xlabel(f"scholars{f' ({unit})' if unit else ''}; a scholar counts in every field they belong to")
-    ax.grid(axis='x', color=viscons.COLOR_GRID)
-    ax.set_axisbelow(True)
-    for side in ('top', 'right', 'left'):
-        ax.spines[side].set_visible(False)
+        ax.set_xlabel(f"Scholars{f' ({unit})' if unit else ''}; a scholar counts in every field they belong to")
+    clean_axes(ax, 'x', hide=('top', 'right', 'left'))
     ax.legend(ncol=len(table.columns), loc='lower right', bbox_to_anchor=(1, 1), fontsize='x-small', frameon=False)
-    name = 'seniority' if by == 'seniority' else TARGET_TITLES.get(by, by)
-    ax.set_title(title or f"GT scholars per field and {name}", loc='left')
+    ax.set_title(title or f"GT scholars per field and {attribute_title(by).lower()}", loc='left')
     return fig
 
 
@@ -156,21 +147,21 @@ def plot_gt_field_overlap(overlap: pd.DataFrame, title: Optional[str] = None) ->
     fig, ax = plt.subplots(figsize=(viscons.PAPER_TEXT_WIDTH_IN / 2, 0.6 + 0.3 * n), layout='constrained')
     off = np.where(np.eye(n, dtype=bool), np.nan, share)
     vmax = float(np.nanmax(off)) if n > 1 and np.isfinite(np.nanmax(off)) and np.nanmax(off) > 0 else 1.0
-    ax.imshow(off * 100, cmap=viscons.GT_HEATMAP_CMAP, vmin=0, vmax=vmax * 100, aspect='auto')
+    cmap = plt.get_cmap(viscons.GT_HEATMAP_CMAP)
+    ax.imshow(off * 100, cmap=cmap, vmin=0, vmax=vmax * 100, aspect='auto')
     for i in range(n):
         for j in range(n):
             text = f"{sizes[i] / 1e6:.1f}M" if i == j else f"{share[i, j]:.0%}"
-            dark = i != j and share[i, j] > 0.6 * vmax
+            fill = 'white' if i == j else cmap(min(share[i, j] / vmax, 1.0))
             ax.text(j, i, text, ha='center', va='center', fontsize=viscons.VALUE_FONT_SIZE,
-                    color='white' if dark else viscons.COLOR_TEXT_SECONDARY, fontweight='bold' if i == j else 'normal')
+                    color=text_on(fill), fontweight='bold' if i == j else 'normal')
     ax.set_xticks(range(n))
     ax.set_xticklabels(overlap.columns, rotation=35, ha='right')
     ax.set_yticks(range(n))
     ax.set_yticklabels(overlap.index)
     ax.tick_params(length=0)
-    for side in ax.spines.values():
-        side.set_visible(False)
-    ax.set_xlabel('also in')
+    clean_axes(ax, hide='all')
+    ax.set_xlabel('Also in')
     ax.set_title(title or 'Field overlap (% of the row field)', loc='left')
     return fig
 
@@ -182,8 +173,7 @@ def plot_gt_bibliometrics(quantiles: pd.DataFrame, metrics: Optional[Sequence[st
     metrics = list(metrics) if metrics is not None else list(dict.fromkeys(quantiles['metric'].astype(str)))
     cells = quantiles.loc[quantiles['metric'].astype(str) == metrics[0], ['field', 'seniority']].reset_index(drop=True)
     positions, titles = row_positions(cells)
-    ncols = min(ncols, len(metrics))
-    nrows = int(np.ceil(len(metrics) / ncols))
+    nrows, ncols = panel_grid(len(metrics), ncols)
     height = _height(len(cells), len(titles))
     fig, axes = plt.subplots(nrows, ncols, figsize=(viscons.PAPER_TEXT_WIDTH_IN, height * nrows), squeeze=False,
                              layout='constrained')
@@ -195,23 +185,22 @@ def plot_gt_bibliometrics(quantiles: pd.DataFrame, metrics: Optional[Sequence[st
                   'mean': r['mean'], 'fliers': []} for _, r in q.iterrows()]
         artists = ax.bxp(boxes, positions=positions, orientation='horizontal', widths=0.7, showmeans=True, showfliers=False,
                          patch_artist=True, manage_ticks=False,
-                         meanprops={'marker': 'o', 'markersize': 1.8, 'markerfacecolor': viscons.COLOR_ERROR_BAR,
+                         meanprops={'marker': 'o', 'markersize': 1.8, 'markerfacecolor': viscons.CI_COLOR,
                                     'markeredgecolor': 'none'},
-                         medianprops={'color': viscons.COLOR_ERROR_BAR, 'linewidth': 0.8},
-                         whiskerprops={'linewidth': 0.6}, capprops={'linewidth': 0.6})
+                         medianprops={'color': viscons.CI_COLOR, 'linewidth': 0.8},
+                         whiskerprops={'color': viscons.CI_COLOR, 'linewidth': viscons.CI_LINEWIDTH},
+                         capprops={'color': viscons.CI_COLOR, 'linewidth': viscons.CI_CAPTHICK})
         for patch, seniority in zip(artists['boxes'], q['seniority']):
             patch.set_facecolor(SENIORITY_COLORS.get(seniority, viscons.FLOW_OTHER_COLOR))
-            patch.set_edgecolor(viscons.COLOR_ERROR_BAR)
+            patch.set_edgecolor(viscons.CI_COLOR)
             patch.set_linewidth(0.5)
         if metric in LOG_METRICS:
             ax.set_xscale('symlog', linthresh=LOG_METRICS[metric])
             ax.set_xlim(left=0)
         _row_axes(ax, cells, positions, titles, labels=k % ncols == 0)
-        ax.grid(axis='x', color=viscons.COLOR_GRID)
-        ax.set_axisbelow(True)
+        clean_axes(ax, 'x', hide=())
         ax.set_xlabel(METRIC_LABELS.get(metric, metric))
-    for ax in axes.flat[len(metrics):]:
-        ax.set_visible(False)
+    hide_unused(axes, len(metrics))
     fig.suptitle(title or 'Bibliometrics (box q25-q75, whiskers q05-q95, dot mean)', fontsize='small')
     return fig
 
@@ -220,18 +209,17 @@ def plot_gt_bibliometrics_by(quantiles: pd.DataFrame, attribute: str, metrics: O
                              ncols: int = 3, include_unknown: bool = False, gender_labels=None,
                              title: Optional[str] = None) -> plt.Figure:
     """Per metric panel, rows field x seniority; per perceived class a dot (median) and a line (q25-q75)."""
-    q = quantiles if include_unknown else quantiles[quantiles[attribute] != gs.UNKNOWN]
+    q = quantiles if include_unknown else quantiles[quantiles[attribute] != cons.UNKNOWN]
     shown = viscons.FLOW_SHOWN_CLASSES.get(attribute)
     if shown:                                     # quantiles cannot be pooled: only the shown classes
-        q = q[q[attribute].isin(set(shown) | {gs.UNKNOWN})]
+        q = q[q[attribute].isin(set(shown) | {cons.UNKNOWN})]
     metrics = list(metrics) if metrics is not None else list(dict.fromkeys(q['metric'].astype(str)))
     cells = q[['field', 'seniority']].drop_duplicates().reset_index(drop=True)
-    cells = gs._sort_cells(cells)
+    cells = gs.sort_cells(cells)
     positions, titles = row_positions(cells)
     order, colors = target_order_colors(attribute, q[attribute].unique(), gender_labels)
     offsets = np.linspace(-0.3, 0.3, len(order)) if len(order) > 1 else [0.0]
-    ncols = min(ncols, len(metrics))
-    nrows = int(np.ceil(len(metrics) / ncols))
+    nrows, ncols = panel_grid(len(metrics), ncols)
     height = _height(len(cells), len(titles))
     fig, axes = plt.subplots(nrows, ncols, figsize=(viscons.PAPER_TEXT_WIDTH_IN, height * nrows + 0.3), squeeze=False,
                              layout='constrained')
@@ -249,14 +237,12 @@ def plot_gt_bibliometrics_by(quantiles: pd.DataFrame, attribute: str, metrics: O
             ax.set_xscale('symlog', linthresh=LOG_METRICS[metric])
             ax.set_xlim(left=0)
         _row_axes(ax, cells, positions, titles, labels=k % ncols == 0)
-        ax.grid(axis='x', color=viscons.COLOR_GRID)
-        ax.set_axisbelow(True)
+        clean_axes(ax, 'x', hide=())
         ax.set_xlabel(METRIC_LABELS.get(metric, metric))
-    for ax in axes.flat[len(metrics):]:
-        ax.set_visible(False)
+    hide_unused(axes, len(metrics))
     fig.legend(loc='outside upper right', ncol=len(order), fontsize=viscons.MIN_FONT_SIZE, frameon=False,
-               title=TARGET_TITLES.get(attribute, attribute).capitalize(), title_fontsize='x-small')
-    fig.suptitle(title or f"Bibliometrics by {TARGET_TITLES.get(attribute, attribute)} (dot median, line q25-q75)",
+               title=attribute_title(attribute), title_fontsize='x-small')
+    fig.suptitle(title or f"Bibliometrics by {attribute_title(attribute).lower()} (dot median, line q25-q75)",
                  fontsize='small')
     return fig
 
@@ -268,11 +254,10 @@ def plot_gt_shares_by_prominence(table: pd.DataFrame, attribute: str, cls: str,
     L / M / H (sequential colours) or all vs top x % (grey vs dark). Equal dots = the class is spread evenly."""
     present = set(table['group'])
     groups = list(groups) if groups is not None else [g for g in gs.PROMINENCE_GROUPS if g in present]
-    cells = gs._sort_cells(table[['field', 'seniority']].drop_duplicates().reset_index(drop=True))
+    cells = gs.sort_cells(table[['field', 'seniority']].drop_duplicates().reset_index(drop=True))
     positions, titles = row_positions(cells)
     y_of = {(f, s): y for (f, s), y in zip(cells.itertuples(index=False, name=None), positions)}
-    ncols = min(5, len(groups))
-    nrows = int(np.ceil(len(groups) / ncols))
+    nrows, ncols = panel_grid(len(groups), 5)
     height = _height(len(cells), len(titles))
     fig, axes = plt.subplots(nrows, ncols, figsize=(viscons.PAPER_TEXT_WIDTH_IN, height * nrows + 0.2),
                              squeeze=False, layout='constrained')
@@ -283,7 +268,7 @@ def plot_gt_shares_by_prominence(table: pd.DataFrame, attribute: str, cls: str,
             levels, colors = ['all', 'top'], {'all': viscons.FLOW_OTHER_COLOR, 'top': viscons.FLOW_SEQUENTIAL[-1]}
         else:
             levels, colors = target_order_colors(group, g['level'].unique(), bin_labels=bin_labels)
-            levels = [l for l in levels if l != gs.UNKNOWN]
+            levels = [l for l in levels if l != cons.UNKNOWN]
         # share of cls in every (cell, level) that has members: 0 when the class is absent, NaN when the level is
         exists = g.groupby(['field', 'seniority', 'level'])['n'].sum().index
         wide = (g[g['class'] == cls].set_index(['field', 'seniority', 'level'])['share']
@@ -296,15 +281,13 @@ def plot_gt_shares_by_prominence(table: pd.DataFrame, attribute: str, cls: str,
                 ax.scatter(wide[level] * 100, [y_of[i] for i in wide.index], s=7, color=colors[level], zorder=2,
                            label=level, edgecolors='none')
         _row_axes(ax, cells, positions, titles, labels=k % ncols == 0)
-        ax.grid(axis='x', color=viscons.COLOR_GRID)
-        ax.set_axisbelow(True)
+        clean_axes(ax, 'x', hide=())
         ax.set_xlabel(f"% {class_label(attribute, cls).lower()}")
         ax.legend(loc='lower left', bbox_to_anchor=(0, 1.0), ncol=len(levels), fontsize=viscons.MIN_FONT_SIZE, frameon=False,
-                  handletextpad=0.1, columnspacing=0.5, title=TARGET_TITLES.get(group, group.replace('_', ' ')).capitalize(),
+                  handletextpad=0.1, columnspacing=0.5, title=attribute_title(group),
                   title_fontsize='x-small', alignment='left')
-    for ax in axes.flat[len(groups):]:
-        ax.set_visible(False)
-    fig.suptitle(title or f"Share {class_label(attribute, cls).lower()} ({TARGET_TITLES.get(attribute, attribute)}) "
+    hide_unused(axes, len(groups))
+    fig.suptitle(title or f"Share {class_label(attribute, cls).lower()} ({attribute_title(attribute).lower()}) "
                           "by prominence class", fontsize='small')
     return fig
 
@@ -329,35 +312,32 @@ def plot_gt_histogram(hist: pd.DataFrame, xlabel: str, thresholds: Optional[Dict
     else:
         share = hist['n'] / max(hist['n'].sum(), 1)
         ax.bar(hist['left'], share * 100, width=hist['right'] - hist['left'], align='edge',
-               color=SENIORITY_COLORS[gs.SENIORITY_ORDER[-1]], edgecolor=viscons.COLOR_BAR_EDGE, linewidth=0.2)
+               color=SENIORITY_COLORS[cons.SENIORITY_CLASSES[-1]], edgecolor=viscons.COLOR_BAR_EDGE, linewidth=0.2)
     if log_y:
         ax.set_yscale('log')
         ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
         ax.yaxis.set_minor_formatter(NullFormatter())
     for label, x in (thresholds or {}).items():
-        ax.axvline(x, **viscons.GT_THRESHOLD_LINE)
+        ax.axvline(x, **viscons.THRESHOLD_LINE)
         ax.annotate(label, (x, 1), xycoords=('data', 'axes fraction'), xytext=(2, -2), textcoords='offset points',
                     ha='left', va='top', fontsize=viscons.MIN_FONT_SIZE, color=viscons.COLOR_TEXT_SECONDARY)
     ax.set_xlabel(xlabel)
     ax.set_ylabel('% of scholars')
-    ax.grid(axis='y', color=viscons.COLOR_GRID)
-    ax.set_axisbelow(True)
-    for side in ('top', 'right'):
-        ax.spines[side].set_visible(False)
+    clean_axes(ax, 'y')
     if title:
         ax.set_title(title, loc='left')
     return fig
 
 
 # --- countries ---------------------------------------------------------------------------------------------------
-def plot_gt_countries(ranking: pd.DataFrame, measure: str = 'n_scholars', top: int = 20, field: str = gs.ALL_FIELDS,
+def plot_gt_countries(ranking: pd.DataFrame, measure: str = 'n_scholars', top: int = 20, field: str = cons.ALL_FIELDS,
                       include_unknown: bool = False, min_scholars: int = 1000, cumulative: bool = True,
                       highlight: Optional[Sequence[str]] = None, ax: Optional[plt.Axes] = None,
                       title: Optional[str] = None) -> plt.Figure:
     """Bars of the countries sorted by `measure` (gs.country_ranking), largest first: the `top` ones, then the rest as
     one 'other' bar (additive measures: % of the field total, with the cumulative % as a line; h-index measures: the
-    value, countries with >= min_scholars only, no 'other'). highlight: country codes in another colour (default: the
-    prompt countries)."""
+    value, countries with >= min_scholars only, no 'other'). highlight: country codes in their colours of the flow
+    figures (default: the prompt countries); the other countries in viscons.GT_COUNTRY_COLOR."""
     additive = measure in gs.COUNTRY_SUM_MEASURES
     d = gs.country_order(ranking, measure, field, include_unknown, 0 if additive else min_scholars)
     shown = d.head(top)
@@ -368,26 +348,25 @@ def plot_gt_countries(ranking: pd.DataFrame, measure: str = 'n_scholars', top: i
         fig = ax.figure
     labels = shown['country'].tolist()
     values = (shown['share'] * 100 if additive else shown['value']).tolist()
-    colors = [viscons.FLOW_CATEGORICAL[1] if c in highlight else viscons.FLOW_SEQUENTIAL[-1] for c in labels]
+    _, flow_colors = target_order_colors('country', sorted(highlight))   # prompt countries: their colours in the flows
+    colors = [flow_colors[c] if c in highlight else viscons.GT_COUNTRY_COLOR for c in labels]
     if additive and len(d) > top:
-        labels.append(f"{gs.OTHER} ({len(d) - top})")
+        labels.append(f"{class_label('country', cons.OTHER)} ({len(d) - top})")
         values.append(float(d['share'].iloc[top:].sum() * 100))
         colors.append(viscons.FLOW_OTHER_COLOR)
     x = np.arange(len(labels))
     ax.bar(x, values, color=colors, edgecolor=viscons.COLOR_BAR_EDGE, linewidth=0.2, width=0.8)
     if additive and cumulative and len(shown):
         ax.plot(x[:len(shown)], shown['cumulative'] * 100, color=viscons.COLOR_TEXT_SECONDARY, linewidth=0.8,
-                marker='o', markersize=1.8, label='cumulative %')
+                marker='o', markersize=1.8, label='Cumulative %')
         ax.set_ylim(0, 100)
         ax.legend(loc='center right', fontsize=viscons.MIN_FONT_SIZE, frameon=False)
     ax.set_xticks(x, labels, rotation=90, fontsize=viscons.MIN_FONT_SIZE)
     ax.set_xlim(-0.6, len(labels) - 0.4)
-    ylabel = f"% of {gs.COUNTRY_MEASURES[measure]}" if additive else gs.COUNTRY_MEASURES[measure]
+    measure_name = gs.COUNTRY_MEASURES[measure]
+    ylabel = f"% of {measure_name}" if additive else measure_name[:1].upper() + measure_name[1:]
     ax.set_ylabel(ylabel)
-    ax.grid(axis='y', color=viscons.COLOR_GRID)
-    ax.set_axisbelow(True)
-    for side in ('top', 'right'):
-        ax.spines[side].set_visible(False)
+    clean_axes(ax, 'y')
     if title is not None:
         ax.set_title(title, loc='left', fontsize='small')
     return fig
@@ -409,8 +388,7 @@ def plot_gt_composition(shares: pd.DataFrame, attributes: Sequence[str] = tuple(
     tables = composition_tables(shares, attributes, include_unknown)
     cells = tables[attributes[0]].index.to_frame(index=False)
     positions, titles = row_positions(cells)
-    ncols = min(ncols, len(attributes))
-    nrows = int(np.ceil(len(attributes) / ncols))
+    nrows, ncols = panel_grid(len(attributes), ncols)
     height = _height(len(cells), len(titles)) + 0.35
     fig, axes = plt.subplots(nrows, ncols, figsize=(viscons.PAPER_TEXT_WIDTH_IN, height * nrows), squeeze=False,
                              layout='constrained')
@@ -430,9 +408,8 @@ def plot_gt_composition(shares: pd.DataFrame, attributes: Sequence[str] = tuple(
         ax.set_xlabel('% of GT scholars')
         ax.legend(ncol=min(len(order), 4), loc='lower left', bbox_to_anchor=(0, 1.0), fontsize=viscons.MIN_FONT_SIZE,
                   frameon=False, handlelength=0.8, columnspacing=0.6,
-                  title=TARGET_TITLES.get(attribute, attribute).capitalize(), title_fontsize='x-small',
+                  title=attribute_title(attribute), title_fontsize='x-small',
                   alignment='left')
-    for ax in axes.flat[len(attributes):]:
-        ax.set_visible(False)
+    hide_unused(axes, len(attributes))
     fig.suptitle(title or 'GT composition per field and seniority (the parity targets)', fontsize='small')
     return fig

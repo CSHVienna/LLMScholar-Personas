@@ -25,7 +25,7 @@ RECOMMENDATION_COLUMNS = ([cons.COL_REC_INDEX, 'name_raw', 'lastname_raw', 'firs
                           + ['name_fix', 'missing_fields', 'is_complete', 'affiliations', 'areas', 'reason',
                              'source_url', 'extra_fields', 'record_json'])
 
-ResponseKey = Tuple[str, int, int]  # (language, prompt_id, run_id)
+ResponseKey = Tuple[str, int, int]  # (language, prompt_id, run_id): cons.RESPONSE_SHORT_KEY within one model
 
 
 class OutdatedSummaryError(RuntimeError):

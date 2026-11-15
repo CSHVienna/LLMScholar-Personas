@@ -2,7 +2,7 @@
 RQ1: global influence of each configuration variable (and of the model) on each metric.
 
 Data: one row per model x configuration (metrics/summary.configuration_table); per metric, rows with a missing value
-are left out. Model: metric ~ model + language + role + location + k + seniority + field + subfield(field)
+are left out. Model: metric ~ model + language + location + role + k + field + subfield(field) + seniority
 (categorical main effects, ordinary least squares). Subfield is NESTED in field: it is coded by within-field contrasts
 (effect coding inside each field), so it captures only differences between the subfields of the same field and
 field keeps its own effect.
@@ -25,8 +25,10 @@ from typing import Dict, List, Sequence
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
+import scipy.linalg
 
 from utils import constants as cons
+from utils.stats import percentile_summary
 
 MODEL_FACTOR = cons.COL_MODEL
 DEFAULT_FACTORS = [MODEL_FACTOR] + cons.CONFIG_VARIABLES
@@ -70,7 +72,6 @@ def lstsq(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     try:
         return np.linalg.lstsq(a, b, rcond=None)[0]
     except np.linalg.LinAlgError:
-        import scipy.linalg
         return scipy.linalg.lstsq(a, b, lapack_driver='gelsy')[0]
 
 
@@ -123,7 +124,7 @@ class Gram:
         return matrix_rank(self._sub(factors)[0])
 
 
-def _prepare(df: pd.DataFrame, metric: str, factors: Sequence[str]):
+def prepare(df: pd.DataFrame, metric: str, factors: Sequence[str]):
     data = df[[metric, *factors]].dropna(subset=[metric])
     y = data[metric].to_numpy(dtype=float)
     blocks = {f: nested_contrasts(data[f].astype(str), data[NESTED[f]].astype(str))
@@ -199,35 +200,23 @@ def influence(df: pd.DataFrame, metric: str, factors: Sequence[str] = DEFAULT_FA
               confidence: float = cons.DEFAULT_CONFIDENCE, seed: int = cons.DEFAULT_SEED) -> pd.DataFrame:
     """One row per factor: partial omega^2 and Shapley R^2 with cluster-bootstrap CIs (+ std of the replicates)."""
     n_boot_shapley = n_boot if n_boot_shapley is None else n_boot_shapley
-    y, blocks = _prepare(df, metric, factors)
+    y, blocks = prepare(df, metric, factors)
     point_omega, point_shapley = omega_squared(y, blocks), shapley_r2(y, blocks)
     full_r2 = sum(v for v in point_shapley.values() if np.isfinite(v))
     rng = np.random.default_rng(seed)
     omega_boot, shapley_boot = [], []
     for b in range(max(n_boot, n_boot_shapley)):
-        y_b, blocks_b = _prepare(resample_models(df, rng), metric, factors)
+        y_b, blocks_b = prepare(resample_models(df, rng), metric, factors)
         if b < n_boot:
             omega_boot.append(omega_squared(y_b, blocks_b))
         if b < n_boot_shapley:
             shapley_boot.append(shapley_r2(y_b, blocks_b))
-    alpha = (1 - confidence) / 2
     rows = []
     for factor in factors:
-        row = {'metric': metric, 'variable': factor, 'family': variable_family(factor),
+        row = {'metric': metric, 'variable': factor, 'family': cons.variable_family(factor),
                'n_configs': len(y), 'n_models': df.loc[df[metric].notna(), MODEL_FACTOR].nunique(), 'r2_full': full_r2}
         for name, point, boot in (('omega2', point_omega, omega_boot), ('shapley_r2', point_shapley, shapley_boot)):
-            values = np.array([r[factor] for r in boot], dtype=float)
-            values = values[np.isfinite(values)]
             row[name] = point[factor]
-            row[f"{name}_ci_low"], row[f"{name}_ci_high"] = (np.quantile(values, [alpha, 1 - alpha]) if len(values)
-                                                             else (np.nan, np.nan))
-            row[f"{name}_std"] = values.std(ddof=1) if len(values) > 1 else np.nan
-            row[f"{name}_n_boot"] = len(values)
+            row.update({f"{name}_{k}": v for k, v in percentile_summary([r[factor] for r in boot], confidence).items()})
         rows.append(row)
     return pd.DataFrame(rows)
-
-
-def variable_family(variable: str) -> str:
-    if variable == MODEL_FACTOR:
-        return 'model'
-    return 'persona' if variable in cons.PERSONA_VARIABLES else 'context'

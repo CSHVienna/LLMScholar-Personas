@@ -18,6 +18,8 @@ from typing import Sequence
 import numpy as np
 from scipy.stats import norm
 
+from utils import constants as cons
+
 CORRECTIONS = ('holm', 'bh', 'by')
 
 
@@ -85,7 +87,7 @@ def add_p_values(table, value: str, sided: str = 'two'):
     return out
 
 
-def significant(table, value: str, correction=None, alpha: float = 0.05, sided: str = 'two') -> np.ndarray:
+def significant(table, value: str, correction=None, alpha: float = cons.ALPHA, sided: str = 'two') -> np.ndarray:
     """Boolean per row: adjusted p < alpha (correction 'holm' | 'bh' | 'by'; p-values added if missing), or, with
     correction=None, the uncorrected percentile CI excludes 0 (one-sided 'greater': its lower limit > 0)."""
     if correction is None:

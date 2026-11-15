@@ -53,6 +53,9 @@ Type the lines as they are: `$OPENAI_API_KEY` is filled in by the shell with the
 
 To remove one: `conda env config vars unset OPENAI_API_KEY -n py311_llmscholar`.
 
+Optional: an email when a step ends (`code/scripts/notify.sh <command>`); setup in
+[code/scripts/README.md](code/scripts/README.md#email-when-a-step-ends--notifysh).
+
 ## Run
 
 Scripts run from any folder (default paths resolve from the project root).
@@ -90,6 +93,9 @@ bash code/scripts/run_responses_pipeline.sh     # tag responses and recommendati
 bash code/scripts/run_matching_pipeline.sh      # match recommended names to OpenAlex authors
 bash code/scripts/run_metrics_pipeline.sh       # metrics, flows, RQ1, RQ2
 ```
+
+Steps 3–4 and the notebooks in one go, step by step with an email per step (skips completed steps, stops at a
+failure): `bash code/scripts/run_all.sh` ([code/scripts/README.md](code/scripts/README.md)).
 
 **Variants**: the same pipeline with other settings (e.g. Jaro-Winkler 0.97), in folders named after the variant:
 

@@ -77,9 +77,9 @@ python code/scripts/batch_input_models.py --apis ollama --output tmp/models_olla
 | Script | Argument | Default | Description |
 |---|---|---|---|
 | params | `-l, --language` | english | target language |
-| params | `-o, --output-dir` | `data/context` | |
+| params | `-o, --output_dir` | `data/context` | (`--output-dir` also accepted) |
 | prompts | `-l, --languages` | all | |
-| prompts | `-o, --output-dir` | `data/context` | folder with `<language>/` parameters |
+| prompts | `-o, --output_dir` | `data/context` | folder with `<language>/` parameters (`--output-dir` also accepted) |
 | prompts | `-c, --combination_id` | none | print this combination |
 | prompts | `--overwrite` | off | rewrite existing prompt files |
 | models | `--models_metadata_file` | `data/models/metadata.json` | |
@@ -209,6 +209,76 @@ python code/scripts/batch_eval_responses.py --models gpt-4_1-nano-2025-04-14    
 cd code/scripts && python batch_eval_responses.py --models gpt-4_1-nano-2025-04-14  # or from code/scripts
 ```
 
+### Everything after the collection — `run_all.sh`
+
+Ground truth → response tags → matching → metrics → RQs → notebooks, one runner step at a time, each wrapped in
+`notify.sh` (one email per step). A failed step stops the later ones; calling it again skips the completed steps
+(`results/_run_all_done.txt`) and starts with the failed one.
+
+```bash
+systemd-run --user --scope -p MemoryMax=64G -p MemorySwapMax=0 -p CPUQuota=1400% nice -n 10 bash code/scripts/run_all.sh
+bash code/scripts/run_all.sh -n                       # the steps, done / to run
+bash code/scripts/run_all.sh -s technical -e flows    # a range of steps
+bash code/scripts/run_all.sh -f -s rq1 -e rq1         # one step again although done
+```
+
+| Option | | |
+|---|---|---|
+| `-s` / `-e STEP` | first / last step | names: `-n` |
+| `-y FILE` | analysis config | default `config/analysis.yaml`; checked first (early + late settings) |
+| `-C DIRS` | demographics cache | passed to `run_gt_pipeline.sh -C` |
+| `-f` | force | run selected steps even if done |
+| `-n` | dry run | print the steps |
+
+The step-by-step version of the same sequence (one command per step) is in `myruns.md`.
+
+### Email when a step ends — `notify.sh`
+
+Put `notify.sh` in front of any command: it runs as usual (same output, same exit code), then emails
+OK / FAILED, the duration and the last output lines. The server's own mail service delivers locally only, so the
+email goes through a Gmail account (app password).
+
+Setup, once (values stay in the conda env, like the API keys):
+
+```bash
+# Gmail app password: https://myaccount.google.com/apppasswords (needs 2-Step Verification); paste it without spaces
+read -s NOTIFY_SMTP_PASSWORD && conda env config vars set NOTIFY_SMTP_PASSWORD="$NOTIFY_SMTP_PASSWORD" -n py311_llmscholar
+conda env config vars set NOTIFY_SMTP_HOST=smtp.gmail.com NOTIFY_SMTP_PORT=587 \
+    NOTIFY_SMTP_USER=<gmail address> NOTIFY_EMAIL=<recipient> -n py311_llmscholar
+conda deactivate && conda activate py311_llmscholar     # load them
+bash code/scripts/notify.sh echo hello                  # test: an email "[LLMScholar] OK: echo hello"
+```
+
+Use:
+
+```bash
+bash code/scripts/notify.sh bash code/scripts/run_metrics_pipeline.sh -s technical
+bash code/scripts/notify.sh python code/scripts/batch_eval_responses.py --models_file data/models/models.txt
+```
+
+| Variable | Default | |
+|---|---|---|
+| `NOTIFY_EMAIL` | `NOTIFY_SMTP_USER` | recipient |
+| `NOTIFY_SMTP_HOST` | none (system `mail`) | mail server, e.g. `smtp.gmail.com` |
+| `NOTIFY_SMTP_PORT` | 587 | STARTTLS |
+| `NOTIFY_SMTP_USER` | | login and sender |
+| `NOTIFY_SMTP_PASSWORD` | | app password (never your normal password) |
+| `NOTIFY_LINES` | 30 | output lines in the email |
+| `NOTIFY_DRY_RUN` | 0 | 1: print the email instead of sending it |
+
+The last line of every run says what happened:
+
+| Line | Meaning |
+|---|---|
+| `[notify] email sent to <address> via smtp.gmail.com` | Gmail accepted it: look in the inbox, or spam / *All Mail* (mail to yourself may skip the inbox) |
+| `[notify] handed to the system mail …` | the `NOTIFY_SMTP_*` variables are not loaded in this shell: `conda deactivate && conda activate py311_llmscholar` (also inside each `screen`) |
+| `[notify] SMTPAuthenticationError …` | wrong Gmail address or app password |
+| `[notify] … timed out` | port 587 blocked from this server |
+| `[notify] NOTIFY_EMAIL is not set` | no recipient (and no `NOTIFY_SMTP_USER`) |
+
+`NOTIFY_DRY_RUN=1` prints the email (To, Via, text) without sending it. A failed email never changes the result of
+the step.
+
 ### Tags (multi-label)
 
 Responses and recommendations are tagged with **every** tag that applies. Each output file has a joined column
@@ -324,7 +394,7 @@ CSV into `results/annotations/`. The server binds to 127.0.0.1 only and never se
   the root (array / object), the number of person records vs k, and the missing requested fields per record.
   Report it in the paper as "annotators were assisted by a JSON syntax check".
   Responses also ask for the **number of recommended people** (compared with the pipeline's count of person records,
-  i.e. `k_returned` of `k_ratio`). Recommendations have an **extra_missing** checkbox (key `m`): a requested
+  i.e. `k_returned`). Recommendations have an **extra_missing** checkbox (key `m`): a requested
   non-name key is absent (compared with the pipeline's `missing_fields`). Answers saved before a checkbox existed keep
   it empty (= not answered, never "no"); "Next unannotated" also visits them. To add new codebook fields to an existing sample without changing its items:
   `python code/scripts/batch_annotation_sample.py --task responses --refresh_codebook`.
@@ -432,7 +502,7 @@ file is missing they start the wizard (in a terminal) or stop.
 ### Metrics (steps 7–8) — `run_metrics_pipeline.sh`, `batch_metrics.py`
 
 Code: `libs/metrics/technical.py`. Per model: `metrics/<variant>/config/<model>.parquet` (validity, refusals,
-behaviour / format / recommendation consistency) and `metrics/<variant>/response/<model>.parquet` (outcome, k ratio,
+behaviour / format / recommendation consistency) and `metrics/<variant>/response/<model>.parquet` (outcome, k balance,
 duplicates, factuality at 4 levels on the unique valid names). Variant `main` by default; robustness checks:
 `-V robustness/<check> -a "--keep_duplicates"` (or `--order_sensitive_keys`, `--consistency_all_runs`).
 
@@ -451,7 +521,7 @@ of the same size n from the GT of the requested field × seniority (0 = like ran
 the social step needs it. RQ1 / RQ2 / interactions run on raw and adjusted metrics (`--metrics all social_adj`, with the
 `*_ethnicity` metrics as the config's `study.ethnicity_attribute`: 45 metrics, `both` 49; `--study_ethnicity` overrides); notebooks 3 and 4:
 `ADJUSTED = True` plots the adjusted ones (set names → `<name>_adj`, e.g. `paper_adj`); their files end in `_adj`,
-next to the raw ones: `rq1_omega2_paper_bar.pdf` / `rq1_omega2_paper_bar_adj.pdf`, `metrics_paper_models_adj.pdf`.
+next to the raw ones: `rq1_omega2_paper_bar.pdf` / `rq1_omega2_paper_bar_adj.pdf`, `metrics_models_paper_bar_adj.pdf` (all names: `viz/names.py`).
 
 | Metric | Expected value |
 |---|---|
@@ -473,7 +543,7 @@ Unit = configuration (response metrics averaged within it). CIs: a model row boo
 row is the mean of its models (models weigh equally) with a hierarchical bootstrap (models, then configurations).
 Bold = best within a group of rows on the displayed (rounded) values.
 
-### Research questions — `batch_rq1.py`, `batch_rq2.py`, `batch_interactions.py`, `code/notebooks/4_research_questions.ipynb`
+### Research questions — `batch_rq1.py`, `batch_rq2.py`, `batch_rq1_interactions.py`, `code/notebooks/4_research_questions.ipynb`
 
 RQ1 (`run_metrics_pipeline.sh -s rq1`, one process per metric): partial ω² (type-II ANOVA) and Shapley R² of the
 model and of every configuration variable on each metric, cluster-bootstrap CIs over models →
@@ -499,7 +569,7 @@ model, separate outputs and figures `interactions_*`): two-way blocks added to t
 | `INTERACTION_DECOMPOSITIONS` | size × k, origin × language, origin × location | share of their LLM block |
 | `INTERACTION_ALPHA` | 0.05 | Holm (pre-specified, global) / BY (screening) |
 | `INTERACTION_OMEGA2_MIN` | 0.01 | screening / global: partial ω² ≥ this |
-| `INTERACTION_SESOI` (`_BY_METRIC`) | 0.05 (k_ratio 0.10) | pre-specified: max \|cell deviation\| ≥ this |
+| `INTERACTION_SESOI` (`_BY_METRIC`) | 0.05 (k_balance 0.10) | pre-specified: max \|cell deviation\| ≥ this |
 
 Outputs: `metrics/<variant>/interactions/<metric>.parquet` (per block: ΔR², adjusted ΔR², local f², partial ω², max
 \|cell deviation\|, share, bootstrap CIs, p) and `interactions/cells/<metric>.parquet` (observed, additive prediction,

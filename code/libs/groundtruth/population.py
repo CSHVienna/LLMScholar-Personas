@@ -30,14 +30,12 @@ import duckdb
 
 from demographics import ethnicity as eth
 from demographics import race
-from groundtruth.db import sql_path
+from groundtruth.db import copy_parquet, sql_path
 from groundtruth.fields import FieldMapping
 from utils import constants as cons
 
 TOP_COLUMNS = [f"top_{name}" for name in cons.GT_TOP_METRICS]
 SHARE_ATTRIBUTES = ['gender', 'race', 'ethnicity', 'country', *cons.GT_BIN_METRICS, *TOP_COLUMNS]
-SCOPE_FIELD_SENIORITY, SCOPE_FIELD, SCOPE_SENIORITY, SCOPE_ALL = 'field_x_seniority', 'field', 'seniority', 'all'
-UNKNOWN = 'unknown'
 
 
 def _sql_str(value: str) -> str:
@@ -64,15 +62,15 @@ def check_scheme(edges: Sequence[float], labels: Sequence[str], what: str) -> No
     edges = list(edges)
     if not edges or any(not 0 < e < 1 for e in edges) or edges != sorted(set(edges)):
         raise ValueError(f"{what} cut points must be increasing and in (0, 1): {edges}")
-    if len(labels) != len(edges) + 1 or len(set(labels)) != len(labels) or UNKNOWN in labels:
-        raise ValueError(f"Need {len(edges) + 1} distinct {what.lower()} labels (not '{UNKNOWN}') for {edges}: {list(labels)}")
+    if len(labels) != len(edges) + 1 or len(set(labels)) != len(labels) or cons.UNKNOWN in labels:
+        raise ValueError(f"Need {len(edges) + 1} distinct {what.lower()} labels (not '{cons.UNKNOWN}') for {edges}: {list(labels)}")
 
 
 def argmax_label_sql(prefix: str, classes: Sequence[str], min_prob: float) -> str:
     """raceBERT (race: prefix 'p_race_', ethnicity: 'p_eth_'): argmax class if its probability >= min_prob, else unknown."""
     best = f"greatest({', '.join(f'{prefix}{c}' for c in classes)})"
     whens = ' '.join(f"WHEN {prefix}{c} = {best} THEN '{c}'" for c in classes)
-    return f"CASE WHEN {best} IS NULL OR {best} < {float(min_prob)} THEN '{cons.DEMOGRAPHICS_UNKNOWN}' {whens} END"
+    return f"CASE WHEN {best} IS NULL OR {best} < {float(min_prob)} THEN '{cons.UNKNOWN}' {whens} END"
 
 
 def create_views(con: duckdb.DuckDBPyConnection, authors_glob: str, demographics_glob: str | None,
@@ -133,7 +131,7 @@ def create_views(con: duckdb.DuckDBPyConnection, authors_glob: str, demographics
         f"(PARTITION BY field, seniority, {metric} IS NULL ORDER BY {metric}) END AS pr_{name}"
         for name, metric in cons.GT_BIN_METRICS.items())
     bin_cols = ',\n'.join(
-        f"CASE WHEN pr_{name} IS NULL THEN '{UNKNOWN}' "
+        f"CASE WHEN pr_{name} IS NULL THEN '{cons.UNKNOWN}' "
         + ' '.join(f"WHEN pr_{name} < {float(edge)} THEN {_sql_str(label)}" for edge, label in zip(bin_edges, bin_labels))
         + f" ELSE {_sql_str(bin_labels[-1])} END AS {name}"
         for name in cons.GT_BIN_METRICS)
@@ -148,7 +146,7 @@ def create_views(con: duckdb.DuckDBPyConnection, authors_glob: str, demographics
         WITH m AS (
             SELECT author_id, unnest(fields) AS field, seniority, seniority_single, {metrics},
                    {', '.join(share_column(f) for f in fields)},
-                   gender, race, ethnicity, coalesce(country, '{UNKNOWN}') AS country
+                   gender, race, ethnicity, coalesce(country, '{cons.UNKNOWN}') AS country
             FROM gt_authors
         ), r AS (
             SELECT *, CASE field {field_share_case} END AS field_share FROM m
@@ -175,10 +173,10 @@ def shares_query() -> str:
                      FROM gt_members)
             ON {attributes} INTO NAME attribute VALUE class
         ), counts AS (
-            SELECT CASE WHEN GROUPING(field) = 0 AND GROUPING(seniority) = 0 THEN '{SCOPE_FIELD_SENIORITY}'
-                        WHEN GROUPING(field) = 0 THEN '{SCOPE_FIELD}'
-                        WHEN GROUPING(seniority) = 0 THEN '{SCOPE_SENIORITY}'
-                        ELSE '{SCOPE_ALL}' END AS scope,
+            SELECT CASE WHEN GROUPING(field) = 0 AND GROUPING(seniority) = 0 THEN '{cons.SCOPE_FIELD_SENIORITY}'
+                        WHEN GROUPING(field) = 0 THEN '{cons.SCOPE_FIELD}'
+                        WHEN GROUPING(seniority) = 0 THEN '{cons.SCOPE_SENIORITY}'
+                        ELSE '{cons.SCOPE_ALL}' END AS scope,
                    field, seniority, attribute, class, count(*) AS n
             FROM long
             GROUP BY GROUPING SETS ((field, seniority, attribute, class), (field, attribute, class),
@@ -210,9 +208,7 @@ def write_outputs(con: duckdb.DuckDBPyConnection, gt_dir: Path | str) -> dict:
     counts = {}
     for name, query in queries.items():
         target = gt_dir / f"{name}.parquet"
-        tmp = gt_dir / f"{name}.parquet.tmp"
-        con.execute(f"COPY ({query}) TO {sql_path(tmp)} (FORMAT parquet, COMPRESSION zstd)")
-        tmp.replace(target)
+        copy_parquet(con, query, target)
         counts[name] = con.execute(f"SELECT count(*) FROM read_parquet({sql_path(target)})").fetchone()[0]
         if name == 'gt_members':   # shares and cut-offs read the written file (window functions run once)
             con.execute(f"CREATE OR REPLACE VIEW gt_members AS SELECT * FROM read_parquet({sql_path(target)})")

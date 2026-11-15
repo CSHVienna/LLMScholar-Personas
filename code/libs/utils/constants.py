@@ -182,7 +182,7 @@ DEFAULT_OLLAMA_HOST = 'localhost'
 DEFAULT_OLLAMA_FIRST_PORT = 11434
 
 # Per-model files are named <model>.parquet inside their folder (the folder says what they are)
-PREFIX_PLOT_TAGS = 'tags'               # plots: tags_<what>.<ext>
+PREFIX_PLOT_TAGS = 'tags'               # plots: tags_<what>.<ext> (viz/names.py)
 PREFIX_ANNOTATION = 'annotation'        # annotation_<task>_items.json / _key.parquet / _<annotator>.csv / _eval_<table>.csv
 
 # -----------------------------------------------------------------------------
@@ -217,9 +217,32 @@ PERSONA_VARIABLES = [VAR_LANGUAGE, VAR_LOCATION, VAR_ROLE]
 CONTEXT_VARIABLES = [VAR_K, VAR_FIELD, VAR_SUBFIELD, VAR_SENIORITY]
 CONFIG_VARIABLES = PERSONA_VARIABLES + CONTEXT_VARIABLES
 
+# Model characteristics: columns of the model metadata (MODELS_METADATA_FILE); MODEL_FAMILY groups the models
+MODEL_ACCESS, MODEL_SIZE, MODEL_REASONING, MODEL_ORIGIN, MODEL_FAMILY = 'access', 'size', 'reasoning', 'origin', 'family'
+MODEL_CHARACTERISTICS = [MODEL_ACCESS, MODEL_SIZE, MODEL_REASONING, MODEL_ORIGIN]
+
+# Families of the sources of variation (row blocks and colours of the figures) and bands of the metric columns
+FAMILY_PERSONA, FAMILY_CONTEXT, FAMILY_MODEL, FAMILY_INTERACTION = 'persona', 'context', 'model', 'interaction'
+METRIC_TECHNICAL, METRIC_FACTUALITY, METRIC_SOCIAL = 'technical', 'factuality', 'social'   # metric families
+BAND_TECHNICAL, BAND_SOCIAL = METRIC_TECHNICAL, METRIC_SOCIAL                               # factuality: technical band
+
+
+def variable_family(variable: str) -> str:
+    """Family of a source of variation: the LLM and its characteristics -> model; prompt variables -> persona /
+    context."""
+    if variable in (COL_MODEL, MODEL_FAMILY, *MODEL_CHARACTERISTICS):
+        return FAMILY_MODEL
+    return FAMILY_PERSONA if variable in PERSONA_VARIABLES else FAMILY_CONTEXT
+
 # A configuration (set of <=10 runs) and a single response
 CONFIG_ID_COLUMNS = [COL_MODEL, COL_DATE] + CONFIG_VARIABLES
 RESPONSE_ID_COLUMNS = CONFIG_ID_COLUMNS + [COL_RUN_ID]
+REC_ID_COLUMNS = RESPONSE_ID_COLUMNS + [COL_REC_INDEX]          # one recommended person of a response
+# The same response / configuration by its position in the raw files (model x language x prompt x run): the key of
+# the response metadata steps (B.1-B.3), the tag figures and the annotation keys (no date / prompt variables needed)
+RESPONSE_SHORT_KEY = [COL_MODEL, VAR_LANGUAGE, COL_PROMPT_ID, COL_RUN_ID]
+CONFIG_SHORT_KEY = [COL_MODEL, VAR_LANGUAGE, COL_PROMPT_ID]
+MATCH_LEVELS = ['name', 'name_field', 'name_seniority', 'author']   # author matching levels (B.6b: matched_<level>)
 
 # Collection date: taken from response timestamps; for sources without timestamps
 # (Gemini batch output) from DEFAULT_COLLECTION_DATES_FILE; otherwise this placeholder.
@@ -442,7 +465,6 @@ DEFAULT_ANNOTATION_MAX_ITEMS = 400      # cap on the sample size
 ANNOTATION_TOOL_FILE = str(PROJECT_ROOT / 'code' / 'tools' / 'annotation_tool.html')
 
 
-
 ###############################################################################
 # GROUND TRUTH (step A; OpenAlex, read-only). Code in libs/groundtruth/ and libs/demographics/.
 ###############################################################################
@@ -481,12 +503,21 @@ BIN_LOW, BIN_MEDIUM, BIN_HIGH = 'L', 'M', 'H'
 BIN_CLASSES = [BIN_LOW, BIN_MEDIUM, BIN_HIGH]
 DEFAULT_GT_BIN_EDGES = [1 / 3, 2 / 3]   # percent-rank cut points: [0, e1) -> L, [e1, e2) -> M, [e2, 1] -> H
 DEFAULT_GT_BIN_LABELS = list(BIN_CLASSES)   # one label per interval; any number of classes (e.g. 5: 0.2 0.4 0.6 0.8)
-GT_BIN_METRICS = {'productivity': 'n_works', 'influence': 'n_citations', 'collaboration': 'n_coauthors'}
+# Person attributes of a recommended scholar (social metrics, flows, GT descriptives). ATTR_LOCATION is the scholar's
+# country (ATTR_COUNTRY, latest affiliation) as named in the metric keys (parity_location); the prompt has VAR_LOCATION
+ATTR_GENDER, ATTR_RACE, ATTR_ETHNICITY, ATTR_COUNTRY, ATTR_LOCATION = 'gender', 'race', 'ethnicity', 'country', 'location'
+ATTR_PRODUCTIVITY, ATTR_INFLUENCE, ATTR_COLLABORATION = 'productivity', 'influence', 'collaboration'
+DEMOGRAPHIC_ATTRIBUTES = [ATTR_GENDER, ATTR_RACE, ATTR_ETHNICITY]
+PROMINENCE_ATTRIBUTES = [ATTR_PRODUCTIVITY, ATTR_INFLUENCE, ATTR_COLLABORATION]
+GT_BIN_METRICS = {ATTR_PRODUCTIVITY: 'n_works', ATTR_INFLUENCE: 'n_citations', ATTR_COLLABORATION: 'n_coauthors'}
 DEFAULT_GT_TOP_PERCENTILE = 5.0          # popularity bias: top x % within field x seniority, by each GT_TOP_METRICS metric
-GT_TOP_METRICS = {'productivity': 'n_works', 'influence': 'n_citations'}   # -> is_top_<name>, shares top_<name>
+GT_TOP_METRICS = {ATTR_PRODUCTIVITY: 'n_works', ATTR_INFLUENCE: 'n_citations'}   # -> is_top_<name>, shares top_<name>
 
 # Perceived gender (nomquamgender, on the first name), race and ethnicity (raceBERT race / ethnicity models, full name)
-GENDER_FEMALE, GENDER_MALE, GENDER_NEUTRAL, GENDER_UNKNOWN = 'female', 'male', 'neutral', 'unknown'
+UNKNOWN = 'unknown'                      # a class that could not be set (no name / no probable class / no country)
+OTHER = 'other'                          # smaller classes pooled (figures, GT tables)
+ALL_FIELDS = 'All fields'                # GT rows pooled over the fields
+GENDER_FEMALE, GENDER_MALE, GENDER_NEUTRAL, GENDER_UNKNOWN = 'female', 'male', 'neutral', UNKNOWN
 GENDER_CLASSES = [GENDER_FEMALE, GENDER_MALE, GENDER_UNKNOWN]
 # Perceived gender labels from p_female (A.4): cut points e_1 < ... < e_k in (0, 1) and k + 1 labels for the
 # intervals [0, e_1), [e_1, e_2), ..., [e_k, 1]; 'unknown' without p_female. Any number of classes, e.g. 5:
@@ -494,10 +525,9 @@ GENDER_CLASSES = [GENDER_FEMALE, GENDER_MALE, GENDER_UNKNOWN]
 DEFAULT_GENDER_EDGES = [0.1, 0.9]
 DEFAULT_GENDER_LABELS = [GENDER_MALE, GENDER_NEUTRAL, GENDER_FEMALE]
 DEFAULT_GENDER_UNCERTAINTY = 0.1         # nomquamgender default: classify only if uncertainty <= threshold
-DEMOGRAPHICS_UNKNOWN = 'unknown'         # no name, or no class probable enough (race / ethnicity)
 # Perceived race: raceBERT race model (US census categories, Florida voters); model label -> class (p_race_<class>)
 RACE_ASIAN, RACE_BLACK, RACE_HISPANIC, RACE_WHITE, RACE_OTHER = 'asian', 'black', 'hispanic', 'white', 'other'
-RACE_UNKNOWN = DEMOGRAPHICS_UNKNOWN
+RACE_UNKNOWN = UNKNOWN
 RACE_CLASSES = [RACE_ASIAN, RACE_BLACK, RACE_HISPANIC, RACE_WHITE, RACE_OTHER, RACE_UNKNOWN]
 RACEBERT_RACE_LABELS = {'api': RACE_ASIAN, 'nh_black': RACE_BLACK, 'hispanic': RACE_HISPANIC,
                         'nh_white': RACE_WHITE, 'aian': RACE_OTHER}   # AIAN merged into Other
@@ -512,7 +542,7 @@ RACEBERT_ETHNICITY_LABELS = {
     'Asian,IndianSubContinent': 'indian_subcontinent', 'Asian,GreaterEastAsian,Japanese': 'japanese',
     'Asian,GreaterEastAsian,EastAsian': 'east_asian', 'GreaterAfrican,Muslim': 'muslim',
     'GreaterAfrican,Africans': 'africans'}
-ETHNICITY_UNKNOWN = DEMOGRAPHICS_UNKNOWN
+ETHNICITY_UNKNOWN = UNKNOWN
 ETHNICITY_CLASSES = [*RACEBERT_ETHNICITY_LABELS.values(), ETHNICITY_UNKNOWN]
 ETHNICITY_GROUPS = {cls: label.split(',')[0].replace('GreaterEuropean', 'greater_european')
                     .replace('GreaterAfrican', 'greater_african').replace('Asian', 'asian')
@@ -527,11 +557,11 @@ ANNOTATION_GENDER_CLASSES = [GENDER_MALE, GENDER_FEMALE, GENDER_NEUTRAL, GENDER_
 ANN_EUROPEAN, ANN_HISPANIC, ANN_PORTUGUESE_BRAZILIAN, ANN_MENA = 'european', 'hispanic', 'portuguese_brazilian', 'mena'
 ANN_EAST_ASIAN, ANN_SOUTH_ASIAN, ANN_BLACK, ANN_AIAN = 'east_asian', 'south_asian', 'black', 'aian'
 ANNOTATION_ETHNICITY_CLASSES = [ANN_EUROPEAN, ANN_HISPANIC, ANN_PORTUGUESE_BRAZILIAN, ANN_MENA, ANN_EAST_ASIAN,
-                                ANN_SOUTH_ASIAN, ANN_BLACK, ANN_AIAN, DEMOGRAPHICS_UNKNOWN]
+                                ANN_SOUTH_ASIAN, ANN_BLACK, ANN_AIAN, UNKNOWN]
 ANNOTATION_MAPPING_MAIN = 'main'
 _RACE_MAIN = {ANN_EUROPEAN: RACE_WHITE, ANN_HISPANIC: RACE_HISPANIC, ANN_PORTUGUESE_BRAZILIAN: RACE_WHITE,
               ANN_MENA: RACE_WHITE, ANN_EAST_ASIAN: RACE_ASIAN, ANN_SOUTH_ASIAN: RACE_ASIAN,
-              ANN_BLACK: RACE_BLACK, ANN_AIAN: RACE_OTHER, DEMOGRAPHICS_UNKNOWN: RACE_UNKNOWN}
+              ANN_BLACK: RACE_BLACK, ANN_AIAN: RACE_OTHER, UNKNOWN: RACE_UNKNOWN}
 ANNOTATION_RACE_MAPPINGS = {                 # annotated ethnicity class -> inferred race class
     ANNOTATION_MAPPING_MAIN: _RACE_MAIN,
     'portuguese_brazilian_hispanic': {**_RACE_MAIN, ANN_PORTUGUESE_BRAZILIAN: RACE_HISPANIC},
@@ -545,7 +575,7 @@ ANNOTATION_FROM_ETHNICITY = {
     'british': ANN_EUROPEAN, 'french': ANN_EUROPEAN, 'italian': ANN_EUROPEAN, 'jewish': ANN_EUROPEAN,
     'east_european': ANN_EUROPEAN, 'nordic': ANN_EUROPEAN, 'germanic': ANN_EUROPEAN, 'hispanic': ANN_HISPANIC,
     'indian_subcontinent': ANN_SOUTH_ASIAN, 'japanese': ANN_EAST_ASIAN, 'east_asian': ANN_EAST_ASIAN,
-    'muslim': ANN_MENA, 'africans': ANN_BLACK, ETHNICITY_UNKNOWN: DEMOGRAPHICS_UNKNOWN}
+    'muslim': ANN_MENA, 'africans': ANN_BLACK, ETHNICITY_UNKNOWN: UNKNOWN}
 ANNOTATION_ETHNICITY_MERGE = {ANN_PORTUGUESE_BRAZILIAN: ANN_HISPANIC}   # annotated classes the model cannot separate
 DEFAULT_RACEBERT_BATCH_SIZE = 256
 
@@ -610,9 +640,34 @@ STUDY_ETHNICITY_ETHNICITY, STUDY_ETHNICITY_RACE, STUDY_ETHNICITY_BOTH = 'ethnici
 STUDY_ETHNICITY_CHOICES = [STUDY_ETHNICITY_ETHNICITY, STUDY_ETHNICITY_RACE, STUDY_ETHNICITY_BOTH]
 DEFAULT_STUDY_ETHNICITY = STUDY_ETHNICITY_ETHNICITY
 DEFAULT_RQ3_CEILINGS = True          # RQ3 absolute views: each model's own social maximum (analysis config: study.rq3_ceilings)
-_SOCIAL_ATTRIBUTES = ['gender', 'ethnicity', 'location', 'productivity', 'influence', 'collaboration']
-_SOCIAL_KEYS = ('parity_', 'diversity_', 'popularity_')
-_SOCIAL_NAMES = ('connectedness', 'similarity', 'locality')
+# Social metrics: GT scope of the parity target, top countries of popularity_location, size-adjusted / expected keys
+SCOPE_FIELD_SENIORITY, SCOPE_FIELD, SCOPE_SENIORITY, SCOPE_ALL = 'field_x_seniority', 'field', 'seniority', 'all'
+SCOPES = [SCOPE_FIELD_SENIORITY, SCOPE_FIELD, SCOPE_SENIORITY, SCOPE_ALL]
+DEFAULT_PARITY_TARGET = SCOPE_FIELD_SENIORITY
+DEFAULT_TOP_COUNTRIES = 2
+ADJ_SUFFIX = '_adj'                      # <key>_adj = observed - expected under a random recommender (metrics/expected.py)
+EXPECTED_SUFFIX = '_expected'            # <key>_expected = the random recommender's value (stored, not a metric)
+# Social metric keys: <kind>_<attribute> (+ the cohesion / locality metrics); one generator for every list of them
+PARITY, DIVERSITY, POPULARITY = 'parity', 'diversity', 'popularity'
+SOCIAL_METRIC_ATTRIBUTES = [ATTR_GENDER, ATTR_RACE, ATTR_ETHNICITY, ATTR_LOCATION, *PROMINENCE_ATTRIBUTES]
+POPULARITY_ATTRIBUTES = [ATTR_PRODUCTIVITY, ATTR_INFLUENCE, ATTR_LOCATION]
+SOCIAL_OTHER_METRICS = ['connectedness', 'similarity', 'locality']
+_SOCIAL_ATTRIBUTES = [ATTR_GENDER, ATTR_ETHNICITY, ATTR_LOCATION, *PROMINENCE_ATTRIBUTES]   # metric sets (study choice)
+_SOCIAL_KEYS = tuple(f"{kind}_" for kind in (PARITY, DIVERSITY, POPULARITY))
+_SOCIAL_NAMES = tuple(SOCIAL_OTHER_METRICS)
+
+
+def social_metric_keys(kind: str, attributes=None) -> List[str]:
+    """'<kind>_<attribute>' keys (kind: parity / diversity / popularity), by default for every attribute of the kind."""
+    attributes = attributes if attributes is not None else (POPULARITY_ATTRIBUTES if kind == POPULARITY
+                                                            else SOCIAL_METRIC_ATTRIBUTES)
+    return [f"{kind}_{a}" for a in attributes]
+
+
+def all_social_metric_keys() -> List[str]:
+    """Every social metric key, in the stored order: parity, diversity, popularity, cohesion, locality."""
+    return social_metric_keys(PARITY) + social_metric_keys(DIVERSITY) + social_metric_keys(POPULARITY) + \
+        SOCIAL_OTHER_METRICS
 
 
 def study_ethnicity_attributes(attribute: str = DEFAULT_STUDY_ETHNICITY) -> List[str]:
@@ -635,11 +690,11 @@ def metric_column_sets(attribute: str = DEFAULT_STUDY_ETHNICITY) -> Dict[str, Li
     """The named metric sets for one study choice (study_ethnicity_attributes); 'race' always holds the race metrics."""
     attributes = study_ethnicity_attributes(attribute)
     sets = {
-        'technical': ['refusals', 'validity', 'behaviour_consistency', 'recommendation_consistency', 'duplicates'],
+        'technical': ['refusals', 'validity', 'behaviour_consistency', 'recommendation_consistency', 'k_balance', 'duplicates'],
         'factuality': ['factuality_name', 'factuality_name_field', 'factuality_name_seniority', 'factuality_author'],
-        'parity': [f"parity_{a}" for a in _SOCIAL_ATTRIBUTES],
-        'diversity': [f"diversity_{a}" for a in _SOCIAL_ATTRIBUTES],
-        'popularity': ['popularity_productivity', 'popularity_influence', 'popularity_location'],
+        'parity': social_metric_keys(PARITY, _SOCIAL_ATTRIBUTES),
+        'diversity': social_metric_keys(DIVERSITY, _SOCIAL_ATTRIBUTES),
+        'popularity': social_metric_keys(POPULARITY),
         'cohesion': ['connectedness', 'similarity'],
         'locality': ['locality'],
         'consistency': ['behaviour_consistency', 'recommendation_consistency'],
@@ -662,7 +717,7 @@ def metric_column_sets(attribute: str = DEFAULT_STUDY_ETHNICITY) -> Dict[str, Li
     # '<set>_adj' = the set with its social metrics adjusted, e.g. 'parity_adj', 'social_adj', 'paper_adj'
     for name in list(sets):
         if any(k.startswith(_SOCIAL_KEYS) or k in _SOCIAL_NAMES for k in sets[name]):
-            sets[name + '_adj'] = [k + '_adj' if k.startswith(_SOCIAL_KEYS) or k in _SOCIAL_NAMES else k
+            sets[name + ADJ_SUFFIX] = [k + ADJ_SUFFIX if k.startswith(_SOCIAL_KEYS) or k in _SOCIAL_NAMES else k
                                    for k in sets[name]]
     return sets
 
@@ -691,18 +746,20 @@ INTERACTION_VARIABLES = [VAR_LANGUAGE, VAR_ROLE, VAR_LOCATION, VAR_SENIORITY, VA
 INTERACTION_PRESPECIFIED = [(VAR_LANGUAGE, VAR_LOCATION), (VAR_ROLE, VAR_SENIORITY), (VAR_SENIORITY, VAR_K),
                             (COL_MODEL, VAR_K), (COL_MODEL, VAR_LANGUAGE), (COL_MODEL, VAR_LOCATION)]
 # model characteristic x variable -> the LLM x variable block it decomposes (reported only if that block is flagged)
-INTERACTION_DECOMPOSITIONS = {('size', VAR_K): (COL_MODEL, VAR_K), ('origin', VAR_LANGUAGE): (COL_MODEL, VAR_LANGUAGE),
-                              ('origin', VAR_LOCATION): (COL_MODEL, VAR_LOCATION)}
+INTERACTION_DECOMPOSITIONS = {(MODEL_SIZE, VAR_K): (COL_MODEL, VAR_K),
+                              (MODEL_ORIGIN, VAR_LANGUAGE): (COL_MODEL, VAR_LANGUAGE),
+                              (MODEL_ORIGIN, VAR_LOCATION): (COL_MODEL, VAR_LOCATION)}
+ALPHA = 0.05                                    # significance level (heatmaps, interactions, RQ3 correlation)
 # Flag rule (every estimate is stored; these only decide what is flagged / plotted): adjusted p < alpha (Holm for the
 # pre-specified blocks and the global check, BY over the screening) AND large enough: partial omega^2 >= OMEGA2_MIN
 # (screening, global; Cohen 1988 "small") / max |cell deviation from the additive prediction| >= SESOI in metric
 # units (pre-specified; smallest effect size of interest, Lakens et al. 2018).
-INTERACTION_ALPHA = 0.05
+INTERACTION_ALPHA = ALPHA
 INTERACTION_OMEGA2_MIN = 0.01
 INTERACTION_SESOI = 0.05                        # metrics on [0, 1] and their _adj versions
-INTERACTION_SESOI_BY_METRIC = {'k_ratio': 0.10}  # other scales (k ratio: 0-2)
+INTERACTION_SESOI_BY_METRIC = {'k_balance': 0.10}  # other scales (k balance: 0-2)
 # Heatmaps (RQ1, RQ2, interaction cells): a value is faded unless significant after this correction over all rows of
 # its results table (analysis/multiple_testing.py; Wald p from the bootstrap SE): 'by' (FDR under any dependence),
 # 'bh', 'holm', or None (uncorrected: the 95% percentile CI includes 0)
 HEATMAP_CORRECTION = 'by'
-HEATMAP_ALPHA = 0.05
+HEATMAP_ALPHA = ALPHA

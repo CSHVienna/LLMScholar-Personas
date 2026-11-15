@@ -51,7 +51,10 @@ def batch_status(client: genai.Client, job_id: str) -> Tuple[str, str]:
 
 
 def download_batch(client: genai.Client, job_id: str) -> str:
-    """The output file (JSONL text)."""
+    """The output file (JSONL text).
+
+    TO CHECK (code review 2026-11-13, R3): without an output file this raises, while llm/gpt.download_batch returns '' (0
+    answers merged, the batch archived as done): the two APIs should behave the same."""
     job = client.batches.get(name=job_id)
     if not job.dest or not job.dest.file_name:
         raise ValueError(f"Batch {job_id} has no output file (not a batch from a file?)")

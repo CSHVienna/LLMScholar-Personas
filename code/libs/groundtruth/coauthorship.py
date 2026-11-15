@@ -22,13 +22,12 @@ Steps (all resumable, outputs appear only when complete):
     A.5   network among given authors (e.g. the factual recommended authors): edges with both ends in the set
 """
 
-import shutil
 from pathlib import Path
 
 import duckdb
 
 from groundtruth.authorships import chunk_dir
-from groundtruth.db import authorships_glob, sql_path
+from groundtruth.db import authorships_glob, copy_parquet, copy_partitioned, empty_query, sql_path
 
 
 # --- A.0b: pairs per chunk ---------------------------------------------------------------------------------------
@@ -54,18 +53,12 @@ def pairs_query(authorships_dir: Path | str, chunk: int, n_buckets: int, max_tea
 def write_pairs_chunk(con: duckdb.DuckDBPyConnection, authorships_dir: Path | str, pairs_dir: Path | str, chunk: int,
                       n_buckets: int, max_team: int) -> int:
     """Write the pairs of one chunk (via a temporary folder, renamed when complete); returns the number of rows."""
-    final = chunk_dir(pairs_dir, chunk)
-    tmp = Path(pairs_dir) / f"_tmp_chunk={chunk}"
-    if tmp.exists():
-        shutil.rmtree(tmp)
-    tmp.mkdir(parents=True)
     if not list(chunk_dir(authorships_dir, chunk).glob('bucket=*/*.parquet')):   # every work filtered (e.g. xpac)
-        tmp.rename(final)
+        copy_partitioned(con, None, chunk_dir(pairs_dir, chunk), 'bucket')     # an empty chunk
         return 0
-    row = con.execute(f"COPY ({pairs_query(authorships_dir, chunk, n_buckets, max_team)}) TO {sql_path(tmp)} "
-                      f"(FORMAT parquet, PARTITION_BY (bucket), OVERWRITE_OR_IGNORE, COMPRESSION zstd)").fetchone()
-    tmp.rename(final)
-    return int(row[0]) if row else -1
+    n = copy_partitioned(con, pairs_query(authorships_dir, chunk, n_buckets, max_team), chunk_dir(pairs_dir, chunk),
+                         'bucket')
+    return -1 if n is None else n
 
 
 # --- A.1a: edges per author bucket -------------------------------------------------------------------------------
@@ -82,17 +75,12 @@ def edges_query(pairs_dir: Path | str, bucket: int) -> str:
 
 def write_edges_bucket(con: duckdb.DuckDBPyConnection, pairs_dir: Path | str, output_file: Path | str,
                        bucket: int) -> int:
-    output_file = Path(output_file)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    tmp = output_file.with_name(output_file.name + '.tmp')
     query = edges_query(pairs_dir, bucket)
     if not list(Path(pairs_dir).glob(f"chunk=*/bucket={bucket}/*.parquet")):    # no pairs at all (tiny samples only)
-        query = ("SELECT NULL::BIGINT AS author_id, NULL::BIGINT AS coauthor_id, NULL::BIGINT AS n_shared_works, "
-                 "NULL::DOUBLE AS newman_weight, NULL::BIGINT AS min_team, NULL::INTEGER AS first_year, "
-                 "NULL::INTEGER AS last_year WHERE false")
-    con.execute(f"COPY ({query}) TO {sql_path(tmp)} (FORMAT parquet, COMPRESSION zstd)")
-    tmp.replace(output_file)
-    return con.execute(f"SELECT count(*) FROM read_parquet({sql_path(output_file)})").fetchone()[0]
+        query = empty_query({'author_id': 'BIGINT', 'coauthor_id': 'BIGINT', 'n_shared_works': 'BIGINT',
+                             'newman_weight': 'DOUBLE', 'min_team': 'BIGINT', 'first_year': 'INTEGER',
+                             'last_year': 'INTEGER'})
+    return copy_parquet(con, query, output_file)
 
 
 # --- A.5: network among given authors ----------------------------------------------------------------------------
@@ -112,9 +100,4 @@ def network_query(edges_dir: Path | str, author_ids_file: Path | str) -> str:
 def write_network(con: duckdb.DuckDBPyConnection, output_file: Path | str, edges_dir: Path | str,
                   author_ids_file: Path | str) -> int:
     """Write the edge list (via a temporary file); returns the number of edges."""
-    output_file = Path(output_file)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    tmp = output_file.with_name(output_file.name + '.tmp')
-    con.execute(f"COPY ({network_query(edges_dir, author_ids_file)}) TO {sql_path(tmp)} (FORMAT parquet, COMPRESSION zstd)")
-    tmp.replace(output_file)
-    return con.execute(f"SELECT count(*) FROM read_parquet({sql_path(output_file)})").fetchone()[0]
+    return copy_parquet(con, network_query(edges_dir, author_ids_file), output_file)

@@ -20,8 +20,8 @@ from matplotlib.patches import Patch
 
 from responses.tag_stats import CombinationCategories
 from viz import constants as viscons
-from viz.figures import bars, shades, style_bar_axes
-from viz.labels import model_labels, tag_label
+from viz.figures import bars, ci, ramp, style_bar_axes
+from viz.labels import LLM, model_labels, tag_label
 
 
 class TagPalette:
@@ -31,9 +31,9 @@ class TagPalette:
         self.categories = categories.categories
         self.validity = categories.validity
         self.colors: Dict[str, str] = {}
-        for family_valid, ramp in ((True, viscons.TAGS_VALID_RAMP), (False, viscons.TAGS_INVALID_RAMP)):
+        for family_valid, palette_ramp in ((True, viscons.TAGS_VALID_RAMP), (False, viscons.TAGS_INVALID_RAMP)):
             family = [c for c in self.categories if self.validity[c] == family_valid]
-            self.colors.update(dict(zip(family, shades(ramp, len(family)))))
+            self.colors.update(dict(zip(family, ramp(palette_ramp, len(family)))))
 
     def color(self, category: str) -> str:
         return self.colors[category]
@@ -55,7 +55,7 @@ def plot_tags_per_model(shares: pd.DataFrame, palette: TagPalette, value_label: 
     _, ax = plt.subplots(figsize=(9.0, max(3.0, 0.24 * len(shares) + 1.5)))
     draw_tags_per_model(ax, shares, palette, vertical=False)
     style_bar_axes(ax, value_label, vertical=False, title=title)
-    ax.legend(handles=palette.legend_handles(), loc='upper left', bbox_to_anchor=(1.06, 1.0), title='tags')
+    ax.legend(handles=palette.legend_handles(), loc='upper left', bbox_to_anchor=(1.06, 1.0), title='Tags')
     return ax.figure
 
 
@@ -72,7 +72,7 @@ def plot_tags_overall(table: pd.DataFrame, palette: TagPalette, value: str, valu
 # Paper figure (vertical bars, both panels in one)
 # -----------------------------------------------------------------------------
 def plot_tags_paper_figure(shares: pd.DataFrame, table: pd.DataFrame, palette: TagPalette, value: str,
-                           value_label: str, tags_label: str, models_label: str = 'model',
+                           value_label: str, tags_label: str, models_label: str = LLM,
                            annotation: Optional[str] = None, left_title: Optional[str] = None,
                            right_title: Optional[str] = None) -> plt.Figure:
     """Per-model stacked bars (left) and the overall distribution (right), both vertical, sharing the y axis.
@@ -154,17 +154,12 @@ def draw_tags_overall(ax: plt.Axes, table: pd.DataFrame, palette: TagPalette, va
     """One bar per category (value column ``value``), error bars if ``ci_low`` / ``ci_high`` exist."""
     positions = np.arange(len(table))
     has_ci = {'ci_low', 'ci_high'} <= set(table.columns)
-    errors = np.vstack([table[value] - table['ci_low'], table['ci_high'] - table[value]]) if has_ci else None
 
     for position, (_, row) in zip(positions, table.iterrows()):
         bars(ax, vertical, [position], [row[value]], start=[0], width=0.7,
              color=palette.color(row['category']), hatch=palette.hatch(row['category']))
-    if errors is not None:
-        error_kw = dict(fmt='none', ecolor=viscons.COLOR_ERROR_BAR, elinewidth=0.8, capsize=1.5)
-        if vertical:
-            ax.errorbar(positions, table[value], yerr=errors, **error_kw)
-        else:
-            ax.errorbar(table[value], positions, xerr=errors, **error_kw)
+    if has_ci:
+        ci(ax, table[value], positions, table['ci_low'], table['ci_high'], vertical=vertical)
 
     # Values at the end of the bars (after the error bar), in text ink
     ends = table['ci_high'] if has_ci else table[value]

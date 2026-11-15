@@ -24,7 +24,8 @@ from demographics.race import PROB_COLUMNS as RACE_PROB_COLUMNS, race_name      
 from demographics.gender import first_name_of                            # noqa: E402
 from demographics import stages                                          # noqa: E402
 from groundtruth import db                                               # noqa: E402
-from groundtruth.authorships import check_params, missing_chunks, n_chunks, write_chunk  # noqa: E402
+from groundtruth.authorships import missing_chunks, n_chunks, write_chunk  # noqa: E402
+from utils.batch import check_params, crc32_shard, shard_file  # noqa: E402
 from groundtruth.bibliometrics import compute_bibliometrics              # noqa: E402
 from groundtruth.coauthorship import write_edges_bucket, write_network, write_pairs_chunk  # noqa: E402
 from groundtruth.fields import load_field_mapping                        # noqa: E402
@@ -366,7 +367,7 @@ class TestDemographicsStages(unittest.TestCase):
         con = duckdb.connect()
         for s in range(self.N_SHARDS):
             stages.infer_shard(stages.shard_names(con, self.keys_dir, s, model),
-                               stages.shard_file(stages.model_dir(self.out, model), s), fn, chunk_names, model,
+                               shard_file(stages.model_dir(self.out, model), s), fn, chunk_names, model,
                                log=lambda m: None, cached=cached(con, s) if cached else None)
 
     def run_models(self):
@@ -390,8 +391,8 @@ class TestDemographicsStages(unittest.TestCase):
         self.assertTrue(pd.isna(keys.loc[6, 'ethnicity_name']) and pd.isna(keys.loc[6, 'ethnicity_shard']))
         self.assertEqual((keys.loc[1, 'gender_first_name'], keys.loc[2, 'gender_first_name']), ('Maria', 'maria'))
         self.assertEqual(self.gender_calls, [['ada', 'maria', 'wei']])        # once per distinct first name, globally
-        self.assertEqual(int(keys.loc[3, 'race_shard']), stages.name_shard('wei ZHANG', self.N_SHARDS))
-        self.assertEqual(int(keys.loc[3, 'ethnicity_shard']), stages.name_shard('wei_zhang', self.N_SHARDS))
+        self.assertEqual(int(keys.loc[3, 'race_shard']), crc32_shard('wei ZHANG', self.N_SHARDS))
+        self.assertEqual(int(keys.loc[3, 'ethnicity_shard']), crc32_shard('wei_zhang', self.N_SHARDS))
 
         self.run_model(stages.RACE, self.fake_race)
         inferred = [n for call in self.calls for n in call]
@@ -425,7 +426,7 @@ class TestDemographicsStages(unittest.TestCase):
         model = stages.RACE
         shard = next(s for s in range(self.N_SHARDS) if len(stages.shard_names(con, self.keys_dir, s, model)) >= 2)
         names = stages.shard_names(con, self.keys_dir, shard, model)
-        out = stages.shard_file(self.race_dir, shard)
+        out = shard_file(self.race_dir, shard)
 
         def crash_on_second(chunk):
             if len(self.calls) == 1:
@@ -460,7 +461,7 @@ class TestDemographicsStages(unittest.TestCase):
         stages.write_merged_bucket(con, *args)                                # complete again: fine
         for model, name in ((stages.RACE, 'wei ZHANG'), (stages.ETHNICITY, 'wei_zhang')):   # a name missing in a shard
             for s in range(self.N_SHARDS):
-                f = stages.shard_file(stages.model_dir(self.out, model), s)
+                f = shard_file(stages.model_dir(self.out, model), s)
                 df = pd.read_parquet(f)
                 if name in set(df[model.name_column]):
                     df.to_parquet(f.with_suffix('.bak'), index=False)
@@ -579,9 +580,10 @@ class TestNameHelpers(unittest.TestCase):
         self.assertIsNone(ethnicity_name(','))
 
     def test_labels(self):
-        from demographics.race import labels
+        from demographics.racebert import argmax_labels
         probs = pd.DataFrame({'p_eth_east_asian': [0.7, 0.4, np.nan], 'p_eth_british': [0.3, 0.6, np.nan]})
-        self.assertEqual(labels(probs, ['p_eth_east_asian', 'p_eth_british'], 0.5), ['east_asian', 'british', 'unknown'])
+        self.assertEqual(argmax_labels(probs, ['p_eth_east_asian', 'p_eth_british'], 'p_eth_', 0.5),
+                         ['east_asian', 'british', 'unknown'])
 
     def test_names_are_cleaned_first(self):
         """The shared text clean-up (utils.text.clean_text) runs before the demographic name helpers and the name keys."""

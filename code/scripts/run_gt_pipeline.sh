@@ -57,6 +57,7 @@
 set -euo pipefail
 
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPTS_DIR}/_pipeline_lib.sh"      # log, selected, ensure_config
 PROJECT_ROOT="$(cd "${SCRIPTS_DIR}/../.." && pwd)"
 LOGS_DIR="${PROJECT_ROOT}/logs"
 RESULTS_DIR="${PROJECT_ROOT}/results"
@@ -97,7 +98,7 @@ if [[ -n "${VARIANT_NAME}" ]]; then
     variant_lines="$("${PYTHON}" "${SCRIPTS_DIR}/configure_variant.py" paths "${VARIANT_NAME}" --results_dir "${RESULTS_DIR}" ${CONFIG_GIVEN:+--config "${CONFIG}"})" || exit 1
     eval "${variant_lines}"
     CONFIG="${VARIANT_CONFIG}"
-    echo "[$(date +%H:%M:%S)] variant ${VARIANT_NAME}: config ${CONFIG} | GT population: ${VARIANT_POPULATION} | author matching: ${VARIANT_AUTHORS}"
+    log "variant ${VARIANT_NAME}: config ${CONFIG} | GT population: ${VARIANT_POPULATION} | author matching: ${VARIANT_AUTHORS}"
 fi
 GT_DIR="${RESULTS_DIR}/groundtruth"
 POPULATION_DIR="${GT_DIR}/population/${VARIANT_POPULATION}"
@@ -107,44 +108,30 @@ for s in ${STEP//,/ }; do
         echo "ERROR: unknown step '${s}' in -s ${STEP} (steps: ${ALL_STEPS// /,} or all)"; exit 1
     fi
 done
-selected() { [[ ",${STEP}," == *",all,"* || ",${STEP}," == *",$1,"* ]]; }   # selected <step>: is it in -s?
 mkdir -p "${LOGS_DIR}"
 if ! mkdir -p "${TEMP_DIR}" || [[ ! -w "${TEMP_DIR}" ]]; then
     echo "ERROR: DuckDB spill folder ${TEMP_DIR} cannot be created / written (-T)"; exit 1
 fi
-echo "[$(date +%H:%M:%S)] DuckDB steps: ${DUCK_JOBS} job(s) x ${THREADS} threads x ${MEMORY} | Python steps: ${JOBS} jobs x ${PY_THREADS} threads | spill ${TEMP_DIR}"
+log "DuckDB steps: ${DUCK_JOBS} job(s) x ${THREADS} threads x ${MEMORY} | Python steps: ${JOBS} jobs x ${PY_THREADS} threads | spill ${TEMP_DIR}"
 DB="--openalex_db ${OPENALEX_DB}"
 DUCK_RES="--threads ${THREADS} --memory_limit ${MEMORY} --temp_dir ${TEMP_DIR}"
 PY_RES="--threads ${PY_THREADS} --memory_limit 8GB --temp_dir ${TEMP_DIR}"
 
 # ensure_config: the analysis config must exist before the steps that read it; in a terminal the wizard creates it
-ensure_config() {   # the config must exist and be complete (settings added later): else the wizard, in a terminal
-    local problem
-    if problem="$("${PYTHON}" "${SCRIPTS_DIR}/configure_analysis.py" --config "${CONFIG}" --check)"; then
-        echo "[$(date +%H:%M:%S)] analysis config: ${CONFIG}"
-    elif [[ -t 0 && -t 1 ]]; then
-        echo "[$(date +%H:%M:%S)] ${problem}"
-        echo "[$(date +%H:%M:%S)] starting the wizard"
-        "${PYTHON}" "${SCRIPTS_DIR}/configure_analysis.py" --config "${CONFIG}" --phase early || { echo "No config written: stopping."; exit 1; }
-    else
-        echo "ERROR: ${problem}"
-        exit 1
-    fi
-}
 
 # run_jobs <step name> <jobs> <unit: chunks|buckets> <count> <script> <script args>: GNU parallel, timestamped joblog
 run_jobs() {
     local name="$1" jobs="$2" unit="$3" count="$4" script="$5" args="$6 --log_dir ${LOGS_DIR}"
     local joblog="${LOGS_DIR}/$(date +%Y-%m-%d-%H:%M)_${name}_${unit}.joblog"
-    echo "[$(date +%H:%M:%S)] ${name}: ${count} ${unit}, ${jobs} job(s) at a time, joblog ${joblog}"
+    log "${name}: ${count} ${unit}, ${jobs} job(s) at a time, joblog ${joblog}"
     if ! parallel -j "${jobs}" --nice 10 --joblog "${joblog}" \
             "${PYTHON}" "${SCRIPTS_DIR}/${script}" --${unit} {} ${args} '>' /dev/null \
             ::: $(seq 0 $((count - 1))); then
-        echo "[$(date +%H:%M:%S)] ${name}: some ${unit} FAILED (see ${joblog}, column Exitval, and their logs in ${LOGS_DIR})"
+        log "${name}: some ${unit} FAILED (see ${joblog}, column Exitval, and their logs in ${LOGS_DIR})"
         echo "Re-run the same command: finished ${unit} are skipped."
         exit 1
     fi
-    echo "[$(date +%H:%M:%S)] ${name}: done"
+    log "${name}: done"
 }
 per_bucket() { run_jobs "$1" "$2" buckets "${N_BUCKETS}" "$3" "$4 --n_buckets ${N_BUCKETS} ${EXTRA_ARGS}"; }
 
@@ -172,10 +159,10 @@ if selected demographics; then
     DEMO="--output_dir ${GT_DIR}/demographics --n_shards ${N_SHARDS} ${PY_RES}"
     per_bucket "gt_demographics_keys" "${JOBS}" "batch_gt_demographics.py" \
         "--stage keys --authors_dir ${GT_DIR}/authors ${DEMO}"
-    echo "[$(date +%H:%M:%S)] gt_demographics_gender: start"
+    log "gt_demographics_gender: start"
     "${PYTHON}" "${SCRIPTS_DIR}/batch_gt_demographics.py" --stage gender --n_buckets "${N_BUCKETS}" ${DEMO} \
         --log_dir "${LOGS_DIR}" ${EXTRA_ARGS} > /dev/null
-    echo "[$(date +%H:%M:%S)] gt_demographics_gender: done"
+    log "gt_demographics_gender: done"
     for model in race ethnicity; do
         run_jobs "gt_demographics_${model}" "${JOBS}" shards "${N_SHARDS}" "batch_gt_demographics.py" \
             "--stage ${model} --n_buckets ${N_BUCKETS} --torch_threads ${PY_THREADS} ${CACHE_ARGS} ${DEMO} ${EXTRA_ARGS}"
@@ -183,12 +170,12 @@ if selected demographics; then
     per_bucket "gt_demographics_merge" "${JOBS}" "batch_gt_demographics.py" "--stage merge ${DEMO}"
 fi
 if selected population && [[ -n "${VARIANT_NAME}" && "${VARIANT_POPULATION}" != "${VARIANT_NAME}" ]]; then
-    echo "[$(date +%H:%M:%S)] gt_population: skipped, variant ${VARIANT_NAME} changes no A.4 setting (reads ${POPULATION_DIR})"
+    log "gt_population: skipped, variant ${VARIANT_NAME} changes no A.4 setting (reads ${POPULATION_DIR})"
 elif selected population; then
     ensure_config
-    echo "[$(date +%H:%M:%S)] gt_population: start"
+    log "gt_population: start"
     "${PYTHON}" "${SCRIPTS_DIR}/batch_gt_population.py" ${DUCK_RES} --config "${CONFIG}" \
         --authors_dir "${GT_DIR}/authors" --demographics_dir "${GT_DIR}/demographics" --gt_dir "${POPULATION_DIR}" \
         --log_dir "${LOGS_DIR}" ${SINGLE_ARGS}
-    echo "[$(date +%H:%M:%S)] gt_population: done"
+    log "gt_population: done"
 fi

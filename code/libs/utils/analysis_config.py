@@ -107,7 +107,7 @@ SCHEMA: List[Section] = [
         Setting('valid_response_tags', 'tags', list(cons.DEFAULT_VALID_RESPONSE_TAGS),
                 'a response is valid if ALL its tags are in this set', choices=cons.RESPONSE_TAGS, used_by=[STEP_METRICS], phase=LATE,
                 details='Tags of B.1-B.2 (see the codebook). Valid responses enter validity, consistency, duplicates, '
-                        'k ratio and factuality.'),
+                        'k balance and factuality.'),
         Setting('valid_rec_tags', 'tags', list(cons.DEFAULT_VALID_REC_TAGS),
                 'a recommendation is valid if ALL its tags are in this set', choices=cons.REC_TAGS, used_by=[STEP_METRICS], phase=LATE,
                 details='Tags of B.3. Valid recommendations enter duplicates and factuality (not recommendation '
@@ -173,10 +173,10 @@ SCHEMA: List[Section] = [
                 used_by=[STEP_METRICS], phase=LATE,
                 details="No (default): both the recommended people and the GT target are renormalised over the known "
                         "classes, and the unknown share is stored separately. Yes: 'unknown' is one more class."),
-        Setting('parity_target', 'choice', 'field_x_seniority', 'GT target of parity (scope of the GT shares)',
-                choices=['field_x_seniority', 'field', 'seniority', 'all'], used_by=[STEP_METRICS], phase=LATE,
+        Setting('parity_target', 'choice', cons.DEFAULT_PARITY_TARGET, 'GT target of parity (scope of the GT shares)',
+                choices=cons.SCOPES, used_by=[STEP_METRICS], phase=LATE,
                 details='field_x_seniority: the requested field and seniority (main); the others are robustness checks.'),
-        Setting('top_countries', 'int', 2,
+        Setting('top_countries', 'int', cons.DEFAULT_TOP_COUNTRIES,
                 'popularity by country: top countries = the k countries with the most GT scholars',
                 low=1, high=50, used_by=[STEP_METRICS], phase=LATE,
                 details='Countries ranked by their number of GT scholars in the target (requested field x seniority, '

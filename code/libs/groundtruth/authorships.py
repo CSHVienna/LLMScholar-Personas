@@ -17,16 +17,13 @@ The same author can appear twice on a work in OpenAlex; such duplicates are remo
 
 import json
 import math
-import os
-import shutil
 from pathlib import Path
-from typing import Dict, List
+from typing import List
 
 import duckdb
 
-from groundtruth.db import sql_path
-
-PARAMS_FILE = '_params.json'
+from groundtruth.db import copy_partitioned
+from utils.batch import PARAMS_FILE
 
 
 def works_filter_sql(min_year: int, max_year: int, include_xpac: bool = False) -> str:
@@ -66,43 +63,12 @@ def chunk_dir(output_dir: Path | str, chunk: int) -> Path:
     return Path(output_dir) / f"chunk={chunk}"
 
 
-def check_params(output_dir: Path | str, params: Dict, overwrite: bool = False) -> None:
-    """Record the run parameters once (atomically); refuse to mix chunks written with different parameters.
-    overwrite: replace the stored parameters (the caller recomputes every output)."""
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / PARAMS_FILE
-    if overwrite:   # atomic replace; parallel jobs write the same content
-        tmp = output_dir / f".{PARAMS_FILE}.{os.getpid()}"
-        tmp.write_text(json.dumps(params, indent=1))
-        os.replace(tmp, path)
-        return
-    try:
-        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)   # first process wins (GNU parallel safe)
-        with os.fdopen(fd, 'w') as f:
-            json.dump(params, f, indent=1)
-        return
-    except FileExistsError:
-        pass
-    stored = json.loads(path.read_text() or '{}')
-    if stored and stored != params:
-        raise ValueError(f"{path} was written with other parameters: {stored} != {params}. "
-                         f"Use another --output_dir or --overwrite (recomputes every output).")
-
-
 def write_chunk(con: duckdb.DuckDBPyConnection, output_dir: Path | str, chunk: int, chunk_size: int,
                 min_year: int, max_year: int, n_buckets: int, include_xpac: bool = False) -> int:
     """Write one chunk (via a temporary folder, renamed when complete); returns the number of rows written."""
-    final = chunk_dir(output_dir, chunk)
-    tmp = Path(output_dir) / f"_tmp_chunk={chunk}"
-    if tmp.exists():
-        shutil.rmtree(tmp)                                          # leftover of a crashed run
-    tmp.mkdir(parents=True)
     query = authorships_query(chunk, chunk_size, min_year, max_year, n_buckets, include_xpac)
-    row = con.execute(f"COPY ({query}) TO {sql_path(tmp)} "
-                      f"(FORMAT parquet, PARTITION_BY (bucket), OVERWRITE_OR_IGNORE, COMPRESSION zstd)").fetchone()
-    tmp.rename(final)
-    return int(row[0]) if row else -1
+    n = copy_partitioned(con, query, chunk_dir(output_dir, chunk), 'bucket')
+    return -1 if n is None else n
 
 
 def missing_chunks(output_dir: Path | str) -> List[int]:

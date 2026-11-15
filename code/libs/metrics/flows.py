@@ -15,6 +15,7 @@ perceived gender, race, ethnicity, country (last known affiliation), the person'
                                          lift = share / baseline; cluster-bootstrap CIs over models
 """
 
+from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
 import numpy as np
@@ -23,14 +24,13 @@ import pandas as pd
 from metrics import social as so
 from metrics import technical as tm
 from utils import constants as cons
+from utils.stats import grouped_percentile_summary
 
-UNKNOWN = so.UNKNOWN
 AUTHOR_SENIORITY = 'author_seniority'   # the person's own seniority class (A.4), not the prompt's 'seniority'
-PERSON_ATTRIBUTES = ['gender', 'race', 'ethnicity', 'country', AUTHOR_SENIORITY, 'productivity', 'influence', 'collaboration',
-                     'is_top_productivity', 'is_top_influence']
-CLASS_ATTRIBUTES = ['gender', 'race', 'ethnicity', 'country', AUTHOR_SENIORITY, 'productivity', 'influence', 'collaboration']
-TARGETS = ['gender', 'ethnicity', 'country', AUTHOR_SENIORITY, 'productivity', 'influence']   # default panels
-OTHER = 'other'
+CLASS_ATTRIBUTES = [*cons.DEMOGRAPHIC_ATTRIBUTES, cons.ATTR_COUNTRY, AUTHOR_SENIORITY, *cons.PROMINENCE_ATTRIBUTES]
+PERSON_ATTRIBUTES = CLASS_ATTRIBUTES + [f"is_top_{a}" for a in cons.GT_TOP_METRICS]
+TARGETS = [cons.ATTR_GENDER, cons.ATTR_ETHNICITY, cons.ATTR_COUNTRY, AUTHOR_SENIORITY, cons.ATTR_PRODUCTIVITY,
+           cons.ATTR_INFLUENCE]                                                                  # default panels
 LOCATION_COUNTRY = cons.LOCATION_COUNTRY        # prompt location -> ISO country code
 RACE_ORDER = [c for c in cons.RACE_CLASSES if c != cons.RACE_UNKNOWN]              # asian ... white, other
 ETHNICITY_ORDER = [c for c in cons.ETHNICITY_CLASSES if c != cons.ETHNICITY_UNKNOWN]  # the 13 model classes
@@ -55,20 +55,21 @@ def people_table(responses: pd.DataFrame, recs: pd.DataFrame, matches: pd.DataFr
         return people.assign(**{a: pd.Series(dtype=object) for a in PERSON_ATTRIBUTES})
     members = gt.members(people['author_id'].unique()).rename(columns={'seniority': AUTHOR_SENIORITY})
     members = members[['author_id', 'field'] + PERSON_ATTRIBUTES]
-    own = people.merge(members, on=['author_id', cons.VAR_FIELD], how='left')
+    own = people.merge(members, on=['author_id', cons.VAR_FIELD], how='left', indicator=True)
+    # not a member of the requested field: the attributes of the person's (first) other field
     fallback = members.drop_duplicates('author_id').drop(columns='field').set_index('author_id')
-    missing = own['gender'].isna() & own['author_id'].isin(fallback.index)
+    missing = (own.pop('_merge') == 'left_only') & own['author_id'].isin(fallback.index)
     for column in PERSON_ATTRIBUTES:
         own.loc[missing, column] = own.loc[missing, 'author_id'].map(fallback[column])
     for column in CLASS_ATTRIBUTES:
-        own[column] = own[column].fillna(UNKNOWN).astype(str)
+        own[column] = own[column].fillna(cons.UNKNOWN).astype(str)
     return own[tm.RESPONSE_KEY + ['author_id'] + PERSON_ATTRIBUTES]
 
 
 # --- flows -------------------------------------------------------------------------------------------------------
 def top_classes(values: pd.Series, n: int) -> List[str]:
     """The n most frequent known classes (the rest becomes 'other')."""
-    known = values[values != UNKNOWN]
+    known = values[values != cons.UNKNOWN]
     return list(known.value_counts().index[:n])
 
 
@@ -81,10 +82,10 @@ def flow_table(people: pd.DataFrame, source: str, target: str, include_unknown: 
     df[source] = df[source].astype(str)
     df[target] = df[target].astype(str)
     if not include_unknown:
-        df = df[df[target] != UNKNOWN]
+        df = df[df[target] != cons.UNKNOWN]
     if top:
         kept = set(top_classes(df[target], top)) | set(keep)
-        df.loc[~df[target].isin(kept) & (df[target] != UNKNOWN), target] = OTHER
+        df.loc[~df[target].isin(kept) & (df[target] != cons.UNKNOWN), target] = cons.OTHER
     counts = df.groupby([source, target]).size().rename('n').reset_index()
     counts['n_source'] = counts.groupby(source)['n'].transform('sum')
     counts['share'] = counts['n'] / counts['n_source']
@@ -92,7 +93,7 @@ def flow_table(people: pd.DataFrame, source: str, target: str, include_unknown: 
 
 
 def unknown_share(people: pd.DataFrame, target: str) -> float:
-    return float((people[target].astype(str) == UNKNOWN).mean()) if len(people) else np.nan
+    return float((people[target].astype(str) == cons.UNKNOWN).mean()) if len(people) else np.nan
 
 
 # --- drift -------------------------------------------------------------------------------------------------------
@@ -103,19 +104,6 @@ def location_codes(locations: Sequence[str]) -> Dict[str, str]:
     return {loc: LOCATION_COUNTRY[loc] for loc in locations}
 
 
-def _drift_point(people: pd.DataFrame, codes: Dict[str, str]) -> pd.DataFrame:
-    known = people[people['country'] != UNKNOWN]
-    rows = []
-    for location, code in codes.items():
-        prompted = known[known[cons.VAR_LOCATION] == location]
-        others = known[known[cons.VAR_LOCATION] != location]
-        share = float((prompted['country'] == code).mean()) if len(prompted) else np.nan
-        baseline = float((others['country'] == code).mean()) if len(others) else np.nan
-        rows.append({'location': location, 'country': code, 'n': len(prompted), 'share': share, 'baseline': baseline,
-                     'lift': share / baseline if baseline and baseline > 0 else np.nan})
-    return pd.DataFrame(rows)
-
-
 def drift_counts(people: pd.DataFrame, codes: Optional[Dict[str, str]] = None) -> pd.DataFrame:
     """Per model and prompt location: n = people with a known country, and k_<code> = people from each prompt
     location's country (all the drift needs: shares are sums of these counts, so the bootstrap over models is a
@@ -123,7 +111,7 @@ def drift_counts(people: pd.DataFrame, codes: Optional[Dict[str, str]] = None) -
     locations = people[cons.VAR_LOCATION].astype(str)
     codes = codes or location_codes(sorted(locations.unique()))
     known = people.assign(**{cons.VAR_LOCATION: locations})
-    known = known[known['country'].astype(str) != UNKNOWN]
+    known = known[known['country'].astype(str) != cons.UNKNOWN]
     grouped = known.groupby([cons.COL_MODEL, cons.VAR_LOCATION], observed=True)
     out = grouped.size().rename('n').to_frame()
     for code in dict.fromkeys(codes.values()):
@@ -171,43 +159,18 @@ def drift(people: pd.DataFrame, n_boot: int = cons.DEFAULT_BOOTSTRAP_SAMPLES, se
     for _ in range(n_boot):
         drawn = rng.choice(models, size=len(models), replace=True)
         draws.append(_drift_from_counts(counts, codes, np.bincount([position[m] for m in drawn], minlength=len(models))))
-    alpha = (1 - confidence) / 2
     if draws:
         boot = pd.concat(draws, ignore_index=True)
         for name in ('share', 'baseline', 'lift'):
-            q = boot.groupby('location')[name].quantile([alpha, 1 - alpha]).unstack()
-            point[f"{name}_ci_low"] = point['location'].map(q[alpha])
-            point[f"{name}_ci_high"] = point['location'].map(q[1 - alpha])
-    point['n_models'] = len(models)
-    return point
-
-
-def drift_slow(people: pd.DataFrame, n_boot: int = cons.DEFAULT_BOOTSTRAP_SAMPLES, seed: int = cons.DEFAULT_SEED,
-               confidence: float = cons.DEFAULT_CONFIDENCE) -> pd.DataFrame:
-    """Reference implementation (resamples the people table); kept for the equivalence test only."""
-    codes = location_codes(sorted(people[cons.VAR_LOCATION].astype(str).unique()))
-    point = _drift_point(people.assign(**{cons.VAR_LOCATION: people[cons.VAR_LOCATION].astype(str)}), codes)
-    groups = {m: g for m, g in people.groupby(cons.COL_MODEL, observed=True)}
-    models = list(groups)
-    rng = np.random.default_rng(seed)
-    draws = []
-    for _ in range(n_boot):
-        sample = pd.concat([groups[m] for m in rng.choice(models, size=len(models), replace=True)], ignore_index=True)
-        draws.append(_drift_point(sample.assign(**{cons.VAR_LOCATION: sample[cons.VAR_LOCATION].astype(str)}), codes))
-    alpha = (1 - confidence) / 2
-    if draws:
-        boot = pd.concat(draws, ignore_index=True)
-        for name in ('share', 'baseline', 'lift'):
-            q = boot.groupby('location')[name].quantile([alpha, 1 - alpha]).unstack()
-            point[f"{name}_ci_low"] = point['location'].map(q[alpha])
-            point[f"{name}_ci_high"] = point['location'].map(q[1 - alpha])
+            ci = grouped_percentile_summary(boot, 'location', name, confidence, skipna=True)
+            point[f"{name}_ci_low"] = point['location'].map(ci['ci_low'])
+            point[f"{name}_ci_high"] = point['location'].map(ci['ci_high'])
     point['n_models'] = len(models)
     return point
 
 
 def load_people(metrics_dir, models: Optional[Sequence[str]] = None) -> pd.DataFrame:
     """All <metrics_dir>/flows/<model>.parquet files (batch_flows.py)."""
-    from pathlib import Path
     files = sorted((Path(metrics_dir) / 'flows').glob('*.parquet'))
     files = [f for f in files if not models or f.stem in models]
     if not files:

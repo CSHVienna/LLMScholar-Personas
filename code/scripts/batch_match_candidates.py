@@ -21,7 +21,7 @@ from pathlib import Path
 
 from matching import candidates as mc
 from groundtruth import db
-from groundtruth.authorships import check_params
+from utils.batch import check_params
 from utils import batch
 from utils import analysis_config as ac
 from utils import constants as cons
@@ -62,7 +62,7 @@ def run_oa_tokens(bucket: int, args: argparse.Namespace) -> str:
 
 
 def run_fuzzy(shard: int, args: argparse.Namespace) -> str:
-    output_file = mc.shard_file(out(args, mc.FUZZY_DIR), shard)
+    output_file = batch.shard_file(out(args, mc.FUZZY_DIR), shard)
     if output_file.exists() and not args.overwrite:
         return f"[shard {shard}] skipped (exists)"
     con = db.connect(args, ':memory:')
@@ -149,7 +149,7 @@ def main() -> None:
             raise SystemExit(f"Stage oa_tokens incomplete: buckets {missing[:5]} ... missing")
         batch.run_jobs(units, run_fuzzy, args)
     else:
-        require(all_exact + [mc.shard_file(out(args, mc.FUZZY_DIR), s) for s in range(args.n_shards)], 'Stages exact / fuzzy')
+        require(all_exact + [batch.shard_file(out(args, mc.FUZZY_DIR), s) for s in range(args.n_shards)], 'Stages exact / fuzzy')
         batch.run_jobs(units, run_merge, args)
     ios.printf(f"Stage {args.stage} finished")
 

@@ -68,7 +68,7 @@ class TestTradeoff(unittest.TestCase):
         self.assertEqual(tr.axis_label(cons.RQ3_SOCIAL_METRICS), '$\\sum$ parity')
 
     def test_plot_and_name(self):
-        from viz import rq_plots
+        from viz import names, rq_plots
         for mode in cons.RQ3_MODES:
             fig = rq_plots.plot_rq3(self.scores.reset_index(), mode, pareto=True, technical=TECH, social=SOCIAL)
             self.assertEqual(len(fig.axes), 1)
@@ -77,12 +77,12 @@ class TestTradeoff(unittest.TestCase):
         inset = fig.axes[0].child_axes[0]
         self.assertEqual(len(inset.texts), len(self.scores))                     # the labels are in the inset
         self.assertEqual(len(fig.axes[0].texts), 1)                              # overview: only the correlation
-        self.assertEqual(rq_plots.rq3_figure_name('absolute_inset'), 'rq3_absolute_inset')
+        self.assertEqual(names.rq3_figure_name('absolute', kind='inset'), 'rq3_absolute_inset')
         with self.assertRaises(ValueError):
             rq_plots.plot_rq3_inset(self.scores.reset_index(), technical=TECH, social=SOCIAL, color_by='nosuch')
-        self.assertEqual(rq_plots.rq3_figure_name('absolute'), 'rq3_absolute')
-        self.assertEqual(rq_plots.rq3_figure_name('relative', TECH, SOCIAL),
-                         'rq3_relative_validity-refusals-duplicates_parity_gender-parity_ethnicity')
+        self.assertEqual(names.rq3_figure_name('absolute'), 'rq3_absolute_scatter')
+        self.assertEqual(names.rq3_figure_name('relative', TECH, SOCIAL),
+                         'rq3_relative_validity-refusals-duplicates-vs-parity-gender-parity-ethnicity_scatter')
 
 
 class TestTradeoffAdjusted(unittest.TestCase):
@@ -161,15 +161,14 @@ class TestTradeoffAdjusted(unittest.TestCase):
 
     def test_label_and_name(self):
         from metrics import summary
-        from viz import rq_plots
+        from viz import names, rq_plots
         self.assertEqual(tr.axis_label(summary.adjusted_keys(cons.RQ3_SOCIAL_METRICS)), '$\\sum$ parity$^{adj}$')
         self.assertEqual(tr.axis_label(['parity_gender_adj']), 'parity$^{adj}$')
         self.assertEqual(tr.axis_label(TECH), 'validity + refusals$^c$ + duplicates$^c$')
-        self.assertEqual(rq_plots.rq3_figure_name('absolute_inset_access', None,
-                                                  summary.adjusted_keys(cons.RQ3_SOCIAL_METRICS)),
-                         'rq3_absolute_inset_access_adj')
-        self.assertEqual(rq_plots.rq3_figure_name('relative', TECH, self.social),
-                         'rq3_relative_validity-refusals-duplicates_parity_gender-parity_ethnicity_adj')
+        self.assertEqual(names.rq3_figure_name('absolute', None, summary.adjusted_keys(cons.RQ3_SOCIAL_METRICS),
+                                               'inset', 'access'), 'rq3_absolute_inset-access_adj')
+        self.assertEqual(names.rq3_figure_name('relative', TECH, self.social),
+                         'rq3_relative_validity-refusals-duplicates-vs-parity-gender-parity-ethnicity_scatter_adj')
         fig = rq_plots.plot_rq3(self.scores, 'absolute', technical=TECH, social=self.social)
         self.assertEqual(fig.axes[0].get_ylim(), (-1.0, 1.0))
         self.assertIn('parity$^{adj}$', fig.axes[0].get_ylabel())
@@ -196,6 +195,24 @@ class TestLabelPlacement(unittest.TestCase):
                 self.assertFalse(overlap(boxes[i], boxes[j]), (i, j))           # no label on another label
             for k, (x, y) in enumerate(points):
                 self.assertFalse(overlap(boxes[i], (x - dot, y - dot, x + dot, y + dot)), (i, k))   # nor on a point
+
+
+
+class TestStudyChoiceAtCallTime(unittest.TestCase):
+    """The RQ3 defaults are read when called, so they follow summary.use_study_ethnicity (review §7, R-a)."""
+
+    def test_defaults_follow_the_study_attribute(self):
+        from metrics import summary
+        from viz import names
+        try:
+            summary.use_study_ethnicity(cons.STUDY_ETHNICITY_RACE)
+            _, social = tr.axis_metrics()
+            self.assertIn('parity_race', social)
+            self.assertNotIn('parity_ethnicity', social)
+            self.assertEqual(names.rq3_figure_name('absolute'), 'rq3_absolute_scatter')     # default sets: no selection
+        finally:
+            summary.use_study_ethnicity(cons.DEFAULT_STUDY_ETHNICITY)
+        self.assertIn('parity_ethnicity', tr.axis_metrics()[1])
 
 
 if __name__ == '__main__':

@@ -5,7 +5,7 @@ Multi-label tags: encoding as one joined string column plus one boolean column p
     -> {'response_tags': 'correct|wrapped', 'response_correct': True, 'response_wrapped': True, ...False}
 """
 
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 from utils import constants as cons
 
@@ -27,6 +27,12 @@ def join(tags: Iterable[str], vocabulary: List[str]) -> str:
 def split(joined: str) -> List[str]:
     """Inverse of :func:`join`."""
     return joined.split(cons.TAG_SEPARATOR) if joined else []
+
+
+def is_valid(joined: Optional[str], valid_tags: Iterable[str]) -> bool:
+    """True if the joined tags are not empty and ALL of them are in ``valid_tags`` (a missing value is not valid)."""
+    tags = split(joined) if isinstance(joined, str) else []
+    return bool(tags) and set(tags) <= set(valid_tags)
 
 
 def tag_columns(tags: Iterable[str], vocabulary: List[str], prefix: str) -> Dict[str, object]:

@@ -26,8 +26,9 @@ from typing import Dict, List, Optional, Sequence
 import numpy as np
 import pandas as pd
 
-from analysis.influence import DEFAULT_FACTORS, MODEL_FACTOR, NESTED, Gram, _prepare, lstsq, resample_models, variable_family
+from analysis.influence import DEFAULT_FACTORS, MODEL_FACTOR, NESTED, Gram, prepare, lstsq, resample_models
 from utils import constants as cons
+from utils.stats import grouped_percentile_summary
 
 
 def fit(y: np.ndarray, blocks: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
@@ -101,17 +102,16 @@ def deviations(df: pd.DataFrame, metric: str, factors: Sequence[str] = DEFAULT_F
     """One row per level of every configuration variable: share, grand_mean, emm, deviation, reference, contrast
     (+ _ci_low, _ci_high, _std, _n_boot for the three), r2, r2_adj, delta_r2_model, n_configs, n_models."""
     data = df[[metric, *factors]].dropna(subset=[metric])
-    y, blocks = _prepare(data, metric, factors)
+    y, blocks = prepare(data, metric, factors)
     point = add_contrasts(level_deviations(data, fit(y, blocks), factors), references)
     key = ['variable', 'parent', 'level']
     rng = np.random.default_rng(seed)
     boot: List[pd.DataFrame] = []
     for b in range(n_boot):
         sample = resample_models(data, rng)
-        y_b, blocks_b = _prepare(sample, metric, factors)
+        y_b, blocks_b = prepare(sample, metric, factors)
         replicate = add_contrasts(level_deviations(sample, fit(y_b, blocks_b), factors), references)
         boot.append(replicate.assign(b=b, grand_mean=float(y_b.mean())))
-    alpha = (1 - confidence) / 2
     grand_mean = float(y.mean())
     point['share'] = point['n'] / point.groupby('variable')['n'].transform('sum')
     point['grand_mean'], point['emm'] = grand_mean, grand_mean + point['deviation']
@@ -119,9 +119,7 @@ def deviations(df: pd.DataFrame, metric: str, factors: Sequence[str] = DEFAULT_F
         draws = pd.concat(boot, ignore_index=True)
         draws['emm'] = draws['grand_mean'] + draws['deviation']
         for name in ('deviation', 'emm', 'contrast'):
-            stats = draws.groupby(key)[name].agg(
-                ci_low=lambda v: np.quantile(v, alpha), ci_high=lambda v: np.quantile(v, 1 - alpha),
-                std=lambda v: v.std(ddof=1) if len(v) > 1 else np.nan, n_boot='count')
+            stats = grouped_percentile_summary(draws, key, name, confidence)
             point = point.merge(stats.add_prefix(f"{name}_").reset_index(), on=key, how='left')
     else:
         for name in ('deviation', 'emm', 'contrast'):
@@ -129,7 +127,7 @@ def deviations(df: pd.DataFrame, metric: str, factors: Sequence[str] = DEFAULT_F
                 point[f"{name}_{s}"] = np.nan
             point[f"{name}_n_boot"] = 0
     point.insert(0, 'metric', metric)
-    point.insert(2, 'family', point['variable'].map(variable_family))
+    point.insert(2, 'family', point['variable'].map(cons.variable_family))
     for name, value in fit_statistics(y, blocks).items():
         point[name] = value
     point['n_configs'], point['n_models'] = len(y), data[MODEL_FACTOR].nunique()

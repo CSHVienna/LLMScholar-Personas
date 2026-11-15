@@ -31,11 +31,10 @@ from typing import Sequence
 
 import duckdb
 
-from groundtruth.db import sql_path
+from groundtruth.db import copy_parquet, sql_path
 from groundtruth.fields import FieldMapping
 from utils import constants as cons
 
-REC_ID_COLUMNS = cons.RESPONSE_ID_COLUMNS + [cons.COL_REC_INDEX]
 _RULE_SQL = {
     cons.MATCH_EXACT_DISPLAY: 'c.exact_display',
     cons.MATCH_EXACT_ALTERNATIVE: 'c.exact_alternative',
@@ -54,13 +53,13 @@ def fuzzy_sql(jw_full_min: float, jw_first_min: float | None, jw_last_min: float
 
 
 def match_query(recommendations_file: Path | str, rec_names_file: Path | str, candidates_glob: str,
-                     authors_glob: str, fields: Sequence[FieldMapping], seed: int, jw_full_min: float,
-                     jw_first_min: float | None = None, jw_last_min: float | None = None,
-                     min_field_share: float = cons.DEFAULT_GT_MIN_FIELD_SHARE,
-                     seniority_definition: str = cons.MATCH_SENIORITY_THREE, reference_year: int = cons.GT_REFERENCE_YEAR,
-                     junior_max: int = cons.DEFAULT_SENIORITY_JUNIOR_MAX,
-                     senior_min: int = cons.DEFAULT_SENIORITY_SENIOR_MIN,
-                     single_cutoff: int = cons.DEFAULT_SENIORITY_SINGLE_CUTOFF) -> str:
+                authors_glob: str, fields: Sequence[FieldMapping], seed: int, jw_full_min: float,
+                jw_first_min: float | None = None, jw_last_min: float | None = None,
+                min_field_share: float = cons.DEFAULT_GT_MIN_FIELD_SHARE,
+                seniority_definition: str = cons.MATCH_SENIORITY_THREE, reference_year: int = cons.GT_REFERENCE_YEAR,
+                junior_max: int = cons.DEFAULT_SENIORITY_JUNIOR_MAX,
+                senior_min: int = cons.DEFAULT_SENIORITY_SENIOR_MIN,
+                single_cutoff: int = cons.DEFAULT_SENIORITY_SINGLE_CUTOFF) -> str:
     rules = {**_RULE_SQL, cons.MATCH_FUZZY: fuzzy_sql(jw_full_min, jw_first_min, jw_last_min)}
     rank = 'CASE ' + ' '.join(f"WHEN {cond} THEN {i}" for i, cond in enumerate(rules.values())) + ' END'
     rule_name = 'CASE match_rank ' + ' '.join(f"WHEN {i} THEN '{name}'" for i, name in enumerate(rules)) + ' END'
@@ -75,13 +74,14 @@ def match_query(recommendations_file: Path | str, rec_names_file: Path | str, ca
                      f"(r.seniority = '{cons.SENIORITY_SENIOR}' AND {age} > {int(single_cutoff)}))")
     else:
         raise ValueError(f"Unknown seniority definition: {seniority_definition}")
-    ids = ', '.join(f"r.{c}" for c in REC_ID_COLUMNS)
-    uid = "concat_ws('|', " + ', '.join(f"m.{c}::VARCHAR" for c in REC_ID_COLUMNS) + ")"   # one recommendation
+    ids = ', '.join(f"r.{c}" for c in cons.REC_ID_COLUMNS)
+    # one recommendation as a string, inside this query only (joins / the random draw); '|' never occurs in the ids
+    uid = "concat_ws('|', " + ', '.join(f"m.{c}::VARCHAR" for c in cons.REC_ID_COLUMNS) + ")"
     draw = f"md5('{int(seed)}|' || r.rec_uid || '|' || c.author_id::VARCHAR)"
     a_cols = ', '.join(['author_id', 'first_pub_year', 'n_works_topic'] + [f.column for f in fields])
     return f"""
         WITH r AS (
-            SELECT {', '.join(f"m.{c}" for c in REC_ID_COLUMNS)}, m.first_name, m.last_name, n.rec_name,
+            SELECT {', '.join(f"m.{c}" for c in cons.REC_ID_COLUMNS)}, m.first_name, m.last_name, n.rec_name,
                    {uid} AS rec_uid
             FROM read_parquet({sql_path(recommendations_file)}) m
             LEFT JOIN read_parquet({sql_path(rec_names_file)}) n
@@ -135,16 +135,11 @@ def match_query(recommendations_file: Path | str, rec_names_file: Path | str, ca
         FROM r
         LEFT JOIN per_name p ON p.rec_name = r.rec_name
         LEFT JOIN levels l ON l.rec_uid = r.rec_uid
-        ORDER BY {', '.join(f"r.{c}" for c in REC_ID_COLUMNS)}
+        ORDER BY {', '.join(f"r.{c}" for c in cons.REC_ID_COLUMNS)}
     """
 
 
 def write_matches(con: duckdb.DuckDBPyConnection, output_file: Path | str, **kwargs) -> int:
     """Write the author matching of one model's recommendations (via a temporary file); returns the number of rows."""
-    output_file = Path(output_file)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    tmp = output_file.with_name(output_file.name + '.tmp')
-    row = con.execute(f"COPY ({match_query(**kwargs)}) TO {sql_path(tmp)} (FORMAT parquet, COMPRESSION zstd)").fetchone()
-    tmp.replace(output_file)
-    return int(row[0]) if row else 0
+    return copy_parquet(con, match_query(**kwargs), output_file)
 

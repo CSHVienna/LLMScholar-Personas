@@ -20,7 +20,7 @@ Pareto front: models not dominated on both axes by another model.
 """
 
 import warnings
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -28,14 +28,14 @@ import pandas as pd
 from metrics import summary
 from utils import constants as cons
 
-QUADRANTS = {'Q1': 'high tech / high social', 'Q2': 'low tech / high social', 'Q3': 'low tech / low social',
-             'Q4': 'high tech / low social'}
+QUADRANTS = {'Q1': 'high technical / high social', 'Q2': 'low technical / high social',
+             'Q3': 'low technical / low social', 'Q4': 'high technical / low social'}   # as the axes: Technical / Social
 MODES = cons.RQ3_MODES
 
 
 def is_adjusted(key: str) -> bool:
     """A size-adjusted metric (<key>_adj: observed - expected, in [-1, 1])."""
-    return key.endswith(summary.ADJ_SUFFIX)
+    return key.endswith(cons.ADJ_SUFFIX)
 
 
 def oriented(values: pd.Series, metric: summary.Metric) -> pd.Series:
@@ -47,7 +47,7 @@ def oriented(values: pd.Series, metric: summary.Metric) -> pd.Series:
 
 def expected_column(key: str) -> str:
     """<base>_expected of a size-adjusted key <base>_adj (the value of a random recommender)."""
-    return key[:-len(summary.ADJ_SUFFIX)] + summary.EXPECTED_SUFFIX
+    return key[:-len(cons.ADJ_SUFFIX)] + cons.EXPECTED_SUFFIX
 
 
 def metric_range(configs: pd.DataFrame, metric: summary.Metric) -> pd.DataFrame:
@@ -68,11 +68,19 @@ def metric_range(configs: pd.DataFrame, metric: summary.Metric) -> pd.DataFrame:
     return pd.DataFrame({'low': -e, 'high': 1 - e})
 
 
-def model_scores(configs: pd.DataFrame, technical: Sequence[str] = tuple(cons.RQ3_TECHNICAL_METRICS),
-                 social: Sequence[str] = tuple(cons.RQ3_SOCIAL_METRICS)) -> pd.DataFrame:
+def axis_metrics(technical: Optional[Sequence[str]] = None, social: Optional[Sequence[str]] = None) -> tuple:
+    """(technical, social) metric keys of the two axes; None = cons.RQ3_TECHNICAL_METRICS / RQ3_SOCIAL_METRICS read
+    NOW (not at import: summary.use_study_ethnicity points RQ3_SOCIAL_METRICS at the study attribute in place)."""
+    return (list(cons.RQ3_TECHNICAL_METRICS if technical is None else technical),
+            list(cons.RQ3_SOCIAL_METRICS if social is None else social))
+
+
+def model_scores(configs: pd.DataFrame, technical: Optional[Sequence[str]] = None,
+                 social: Optional[Sequence[str]] = None) -> pd.DataFrame:
     """One row per model: each metric (mean over configurations, oriented), technical / social score, the model's
     attainable range per axis (<axis>_min, <axis>_max; module docstring), the absolute split per axis (<axis>_split:
     1/2 per raw metric, 0 per adjusted one) and n_missing (metrics without a value, left out of the sum)."""
+    technical, social = axis_metrics(technical, social)
     check_adjusted_axes(technical, social)
     keys = list(dict.fromkeys([*technical, *social]))
     missing = [k for k in keys if k not in configs]
@@ -154,7 +162,7 @@ def axis_label(keys: Sequence[str]) -> str:
         metric = summary.METRICS[keys[i]]
         adj = is_adjusted(metric.key)
         if j > i:
-            parts.append(f"$\\sum$ {groups[i].removesuffix(summary.ADJ_SUFFIX)}" + ('$^{adj}$' if adj else ''))
+            parts.append(f"$\\sum$ {groups[i].removesuffix(cons.ADJ_SUFFIX)}" + ('$^{adj}$' if adj else ''))
         else:
             name = metric.key.split('_')[0] if metric.family == 'social' else metric.key
             marks = ['adj'] * adj + ['c'] * (metric.direction == summary.LOWER)   # c: complement (adj: -x)

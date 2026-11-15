@@ -33,9 +33,8 @@ popularity and locality from their expected share (here), the others from an exp
 optional).
 """
 
-from itertools import combinations
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, Optional, Sequence, Tuple
 
 import duckdb
 import numpy as np
@@ -45,19 +44,20 @@ from groundtruth.db import shared_gt_dir, sql_path
 from metrics import technical as tm
 from utils import constants as cons
 
-UNKNOWN = 'unknown'
-ATTRIBUTES = {'gender': 'gender', 'race': 'race', 'ethnicity': 'ethnicity', 'location': 'country', 'productivity': 'productivity',
-              'influence': 'influence', 'collaboration': 'collaboration'}      # metric name -> gt_members / gt_shares
+ATTRIBUTES = {a: cons.ATTR_COUNTRY if a == cons.ATTR_LOCATION else a
+              for a in cons.SOCIAL_METRIC_ATTRIBUTES}          # attribute in the metric key -> gt_members / gt_shares column
+# Columns of the per-model inputs the recommended people are built from (batch_social_metrics.py, batch_flows.py)
+PEOPLE_INPUT_COLUMNS = {'responses': tm.RESPONSE_KEY + [cons.COL_RESPONSE_TAGS],
+                        'recommendations': tm.REC_KEY + ['first_name', 'last_name', 'name_key', cons.COL_REC_TAGS],
+                        'matching': tm.REC_KEY + ['matched_author', 'author_id']}
 POPULARITY = list(cons.GT_TOP_METRICS)                                            # productivity (works), influence
 PCA_FEATURES = ['n_works', 'n_citations', 'h_index', 'i10_index', 'e_index', 'two_year_mean_citedness', 'n_coauthors',
                 'citations_per_paper_per_year', 'academic_age']
 PCA_VARIANCE = 0.90
-SCOPES = ['field_x_seniority', 'field', 'seniority', 'all']
-METRIC_KEYS = ([f"parity_{a}" for a in ATTRIBUTES] + [f"diversity_{a}" for a in ATTRIBUTES]
-               + [f"popularity_{m}" for m in POPULARITY] + ['popularity_location', 'connectedness', 'similarity', 'locality'])
-ADJUSTED_KEYS = [f"{key}_adj" for key in METRIC_KEYS]                                  # metrics/expected.py
-EXPECTED_KEYS = [f"{key}_expected" for key in METRIC_KEYS]                        # random recommender
-DEFAULT_TOP_COUNTRIES = 2
+_LOG_FEATURES = ', '.join(f"ln(1 + greatest(coalesce({f}, 0), 0)) AS {f}" for f in PCA_FEATURES)   # SQL: log1p, >= 0
+METRIC_KEYS = cons.all_social_metric_keys()
+ADJUSTED_KEYS = [key + cons.ADJ_SUFFIX for key in METRIC_KEYS]                                  # metrics/expected.py
+EXPECTED_KEYS = [key + cons.EXPECTED_SUFFIX for key in METRIC_KEYS]                        # random recommender
 
 
 # --- people ------------------------------------------------------------------------------------------------------
@@ -67,7 +67,7 @@ def response_people(responses: pd.DataFrame, recs: pd.DataFrame, matches: pd.Dat
     """RESPONSE_KEY + author_id: the matched authors of the unique valid names of every valid response (each once)."""
     valid_responses = responses[tm.outcome(responses[cons.COL_RESPONSE_TAGS], valid_response_tags) == tm.OUTCOME_VALID]
     keep = set(tm.row_id(valid_responses, tm.RESPONSE_KEY))
-    valid = recs[tm.is_valid(recs[cons.COL_REC_TAGS], valid_rec_tags)].copy()
+    valid = recs[tm.valid_mask(recs[cons.COL_REC_TAGS], valid_rec_tags)].copy()
     valid['rid'], valid['xid'] = tm.row_id(valid, tm.RESPONSE_KEY), tm.row_id(valid, tm.REC_KEY)
     valid = valid[valid['rid'].isin(keep)]
     valid['dkey'] = tm.duplicate_keys(valid, order_sensitive_keys)
@@ -89,11 +89,15 @@ class GroundTruth:
         self.con = con or duckdb.connect()
         self.shares = pd.read_parquet(self.dir / 'gt_shares.parquet')
         self._pca = None
+        self._targets: Dict[tuple, pd.Series] = {}
+
+    def _register_ids(self, author_ids: Sequence[int]) -> None:
+        """The distinct author ids as the DuckDB table wanted_ids (author_id BIGINT) for the next query."""
+        self.con.register('wanted_ids', pd.DataFrame({'author_id': pd.Series(list(set(author_ids)), dtype='int64')}))
 
     def members(self, author_ids: Sequence[int]) -> pd.DataFrame:
         """gt_members rows (all fields) of the given authors."""
-        ids = pd.DataFrame({'author_id': pd.Series(list(set(author_ids)), dtype='int64')})
-        self.con.register('wanted_ids', ids)
+        self._register_ids(author_ids)
         return self.con.execute(f"SELECT m.* FROM read_parquet({sql_path(self.dir / 'gt_members.parquet')}) m "
                                 f"SEMI JOIN wanted_ids USING (author_id)").df()
 
@@ -102,7 +106,7 @@ class GroundTruth:
         files = sorted((shared_gt_dir(self.dir) / 'coauthor_edges').glob('bucket-*.parquet'))
         if not files or not len(author_ids):
             return pd.DataFrame({'a': pd.Series(dtype='int64'), 'b': pd.Series(dtype='int64')})
-        self.con.register('wanted_ids', pd.DataFrame({'author_id': pd.Series(list(set(author_ids)), dtype='int64')}))
+        self._register_ids(author_ids)
         return self.con.execute(f"""
             SELECT e.author_id AS a, e.coauthor_id AS b FROM read_parquet({[str(f) for f in files]}) e
             WHERE e.author_id < e.coauthor_id
@@ -113,8 +117,7 @@ class GroundTruth:
         """(mean, std, components) of the log1p features over the GT population; components keep >= PCA_VARIANCE."""
         if self._pca is None:
             authors = sql_path(self.dir / 'gt_authors.parquet')
-            logs_ = ', '.join(f"ln(1 + greatest(coalesce({f}, 0), 0)) AS {f}" for f in PCA_FEATURES)
-            self.con.execute(f"CREATE OR REPLACE TEMP VIEW feats AS SELECT {logs_} FROM read_parquet({authors})")
+            self.con.execute(f"CREATE OR REPLACE TEMP VIEW feats AS SELECT {_LOG_FEATURES} FROM read_parquet({authors})")
             stats = self.con.execute("SELECT " + ', '.join(f"avg({f}), stddev_samp({f})" for f in PCA_FEATURES)
                                      + " FROM feats").fetchone()
             mean, std = np.array(stats[0::2], dtype=float), np.array(stats[1::2], dtype=float)
@@ -136,20 +139,25 @@ class GroundTruth:
     def features(self, author_ids: Sequence[int]) -> pd.DataFrame:
         """PCA coordinates of the given authors (index author_id)."""
         mean, std, components = self.pca()
-        ids = pd.DataFrame({'author_id': pd.Series(list(set(author_ids)), dtype='int64')})
-        self.con.register('wanted_ids', ids)
-        logs_ = ', '.join(f"ln(1 + greatest(coalesce({f}, 0), 0)) AS {f}" for f in PCA_FEATURES)
-        raw = self.con.execute(f"SELECT author_id, {logs_} FROM read_parquet({sql_path(self.dir / 'gt_authors.parquet')}) "
+        self._register_ids(author_ids)
+        raw = self.con.execute(f"SELECT author_id, {_LOG_FEATURES} FROM read_parquet({sql_path(self.dir / 'gt_authors.parquet')}) "
                                f"SEMI JOIN wanted_ids USING (author_id)").df().set_index('author_id')
         return pd.DataFrame(((raw[PCA_FEATURES].to_numpy() - mean) / std) @ components, index=raw.index)
 
     def target(self, scope: str, field: Optional[str], seniority: Optional[str], attribute: str) -> pd.Series:
-        """GT class shares (class -> share) of an attribute in a scope (NaN-free; may be empty)."""
+        """GT class shares (class -> share) of an attribute in a scope (NaN-free; may be empty); computed once per
+        (scope, field, seniority, attribute)."""
+        key = (scope, field, seniority, attribute)
+        if key not in self._targets:
+            self._targets[key] = self._target(*key)
+        return self._targets[key]
+
+    def _target(self, scope: str, field: Optional[str], seniority: Optional[str], attribute: str) -> pd.Series:
         s = self.shares
         rows = s[(s['scope'] == scope) & (s['attribute'] == attribute)]
-        if scope in ('field_x_seniority', 'field'):
+        if scope in (cons.SCOPE_FIELD_SENIORITY, cons.SCOPE_FIELD):
             rows = rows[rows['field'] == field]
-        if scope in ('field_x_seniority', 'seniority'):
+        if scope in (cons.SCOPE_FIELD_SENIORITY, cons.SCOPE_SENIORITY):
             rows = rows[rows['seniority'] == seniority]
         return rows.set_index('class')['share']
 
@@ -157,7 +165,7 @@ class GroundTruth:
 # --- measures ----------------------------------------------------------------------------------------------------
 def known(distribution: pd.Series, include_unknown: bool) -> pd.Series:
     """The distribution without 'unknown' (renormalised) unless include_unknown."""
-    d = distribution if include_unknown else distribution.drop(UNKNOWN, errors='ignore')
+    d = distribution if include_unknown else distribution.drop(cons.UNKNOWN, errors='ignore')
     total = d.sum()
     return d / total if total > 0 else d.iloc[0:0]
 
@@ -209,23 +217,33 @@ def connectedness(people: Sequence[int], edges: Iterable[Tuple[int, int]]) -> fl
 
 
 def similarity(vectors: np.ndarray) -> float:
-    """Mean pairwise cosine similarity of the rows; NaN for < 2 rows."""
+    """Mean pairwise cosine similarity of the rows (zero vectors count as cosine 0); NaN for < 2 rows. Closed form
+    (linear in the rows): with unit rows u_i and S = sum_i u_i, sum over pairs i != j of u_i . u_j = S . S - sum_i |u_i|^2,
+    over n (n - 1) ordered pairs. The observed metric and its random-recommender baseline (metrics/expected.py)."""
     if len(vectors) < 2:
         return np.nan
     norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-    unit = np.divide(vectors, norms, out=np.zeros_like(vectors), where=norms > 0)
-    return float(np.mean([unit[i] @ unit[j] for i, j in combinations(range(len(unit)), 2)]))
+    unit = np.divide(vectors, norms, out=np.zeros_like(vectors, dtype=float), where=norms > 0)
+    total = unit.sum(axis=0)
+    return float(total @ total - (unit * unit).sum()) / (len(unit) * (len(unit) - 1))
 
 
 # --- per response ------------------------------------------------------------------------------------------------
+def _with_expected(row: dict, key: str, observed: float, expected: float) -> None:
+    """row[key] = observed, row[<key>_expected] = expected (random recommender), row[<key>_adj] = the difference."""
+    row[key] = observed
+    row[key + cons.EXPECTED_SUFFIX] = expected
+    row[key + cons.ADJ_SUFFIX] = observed - expected
+
+
 def social_metrics(responses: pd.DataFrame, people: pd.DataFrame, gt: GroundTruth, include_unknown: bool = False,
-                   scope: str = 'field_x_seniority', top_k_countries: int = DEFAULT_TOP_COUNTRIES,
+                   scope: str = cons.DEFAULT_PARITY_TARGET, top_k_countries: int = cons.DEFAULT_TOP_COUNTRIES,
                    expectations=None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """(metrics: one row per response, gaps: one row per response x attribute x class). ``expectations``
     (metrics.expected.Expected) adds <metric>_expected and _adj of the simulated metrics; those of popularity_* and
     locality are always added."""
-    if scope not in SCOPES:
-        raise ValueError(f"scope must be one of {SCOPES}")
+    if scope not in cons.SCOPES:
+        raise ValueError(f"scope must be one of {cons.SCOPES}")
     ids = people['author_id'].unique()
     members = gt.members(ids)
     edges = gt.edges(ids)
@@ -234,58 +252,42 @@ def social_metrics(responses: pd.DataFrame, people: pd.DataFrame, gt: GroundTrut
     people = people.assign(rid=tm.row_id(people, tm.RESPONSE_KEY))
     by_response = {rid: g for rid, g in people.groupby('rid')}
     member_index = members.set_index(['author_id', 'field'])
-    targets: Dict[tuple, pd.Series] = {}
 
     rows, gaps = [], []
-    for _, response in responses.iterrows():
-        rid = tm.row_id(response.to_frame().T, tm.RESPONSE_KEY).iloc[0]
+    rids = tm.row_id(responses, tm.RESPONSE_KEY)            # all ids at once (same strings as one by one)
+    for rid, response in zip(rids, responses.to_dict('records')):
         field, seniority = response[cons.VAR_FIELD], response[cons.VAR_SENIORITY]
         group = by_response.get(rid)
         ids_r = list(group['author_id']) if group is not None else []
         rows_r = member_index.reindex([(a, field) for a in ids_r]).dropna(how='all')
         row = {**{c: response[c] for c in tm.RESPONSE_KEY}, 'n_people': len(rows_r)}
         for name, column in ATTRIBUTES.items():
-            key = (scope, field, seniority, column)
-            if key not in targets:
-                targets[key] = gt.target(scope, field, seniority, column)
-            q = known(targets[key], include_unknown)
-            counts = rows_r[column].fillna(UNKNOWN).value_counts() if len(rows_r) else pd.Series(dtype=float)
+            q = known(gt.target(scope, field, seniority, column), include_unknown)
+            counts = rows_r[column].fillna(cons.UNKNOWN).value_counts() if len(rows_r) else pd.Series(dtype=float)
             p = known(counts / counts.sum(), include_unknown) if len(counts) else counts
-            n_known = int(counts.drop(UNKNOWN, errors='ignore').sum()) if not include_unknown else int(counts.sum())
+            n_known = int(counts.drop(cons.UNKNOWN, errors='ignore').sum()) if not include_unknown else int(counts.sum())
             row[f"parity_{name}"] = parity(p, q)
             row[f"diversity_{name}"] = diversity(p, len(q), n_known)
-            row[f"unknown_{name}"] = float(counts.get(UNKNOWN, 0) / counts.sum()) if len(counts) else np.nan
+            row[f"unknown_{name}"] = float(counts.get(cons.UNKNOWN, 0) / counts.sum()) if len(counts) else np.nan
             for cls in p.index.union(q.index):
                 gaps.append({**{c: response[c] for c in tm.RESPONSE_KEY}, 'attribute': name, 'class': cls,
                              'p': float(p.get(cls, 0.0)), 'q': float(q.get(cls, 0.0)),
                              'gap': float(p.get(cls, 0.0) - q.get(cls, 0.0))})
         for name in POPULARITY:
-            key = (scope, field, seniority, f"top_{name}")
-            if key not in targets:
-                targets[key] = gt.target(scope, field, seniority, f"top_{name}")
-            expected = float(targets[key].get('top', np.nan))
+            expected = float(gt.target(scope, field, seniority, f"top_{name}").get('top', np.nan))
             observed = float(rows_r[f"is_top_{name}"].astype(float).mean()) if len(rows_r) else np.nan
-            row[f"popularity_{name}"] = observed
-            row[f"popularity_{name}_expected"] = expected
-            row[f"popularity_{name}_adj"] = observed - expected
-        key = (scope, field, seniority, ATTRIBUTES['location'])
-        if key not in targets:
-            targets[key] = gt.target(scope, field, seniority, ATTRIBUTES['location'])
-        countries = known(targets[key], include_unknown=False)
+            _with_expected(row, f"popularity_{name}", observed, expected)
+        countries = known(gt.target(scope, field, seniority, ATTRIBUTES[cons.ATTR_LOCATION]), include_unknown=False)
         top = top_countries(countries, top_k_countries)
-        located = rows_r[ATTRIBUTES['location']].fillna(UNKNOWN) if len(rows_r) else pd.Series(dtype=object)
-        located = located[located != UNKNOWN]
+        located = rows_r[ATTRIBUTES[cons.ATTR_LOCATION]].fillna(cons.UNKNOWN) if len(rows_r) else pd.Series(dtype=object)
+        located = located[located != cons.UNKNOWN]
         observed = float(located.isin(top).mean()) if len(located) else np.nan
         expected = float(countries[countries.index.isin(top)].sum()) if len(top) else np.nan
-        row['popularity_location'] = observed
-        row['popularity_location_expected'] = expected
-        row['popularity_location_adj'] = observed - expected
+        _with_expected(row, 'popularity_location', observed, expected)
         home = cons.LOCATION_COUNTRY.get(str(response.get(cons.VAR_LOCATION)))
         observed = float((located == home).mean()) if home and len(located) else np.nan
         expected = float(countries.get(home, 0.0)) if home and len(countries) else np.nan
-        row['locality'] = observed
-        row['locality_expected'] = expected
-        row['locality_adj'] = observed - expected
+        _with_expected(row, 'locality', observed, expected)
         present = [a for a, _ in rows_r.index] if len(rows_r) else []
         row['connectedness'] = connectedness(present, edge_list)
         row['similarity'] = similarity(vectors.reindex(present).dropna().to_numpy()) if len(present) else np.nan

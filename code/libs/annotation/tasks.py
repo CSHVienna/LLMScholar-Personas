@@ -10,7 +10,7 @@ Each task produces two files (written by ``batch_annotation_sample.py``):
 
 import json
 from dataclasses import dataclass
-from typing import Callable, Dict, List
+from typing import Callable, Dict, Iterable, List
 
 import numpy as np
 import pandas as pd
@@ -18,6 +18,7 @@ import pandas as pd
 from utils import constants as cons
 
 ITEM_ID = 'item_id'
+STRATUM, STRATUM_SIZE = 'stratum', 'stratum_size'     # sampling stratum of an item and its size in the population
 EXTRA_MISSING = 'extra_missing'   # recommendations: checkbox answer ('1' / '0'; '' = not answered, e.g. older answers)
 
 
@@ -67,6 +68,14 @@ def _label(tag: str, definitions: Dict[str, str]) -> dict:
 # -----------------------------------------------------------------------------
 # Sampling
 # -----------------------------------------------------------------------------
+def quota_for(sizes: pd.Series, per_stratum: int, max_items: int) -> int:
+    """Per-stratum quota: per_stratum, lowered until the sample (at most quota items per stratum) fits max_items."""
+    quota = per_stratum
+    while quota > 1 and sizes.clip(upper=quota).sum() > max_items:
+        quota -= 1
+    return quota
+
+
 def stratified_sample(df: pd.DataFrame, stratum_column: str, per_stratum: int, max_items: int,
                       seed: int) -> pd.DataFrame:
     """Up to ``per_stratum`` random rows per stratum (all rows of small strata), at most ``max_items`` overall.
@@ -74,10 +83,7 @@ def stratified_sample(df: pd.DataFrame, stratum_column: str, per_stratum: int, m
     Rare strata are thereby over-represented on purpose (every inferred combination gets checked).
     If the cap binds, the per-stratum quota is lowered until the sample fits.
     """
-    sizes = df[stratum_column].value_counts()
-    quota = per_stratum
-    while quota > 1 and sizes.clip(upper=quota).sum() > max_items:
-        quota -= 1
+    quota = quota_for(df[stratum_column].value_counts(), per_stratum, max_items)
     parts = [group.sample(n=min(len(group), quota), random_state=seed)
              for _, group in df.groupby(stratum_column, observed=True)]
     return pd.concat(parts).sample(frac=1, random_state=seed).reset_index(drop=True)   # shuffled
@@ -113,7 +119,7 @@ def response_item(row: pd.Series) -> List[Section]:
 def recommendation_item(row: pd.Series) -> List[Section]:
     """Raw name / lastname values (exactly as returned, quoted) and the full record."""
     def quoted(value) -> str:
-        return '(missing)' if value is None or (isinstance(value, float) and np.isnan(value)) else json.dumps(value, ensure_ascii=False)
+        return '(missing)' if pd.isna(value) else json.dumps(value, ensure_ascii=False)
     record = json.dumps(json.loads(row['record_json']), indent=2, ensure_ascii=False)
     return [Section('name', quoted(row['name_raw']), preformatted=True),
             Section('lastname', quoted(row['lastname_raw']), preformatted=True),
@@ -126,11 +132,17 @@ ITEM_BUILDERS: Dict[str, Callable[[pd.Series], List[Section]]] = {
 }
 
 
+def payload(codebook_: dict, item_ids: Iterable[str], sections: Iterable[List[Section]]) -> dict:
+    """The JSON the annotation tool loads (every task): codebook + items (id and sections) + the tag separator."""
+    items = [{ITEM_ID: item_id, 'sections': [s.to_dict() for s in item_sections]}
+             for item_id, item_sections in zip(item_ids, sections)]
+    return {'codebook': codebook_, 'items': items, 'tag_separator': cons.TAG_SEPARATOR}
+
+
 def items_payload(task: str, sample: pd.DataFrame) -> dict:
     """The blind JSON for the annotation tool: codebook + items (no inferred labels)."""
     build = ITEM_BUILDERS[task]
-    items = [{ITEM_ID: row[ITEM_ID], 'sections': [s.to_dict() for s in build(row)]} for _, row in sample.iterrows()]
-    return {'codebook': codebook(task), 'items': items, 'tag_separator': cons.TAG_SEPARATOR}
+    return payload(codebook(task), sample[ITEM_ID], (build(row) for _, row in sample.iterrows()))
 
 
 def key_table(task: str, sample: pd.DataFrame) -> pd.DataFrame:

@@ -18,7 +18,8 @@ from responses import tags as tag_utils                                  # noqa:
 from responses.content_parser import ContentParser                       # noqa: E402
 from responses.context import PromptContext                              # noqa: E402
 from responses.persons import missing_fields                             # noqa: E402
-from responses.recommendations import NameTagger, normalize_tokens, tag_recommendations  # noqa: E402
+from responses.recommendations import NameTagger, tag_recommendations
+from utils.names import normalize_tokens  # noqa: E402
 from utils.text import clean_text                                         # noqa: E402
 from responses.sources import RawResponse, get_adapter                   # noqa: E402
 from responses.taxonomy import classify                                  # noqa: E402

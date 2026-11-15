@@ -1,10 +1,74 @@
-"""Short display labels (models, tag combinations) used by all plots."""
+"""
+Display names of every plot: one name per concept (same name in every figure). Plots ask here and nothing else.
+
+    variable_title(v)        prompt variable / LLM / model characteristic: 'Language', 'k', 'LLM', 'Access', ...
+    level_label(v, value)    value of a prompt variable or model characteristic: 'Recruiter', 'Open', 'Yes', ...
+    attribute_title(a)       person attribute (flows, GT): 'Gender', 'Country', 'Seniority', 'Productivity', ...
+    class_label(a, value)    class of a person attribute: 'East Asian', 'Female', 'Junior', 'Other', countries as is
+    MEASURE_LABELS           effect sizes (RQ1, interactions); fade_rule(): the 'faded' note of every heatmap
+Metric headers (Par.$_{gender}$, short 'Gender' / '# works') live with the metric registry (metrics/summary.py:
+METRICS, ATTRIBUTE_NAMES); prompt titles in summary.PROMPT_TITLES, model characteristics in summary.MODEL_ATTRIBUTES.
+Rule: sentence case for titles, axis labels and classes ('k' and symbols as they are).
+"""
 
 import re
-from typing import Dict, Iterable
+from typing import Dict, Iterable, Optional
 
+from metrics import flows as fl
+from metrics import summary
 from utils import constants as cons
 from viz import constants as viscons
+
+LLM = 'LLM'                                         # the model factor, in every figure (never 'Model')
+FAMILY_TITLES = {cons.FAMILY_MODEL: LLM, cons.FAMILY_PERSONA: 'Persona', cons.FAMILY_CONTEXT: 'Context',
+                 cons.FAMILY_INTERACTION: 'Interaction'}
+_SOURCE_TITLES = {cons.COL_MODEL: LLM, cons.MODEL_FAMILY: f'{LLM} family'}
+ATTRIBUTE_TITLES = {'gender': 'Gender', 'race': 'Race', 'ethnicity': 'Ethnicity', 'country': 'Country',
+                    fl.AUTHOR_SENIORITY: 'Seniority', 'productivity': 'Productivity', 'influence': 'Influence',
+                    'collaboration': 'Collaboration'}     # no 'perceived' in figures (the captions say it once)
+_AS_IS_CLASSES = ('country', 'productivity', 'influence', 'collaboration')   # country codes, L / M / H bins
+MEASURE_LABELS = {'omega2': r'Partial $\omega^2$', 'shapley_r2': r'Shapley $R^2$', 'delta_r2': r'$\Delta R^2$',
+                  'f2': r'Local $f^2$', 'max_abs_deviation': 'Max |deviation|'}
+CORRECTION_LABELS = {'holm': 'Holm', 'bh': 'BH', 'by': 'BY'}
+
+
+def variable_title(variable: str) -> str:
+    """'language' -> 'Language', 'k' -> 'k', the model factor -> 'LLM', 'access' -> 'Access'."""
+    if variable in _SOURCE_TITLES:
+        return _SOURCE_TITLES[variable]
+    if variable in summary.MODEL_ATTRIBUTES:
+        return summary.MODEL_ATTRIBUTES[variable][0]
+    return summary.PROMPT_TITLES.get(variable, variable.replace('_', ' ').capitalize())
+
+
+def level_label(variable: str, value) -> str:
+    """Value of a prompt variable (summary.level_label) or of a model characteristic (its label, e.g. True -> 'Yes')."""
+    if variable in summary.MODEL_ATTRIBUTES:
+        _, levels, labels = summary.MODEL_ATTRIBUTES[variable]
+        return dict(zip(map(str, levels), labels)).get(str(value), str(value))
+    return summary.level_label(value)
+
+
+def attribute_title(attribute: str) -> str:
+    """Person attribute (flows, GT): 'gender' -> 'Gender', 'author_seniority' / 'seniority' -> 'Seniority'."""
+    return ATTRIBUTE_TITLES.get(attribute, attribute.replace('_', ' ').capitalize())
+
+
+def class_label(attribute: str, value: str) -> str:
+    """Class of a person attribute: 'east_asian' -> 'East Asian', 'female' -> 'Female', 'junior' -> 'Junior',
+    'other' -> 'Other'; country codes and L / M / H bins as they are."""
+    if value in (cons.OTHER, cons.UNKNOWN):
+        return value.capitalize()
+    if attribute in _AS_IS_CLASSES:
+        return value
+    return value.replace('_', ' ').title()
+
+
+def fade_rule(correction: Optional[str], alpha: float) -> str:
+    """What a faded heatmap value means: 'BY-adjusted p ≥ 0.05', or '95% CI includes 0' without a correction."""
+    if correction is None:
+        return '95% CI includes 0'
+    return f"{CORRECTION_LABELS[correction]}-adjusted p ≥ {alpha:g}"
 
 _RULES = [(re.compile(pattern), replacement) for pattern, replacement in viscons.MODEL_LABEL_RULES]
 

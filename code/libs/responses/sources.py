@@ -87,7 +87,7 @@ class GptAdapter(SourceAdapter):
 
 
 class GeminiAdapter(SourceAdapter):
-    """Vertex AI batch API: ``{response: {candidates, usageMetadata, promptFeedback}, key}``."""
+    """Gemini Developer API batch output (llm/gemini.py): ``{response: {candidates, usageMetadata, promptFeedback}, key}``."""
 
     name = cons.SOURCE_GEMINI
 

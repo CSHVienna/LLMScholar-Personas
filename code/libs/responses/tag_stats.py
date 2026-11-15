@@ -14,16 +14,9 @@ import numpy as np
 import pandas as pd
 
 from utils import constants as cons
-from responses import tags as tag_utils
+from utils.stats import percentile_ci
+from responses.tags import is_valid
 
-RESPONSE_KEY = [cons.COL_MODEL, cons.VAR_LANGUAGE, cons.COL_PROMPT_ID, cons.COL_RUN_ID]
-CONFIGURATION_KEY = [cons.COL_MODEL, cons.VAR_LANGUAGE, cons.COL_PROMPT_ID]   # a prompt with its runs
-
-
-def is_valid(joined_tags: str, valid_tags: Iterable[str]) -> bool:
-    """True if every tag of the combination is in ``valid_tags`` (an empty combination is not valid)."""
-    tags = tag_utils.split(joined_tags)
-    return bool(tags) and set(tags) <= set(valid_tags)
 
 
 @dataclass(frozen=True)
@@ -107,8 +100,7 @@ def model_mean_shares(df: pd.DataFrame, tags_column: str, categories: Combinatio
     picks = rng.integers(0, n_models, size=(n_boot, n_models))
     boot_means = boot_shares[picks, np.arange(n_boot)[:, None], :].mean(axis=1)
 
-    alpha = (1 - confidence) / 2
-    low, high = np.quantile(boot_means, [alpha, 1 - alpha], axis=0)
+    low, high = percentile_ci(boot_means, confidence, axis=0)
     return pd.DataFrame({'category': categories.categories, 'mean': model_shares.mean(axis=0),
                          'ci_low': low, 'ci_high': high, 'std_models': model_shares.std(axis=0, ddof=1),
                          'n_models': n_models, 'n_rows': len(df),
@@ -118,7 +110,7 @@ def model_mean_shares(df: pd.DataFrame, tags_column: str, categories: Combinatio
 def _counts_per_configuration(df: pd.DataFrame, tags_column: str,
                               categories: CombinationCategories) -> Dict[str, np.ndarray]:
     """Per model: counts per configuration (rows) and category (columns)."""
-    table = pd.crosstab([df[c] for c in CONFIGURATION_KEY], categories.assign(df[tags_column]), dropna=False)
+    table = pd.crosstab([df[c] for c in cons.CONFIG_SHORT_KEY], categories.assign(df[tags_column]), dropna=False)
     table = table.reindex(columns=categories.categories, fill_value=0)
     table = table[table.sum(axis=1) > 0]
     return {model: group.to_numpy(dtype=float) for model, group in table.groupby(level=cons.COL_MODEL, observed=True)}

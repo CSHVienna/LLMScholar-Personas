@@ -83,7 +83,10 @@ def send_request(client: Client, api_name: str, prompt: str, options: dict) -> d
 
 def port_watcher(port_status, port_load, host: str, first_port: int, lock, stop_event: threading.Event,
                  interval: float = WATCH_INTERVAL_S) -> None:
-    """Thread: keep ``port_status`` up to date until ``stop_event`` is set."""
+    """Thread: keep ``port_status`` up to date until ``stop_event`` is set.
+
+    TO CHECK (code review 2026-11-13, R5): the status line is printed when random.random() < 0.2, so the logs differ between
+    runs. Option: print every N-th round."""
     while not stop_event.is_set():
         for i in range(len(port_status)):
             alive = is_port_alive(host, first_port + i)
@@ -111,7 +114,11 @@ def init_worker(port_status, port_load, lock, settings: dict) -> None:
 
 
 def process_prompt(item: dict) -> Tuple[str, Optional[str]]:
-    """Send one prompt to the least-loaded alive server and store the answer. Returns (prompt id, error)."""
+    """Send one prompt to the least-loaded alive server and store the answer. Returns (prompt id, error).
+
+    TO CHECK (code review 2026-11-13, R2): any exception marks the server down, also a prompt-specific error (bad request,
+    model error); the watcher brings it back after <= WATCH_INTERVAL_S, so prompts can briefly pile on the other
+    servers. Option: mark it down only on connection errors / timeouts."""
     port_status, port_load, lock = _WORKER['port_status'], _WORKER['port_load'], _WORKER['lock']
     settings, store = _WORKER['settings'], _WORKER['store']
     prompt_id = str(item['id'])

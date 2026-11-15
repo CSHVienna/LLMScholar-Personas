@@ -14,8 +14,11 @@ Configuration (CONFIG_ID_COLUMNS = model, date, language, location, role, k, fie
                                 for a recommendation without one the normalised raw 'first|last' in written order);
                                 NaN if < 2 valid runs.  n_valid_runs = number of runs used
 Response (RESPONSE_ID_COLUMNS = configuration + run_id):
-    outcome, is_valid, k_requested, k_returned (person records, all tags), k_ratio (valid responses only)
+    outcome, is_valid, k_requested, k_returned (person records, all tags)
     n_valid_recs, n_unique_names (among the valid recommendations, by name_key)
+    k_balance                   2 r / (r + k_requested), r = n_valid_recs (valid names, repeats counted): 1 = exactly
+                                the k requested, -> 0 fewer (0 = none), -> 2 more (bounded; twice too many 4/3, half 2/3);
+                                valid responses only
     duplicates                  1 - n_unique_names / n_valid_recs (valid responses with >= 1 valid recommendation)
     factuality_name / _name_field / _name_seniority / _author
                                 share of the UNIQUE valid names matched at that level (B.6 matched_*; a repeated
@@ -29,20 +32,26 @@ Robustness options (plan §2.4; each written to its own folder by the caller):
 """
 
 from itertools import combinations
-from typing import Iterable, List, Optional, Sequence
+from typing import Iterable, Optional, Sequence
 
 import numpy as np
 import pandas as pd
 
-from responses.recommendations import normalize_tokens
+from responses.tags import is_valid
+from utils.names import normalize_tokens
 from utils import constants as cons
 
 OUTCOME_VALID, OUTCOME_REFUSED, OUTCOME_INVALID = 'valid', 'refused', 'invalid'
 OUTCOMES = [OUTCOME_VALID, OUTCOME_REFUSED, OUTCOME_INVALID]
-LEVELS = ['name', 'name_field', 'name_seniority', 'author']
+LEVELS = cons.MATCH_LEVELS
 CONFIG_KEY = cons.CONFIG_ID_COLUMNS
 RESPONSE_KEY = cons.RESPONSE_ID_COLUMNS
-REC_KEY = RESPONSE_KEY + [cons.COL_REC_INDEX]
+REC_KEY = cons.REC_ID_COLUMNS
+# Columns of the per-model inputs the technical metrics read (batch_metrics.py; utils/batch.load_model_inputs)
+INPUT_COLUMNS = {'responses': RESPONSE_KEY + [cons.COL_RESPONSE_TAGS, 'n_persons'],
+                 'recommendations': REC_KEY + ['name_raw', 'lastname_raw', 'first_name', 'last_name', 'name_key',
+                                               cons.COL_REC_TAGS],
+                 'matching': REC_KEY + [f"matched_{level}" for level in LEVELS]}
 
 
 # --- ids ----------------------------------------------------------------------------------------------------------
@@ -57,16 +66,16 @@ def tag_set(tags: Optional[str]) -> frozenset:
     return frozenset(tags.split(cons.TAG_SEPARATOR)) if isinstance(tags, str) and tags else frozenset()
 
 
-def is_valid(tags: pd.Series, valid_tags: Iterable[str]) -> pd.Series:
-    """A response / recommendation is valid if it has tags and ALL of them are in the valid set."""
+def valid_mask(tags: pd.Series, valid_tags: Iterable[str]) -> pd.Series:
+    """Per row of joined tags: valid (responses.tags.is_valid: tags present and ALL in the valid set)."""
     valid = frozenset(valid_tags)
-    return tags.map(lambda t: bool(tag_set(t)) and tag_set(t) <= valid)
+    return tags.map(lambda t: is_valid(t, valid))
 
 
 def outcome(tags: pd.Series, valid_tags: Iterable[str]) -> pd.Series:
     """refused (tagged refused) > valid (all tags valid) > invalid."""
     refused = tags.map(lambda t: cons.RESPONSE_REFUSED in tag_set(t))
-    valid = is_valid(tags, valid_tags)
+    valid = valid_mask(tags, valid_tags)
     return pd.Series(np.where(refused, OUTCOME_REFUSED, np.where(valid, OUTCOME_VALID, OUTCOME_INVALID)), index=tags.index)
 
 
@@ -150,9 +159,8 @@ def response_metrics(responses: pd.DataFrame, recs: pd.DataFrame, matches: pd.Da
     out['is_valid'] = out['outcome'] == OUTCOME_VALID
     out['k_requested'] = responses[cons.VAR_K].to_numpy()
     out['k_returned'] = responses['n_persons'].to_numpy()
-    out['k_ratio'] = np.where(out['is_valid'], out['k_returned'] / out['k_requested'], np.nan)
 
-    valid = recs[is_valid(recs[cons.COL_REC_TAGS], valid_rec_tags)].copy()
+    valid = recs[valid_mask(recs[cons.COL_REC_TAGS], valid_rec_tags)].copy()
     valid['dkey'] = duplicate_keys(valid, order_sensitive_keys)
     valid['rid'], valid['xid'] = row_id(valid, RESPONSE_KEY), row_id(valid, REC_KEY)
     match_columns = [f"matched_{level}" for level in LEVELS]
@@ -174,9 +182,10 @@ def response_metrics(responses: pd.DataFrame, recs: pd.DataFrame, matches: pd.Da
         out[column] = rid.map(per[column]).fillna(0).astype(int).to_numpy()
     for column in fact.columns:
         out[column] = rid.map(fact[column]).to_numpy()
+    returned = out['n_valid_recs']
+    out['k_balance'] = np.where(out['is_valid'], 2 * returned / (returned + out['k_requested']), np.nan)
     has_recs = out['is_valid'] & (out['n_valid_recs'] > 0)
     out['duplicates'] = np.where(has_recs, 1 - out['n_unique_names'] / out['n_valid_recs'].where(has_recs, 1), np.nan)
     for column in [f"factuality_{l}" for l in LEVELS] + ['n_factual_author']:
         out[column] = out[column].where(has_recs)
     return out
-

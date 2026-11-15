@@ -22,6 +22,7 @@ import pandas as pd
 
 from metrics import technical as tm
 from utils import constants as cons
+from utils.stats import percentile_ci
 
 HIGHER, LOWER, NEUTRAL = 1, -1, 0
 
@@ -38,49 +39,42 @@ class Metric:
     short: str = ''                        # compact label under a subgroup bracket (heatmaps), e.g. 'Name'
     narrow: str = ''                       # header in wide bar figures (many columns), e.g. 'Dup.'; '' = label
 
-    def header(self, n_columns: int) -> str:
-        """Column header of a bar figure: the narrow label when the figure has many columns."""
-        from viz import constants as viscons
-        return self.narrow if self.narrow and n_columns >= viscons.METRIC_NARROW_HEADER_FROM else self.label
-
     @property
     def band(self) -> str:
         """Top-level block of columns in the heatmaps: technical (incl. factuality) or social."""
-        return 'social' if self.family == 'social' else 'technical'
+        return cons.BAND_SOCIAL if self.family == cons.METRIC_SOCIAL else cons.BAND_TECHNICAL
 
 
 METRICS: Dict[str, Metric] = {m.key: m for m in [
-    Metric('refusals', 'Refusals', LOWER, 'technical', 'refusals', short='Refusals'),
-    Metric('validity', 'Validity', HIGHER, 'technical', 'validity', short='Validity'),
-    Metric('behaviour_consistency', 'Consist.$_{behav}$', NEUTRAL, 'technical', 'consistency', short='Behaviour'),
-    Metric('recommendation_consistency', 'Consist.$_{recs}$', NEUTRAL, 'technical', 'consistency', short='Recomm.'),
-    Metric('duplicates', 'Duplicates', LOWER, 'technical', 'duplicates', short='Duplicat.', narrow='Dup.'),
-    Metric('k_ratio', 'k ratio', NEUTRAL, 'technical', 'k_ratio', limits=(0.0, 2.0), short='k ratio'),
-    Metric('factuality_name', 'Fact.$_{name}$', HIGHER, 'factuality', 'factuality', short='Name'),
-    Metric('factuality_name_field', 'Fact.$_{field}$', HIGHER, 'factuality', 'factuality', short='Field'),
-    Metric('factuality_name_seniority', 'Fact.$_{seniority}$', HIGHER, 'factuality', 'factuality', short='Seniority'),
-    Metric('factuality_author', 'Fact.$_{author}$', HIGHER, 'factuality', 'factuality', short='Author'),
+    Metric('refusals', 'Refusals', LOWER, cons.METRIC_TECHNICAL, 'refusals', short='Refusals'),
+    Metric('validity', 'Validity', HIGHER, cons.METRIC_TECHNICAL, 'validity', short='Validity'),
+    Metric('behaviour_consistency', 'Consist.$_{behav}$', NEUTRAL, cons.METRIC_TECHNICAL, 'consistency', short='Behaviour'),
+    Metric('recommendation_consistency', 'Consist.$_{recs}$', NEUTRAL, cons.METRIC_TECHNICAL, 'consistency', short='Recs'),
+    Metric('duplicates', 'Duplicates', LOWER, cons.METRIC_TECHNICAL, 'duplicates', short='Duplicat.', narrow='Dup.'),
+    Metric('k_balance', 'k balance', NEUTRAL, cons.METRIC_TECHNICAL, 'k_balance', limits=(0.0, 2.0), short='k balance'),
+    Metric('factuality_name', 'Fact.$_{name}$', HIGHER, cons.METRIC_FACTUALITY, 'factuality', short='Name'),
+    Metric('factuality_name_field', 'Fact.$_{field}$', HIGHER, cons.METRIC_FACTUALITY, 'factuality', short='Field'),
+    Metric('factuality_name_seniority', 'Fact.$_{seniority}$', HIGHER, cons.METRIC_FACTUALITY, 'factuality', short='Seniority'),
+    Metric('factuality_author', 'Fact.$_{author}$', HIGHER, cons.METRIC_FACTUALITY, 'factuality', short='Author'),
 ]}
-_SOCIAL_SHORT = {'gender': 'Gender', 'race': 'Race', 'ethnicity': 'Ethnicity', 'location': 'Location', 'productivity': 'Works',
-                 'influence': 'Citations', 'collaboration': 'Coauthors'}       # heatmap column labels
-_SOCIAL_SUB = {'gender': 'gender', 'race': 'race', 'ethnicity': 'ethn', 'location': 'loc', 'productivity': 'works',
-               'influence': 'cit', 'collaboration': 'coauth'}                 # subscripts of the bar headers
-for _attribute in _SOCIAL_SHORT:
-    METRICS[f"parity_{_attribute}"] = Metric(f"parity_{_attribute}", f"Par.$_{{{_SOCIAL_SUB[_attribute]}}}$", HIGHER,
-                                             'social', 'parity', short=_SOCIAL_SHORT[_attribute])
-for _attribute in _SOCIAL_SHORT:
-    METRICS[f"diversity_{_attribute}"] = Metric(f"diversity_{_attribute}", f"Div.$_{{{_SOCIAL_SUB[_attribute]}}}$",
-                                                HIGHER, 'social', 'diversity', short=_SOCIAL_SHORT[_attribute])
-for _attribute in ('productivity', 'influence', 'location'):
-    METRICS[f"popularity_{_attribute}"] = Metric(f"popularity_{_attribute}", f"Pop.$_{{{_SOCIAL_SUB[_attribute]}}}$",
-                                                 NEUTRAL, 'social', 'popularity', short=_SOCIAL_SHORT[_attribute])
-METRICS['connectedness'] = Metric('connectedness', 'Coh.$_{conn}$', NEUTRAL, 'social', 'cohesion', short='Connect.')
-METRICS['similarity'] = Metric('similarity', 'Coh.$_{sim}$', NEUTRAL, 'social', 'cohesion', short='Similar.')
-METRICS['locality'] = Metric('locality', 'Locality', NEUTRAL, 'social', 'locality', short='Locality', narrow='Loc.')
+# Person attribute of a social metric -> (short: heatmap column label, sub: subscript of the bar header). The metric
+# key 'location' is the scholar's COUNTRY (latest affiliation): shown as 'Country' ('Location' = the prompt variable);
+# prominence attributes are counts: '# works' / '# citations' / '# coauthors' ('#' only in these short forms)
+ATTRIBUTE_NAMES = {cons.ATTR_GENDER: ('Gender', 'gender'), cons.ATTR_RACE: ('Race', 'race'),
+                   cons.ATTR_ETHNICITY: ('Ethnicity', 'ethn'), cons.ATTR_LOCATION: ('Country', 'country'),
+                   cons.ATTR_PRODUCTIVITY: ('# works', r'{\#}works'), cons.ATTR_INFLUENCE: ('# citations', r'{\#}cit'),
+                   cons.ATTR_COLLABORATION: ('# coauthors', r'{\#}coauth')}
+_SOCIAL_HEADERS = {cons.PARITY: ('Par.', HIGHER), cons.DIVERSITY: ('Div.', HIGHER), cons.POPULARITY: ('Pop.', NEUTRAL)}
+for _kind, (_head, _direction) in _SOCIAL_HEADERS.items():
+    _attributes = cons.POPULARITY_ATTRIBUTES if _kind == cons.POPULARITY else cons.SOCIAL_METRIC_ATTRIBUTES
+    for _key, _attribute in zip(cons.social_metric_keys(_kind, _attributes), _attributes):
+        _short, _sub = ATTRIBUTE_NAMES[_attribute]
+        METRICS[_key] = Metric(_key, f"{_head}$_{{{_sub}}}$", _direction, cons.METRIC_SOCIAL, _kind, short=_short)
+METRICS['connectedness'] = Metric('connectedness', 'Coh.$_{conn}$', NEUTRAL, cons.METRIC_SOCIAL, 'cohesion', short='Connect.')
+METRICS['similarity'] = Metric('similarity', 'Coh.$_{sim}$', NEUTRAL, cons.METRIC_SOCIAL, 'cohesion', short='Similar.')
+METRICS['locality'] = Metric('locality', 'Locality', NEUTRAL, cons.METRIC_SOCIAL, 'locality', short='Locality', narrow='Loc.')
 # Size-adjusted social metrics (metrics/expected.py): <key>_adj = observed - expected under a random recommender;
 # group <group>_adj (so 'parity' still selects the raw ones); differences, so scaled to the data
-ADJ_SUFFIX = '_adj'
-EXPECTED_SUFFIX = '_expected'                  # value of a random recommender of the same n (stored, not a metric)
 
 
 def adjusted_label(label: str) -> str:
@@ -88,21 +82,20 @@ def adjusted_label(label: str) -> str:
     return label.replace('$_{', '$^{adj}_{') if '$_{' in label else label + '$^{adj}$'
 
 
-for _key in [k for k, m in METRICS.items() if m.family == 'social']:
+for _key in [k for k, m in METRICS.items() if m.family == cons.METRIC_SOCIAL]:
     _m = METRICS[_key]
-    METRICS[_key + ADJ_SUFFIX] = Metric(_key + ADJ_SUFFIX, adjusted_label(_m.label), _m.direction, 'social',
-                                        _m.group + ADJ_SUFFIX, _m.decimals, None, _m.short,
+    METRICS[_key + cons.ADJ_SUFFIX] = Metric(_key + cons.ADJ_SUFFIX, adjusted_label(_m.label), _m.direction, cons.METRIC_SOCIAL,
+                                        _m.group + cons.ADJ_SUFFIX, _m.decimals, None, _m.short,
                                         adjusted_label(_m.narrow) if _m.narrow else '')
 # Default columns of each family (the figures of the paper); social metrics are added with step 9
 COLUMN_SETS = cons.METRIC_COLUMN_SETS          # named column sets: all, technical, factuality, social, parity, paper, ...
-FAMILY_DEFAULTS = COLUMN_SETS                    # (old name)
 _unknown = sorted({k for keys in COLUMN_SETS.values() for k in keys} - set(METRICS))
 if _unknown:
     raise ValueError(f"METRIC_COLUMN_SETS (utils/constants.py) names unknown metrics: {_unknown}")
 CONFIG_METRICS = ['validity', 'refusals', 'behaviour_consistency', 'format_consistency', 'recommendation_consistency']
-RESPONSE_METRICS = ['duplicates', 'k_ratio'] + [f"factuality_{level}" for level in tm.LEVELS]
-SOCIAL_METRICS = [k for k, m in METRICS.items() if m.family == 'social']
-SOCIAL_EXPECTED = [k + EXPECTED_SUFFIX for k in SOCIAL_METRICS if not k.endswith(ADJ_SUFFIX)]   # RQ3 adj ranges
+RESPONSE_METRICS = ['duplicates', 'k_balance'] + [f"factuality_{level}" for level in tm.LEVELS]
+SOCIAL_METRICS = [k for k, m in METRICS.items() if m.family == cons.METRIC_SOCIAL]
+SOCIAL_EXPECTED = [k + cons.EXPECTED_SUFFIX for k in SOCIAL_METRICS if not k.endswith(cons.ADJ_SUFFIX)]   # RQ3 adj ranges
 
 
 def use_study_ethnicity(attribute: str) -> List[str]:
@@ -118,14 +111,14 @@ def use_study_ethnicity(attribute: str) -> List[str]:
 
 def adjusted_keys(keys: Sequence[str]) -> List[str]:
     """The keys with every social metric replaced by its size-adjusted version (<key>_adj); others unchanged."""
-    return [k + ADJ_SUFFIX if k in METRICS and METRICS[k].family == 'social' and not k.endswith(ADJ_SUFFIX)
-            and k + ADJ_SUFFIX in METRICS else k for k in keys]
+    return [k + cons.ADJ_SUFFIX if k in METRICS and METRICS[k].family == cons.METRIC_SOCIAL and not k.endswith(cons.ADJ_SUFFIX)
+            and k + cons.ADJ_SUFFIX in METRICS else k for k in keys]
 
 
 def _adjusted_item(item: str) -> str:
     """One selection item size-adjusted: a set / subgroup name -> '<name>_adj' (if it exists), a key -> '<key>_adj'."""
-    if item + ADJ_SUFFIX in COLUMN_SETS or any(m.group == item + ADJ_SUFFIX for m in METRICS.values()):
-        return item + ADJ_SUFFIX
+    if item + cons.ADJ_SUFFIX in COLUMN_SETS or any(m.group == item + cons.ADJ_SUFFIX for m in METRICS.values()):
+        return item + cons.ADJ_SUFFIX
     return adjusted_keys([item])[0]
 
 
@@ -145,7 +138,7 @@ def selection_name(selection) -> str:
     """File-name part of a column selection, with '_adj' moved to the END so a figure and its size-adjusted twin sort
     together: 'paper' -> 'paper', 'paper_adj' -> 'paper' + '_adj' (the caller appends the rest before it)."""
     base, adjusted = split_adjusted(selection)
-    return base + (ADJ_SUFFIX if adjusted else '')
+    return base + (cons.ADJ_SUFFIX if adjusted else '')
 
 
 def _items(selection) -> List[str]:
@@ -158,10 +151,10 @@ def split_adjusted(selection, exclude=None) -> tuple:
     if selection is None:
         return 'all', False
     items = _items(selection)
-    adjusted = any(k.endswith(ADJ_SUFFIX) for k in items)
-    name = '-'.join(k.removesuffix(ADJ_SUFFIX) for k in items)
+    adjusted = any(k.endswith(cons.ADJ_SUFFIX) for k in items)
+    name = '-'.join(k.removesuffix(cons.ADJ_SUFFIX) for k in items)
     if exclude:
-        name += '-no-' + '-'.join(k.removesuffix(ADJ_SUFFIX) for k in _items(exclude))
+        name += '-no-' + '-'.join(k.removesuffix(cons.ADJ_SUFFIX) for k in _items(exclude))
     return name, adjusted
 
 
@@ -183,7 +176,7 @@ def select_metrics(selection: str | Sequence[str], adjusted: bool = False,
         keys = adjusted_keys(keys)
     if exclude:
         drop = {k for item in _items(exclude) for k in _expand(item)}
-        keys = [k for k in keys if k not in drop and k.removesuffix(ADJ_SUFFIX) not in drop]
+        keys = [k for k in keys if k not in drop and k.removesuffix(cons.ADJ_SUFFIX) not in drop]
     unknown = [k for k in keys if k not in METRICS]
     if unknown:
         raise ValueError(f"Unknown metrics {unknown}; known: {list(METRICS)}")
@@ -202,35 +195,41 @@ class RowGroup:
 
 
 MODEL_ATTRIBUTES = {   # column of the model metadata -> (title, levels, labels)
-    'access': ('Access', ['open-weight', 'proprietary'], ['Open', 'Proprietary']),
-    'size': ('Size', ['T', 'S', 'M', 'L', 'XL'], ['Tiny', 'Small', 'Medium', 'Large', 'XL']),
-    'reasoning': ('Reasoning', [True, False], ['True', 'False']),
-    'origin': ('Origin', ['USA', 'FRA', 'CHN', 'ARE'], ['USA', 'FRA', 'CHN', 'ARE']),
+    cons.MODEL_ACCESS: ('Access', ['open-weight', 'proprietary'], ['Open', 'Proprietary']),
+    cons.MODEL_SIZE: ('Size', ['T', 'S', 'M', 'L', 'XL'], ['Tiny', 'Small', 'Medium', 'Large', 'Extra large']),
+    cons.MODEL_REASONING: ('Reasoning', [True, False], ['Yes', 'No']),
+    cons.MODEL_ORIGIN: ('Origin', ['USA', 'FRA', 'CHN', 'ARE'], ['USA', 'FRA', 'CHN', 'ARE']),
 }
 PROMPT_TITLES = {cons.VAR_LANGUAGE: 'Language', cons.VAR_LOCATION: 'Location', cons.VAR_ROLE: 'Role', cons.VAR_SUBFIELD: 'Subfield',
-                 cons.VAR_K: 'K', cons.VAR_FIELD: 'Field', cons.VAR_SENIORITY: 'Seniority'}   # display titles
+                 cons.VAR_K: 'k', cons.VAR_FIELD: 'Field', cons.VAR_SENIORITY: 'Seniority'}   # display titles
 PROMPT_LABELS = {'Director/Recruiter': 'Recruiter', 'PhD student': 'Student', 'Computer Science': 'Computer Sc.'}
-PERSONA, CONTEXT = 'persona', 'context'
+
+
+def level_label(value) -> str:
+    """Display label of a prompt-variable value: PROMPT_LABELS, else lower-case values capitalised ('english' ->
+    'English'), others as they are ('Computer Science', 'US')."""
+    text = str(value)
+    return PROMPT_LABELS.get(text, text.capitalize() if text.islower() else text)
 
 
 def model_rows(models: Sequence[str], labels: Optional[Dict[str, str]] = None) -> List[RowGroup]:
     """One block with one row per model (in the given order)."""
     labels = labels or {}
-    return [RowGroup('', cons.COL_MODEL, list(models), [labels.get(m, m) for m in models], 'model')]
+    return [RowGroup('', cons.COL_MODEL, list(models), [labels.get(m, m) for m in models], cons.FAMILY_MODEL)]
 
 
 def model_family_rows(models: Sequence[str], metadata: Optional[pd.DataFrame] = None,
                       labels: Optional[Dict[str, str]] = None) -> List[RowGroup]:
     """One block per model family (metadata 'family', in the order the families first appear in `models`), one row
-    per model, each family in its own colour."""
+    per model; every row in the model colour (the blocks are titled and separated by rules)."""
     metadata = load_model_metadata() if metadata is None else metadata
-    family_of = dict(zip(metadata[cons.COL_MODEL], metadata['family']))
+    family_of = dict(zip(metadata[cons.COL_MODEL], metadata[cons.MODEL_FAMILY]))
     labels = labels or {}
     families: Dict[str, List[str]] = {}
     for model in models:
         families.setdefault(family_of.get(model, 'other'), []).append(model)
-    return [RowGroup(family, cons.COL_MODEL, members, [labels.get(m, m) for m in members], f"family:{i}")
-            for i, (family, members) in enumerate(families.items())]
+    return [RowGroup(family, cons.COL_MODEL, members, [labels.get(m, m) for m in members], cons.FAMILY_MODEL)
+            for family, members in families.items()]
 
 
 def attribute_rows(attributes: Sequence[str] = tuple(MODEL_ATTRIBUTES)) -> List[RowGroup]:
@@ -242,10 +241,8 @@ def prompt_rows(variables: Sequence[str] = tuple(v for v in cons.CONFIG_VARIABLE
     groups = []
     for v in variables:
         levels = list(cons.VARIABLE_VALUES[v])
-        labels = [PROMPT_LABELS.get(str(x), x.capitalize() if isinstance(x, str) and x.islower() else str(x))
-                  for x in levels]
-        groups.append(RowGroup(PROMPT_TITLES.get(v, v), v, levels, labels,
-                               PERSONA if v in cons.PERSONA_VARIABLES else CONTEXT))
+        groups.append(RowGroup(PROMPT_TITLES.get(v, v), v, levels, [level_label(x) for x in levels],
+                               cons.variable_family(v)))
     return groups
 
 
@@ -314,7 +311,6 @@ def estimate(configs: pd.DataFrame, rows: Sequence[RowGroup], metrics: Sequence[
     missing = [k for k in keys if k not in configs]
     if missing:
         raise ValueError(f"Metrics not in the configuration table: {missing}")
-    alpha = (1 - confidence) / 2
     out = []
     for group in rows:
         for level, label in zip(group.levels, group.labels):
@@ -334,7 +330,7 @@ def estimate(configs: pd.DataFrame, rows: Sequence[RowGroup], metrics: Sequence[
                     else:
                         picks = rng.integers(0, len(per_model), size=(n_boot, len(per_model)))
                         boot = np.nanmean(draws[picks, np.arange(n_boot)[:, None], :], axis=1)
-                    low, high = np.nanquantile(boot, [alpha, 1 - alpha], axis=0)
+                    low, high = percentile_ci(boot, confidence, axis=0, skipna=True)
             for i, key in enumerate(keys):
                 out.append({'group': group.title, 'color_key': group.color_key, 'row': level, 'label': label,
                             'metric': key, 'mean': point[i], 'ci_low': low[i], 'ci_high': high[i],

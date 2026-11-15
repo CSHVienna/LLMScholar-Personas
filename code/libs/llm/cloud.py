@@ -26,7 +26,11 @@ from llm.store import ResponseStore
 from utils import constants as cons
 from utils import ios
 
-PROVIDER_MODULES = {cons.SOURCE_GPT: 'llm.openai', cons.SOURCE_GEMINI: 'llm.gemini'}
+# A provider module (llm/gpt.py, llm/gemini.py) has: PROMPT_ID_KEY (the prompt id field of a request / answer line),
+# make_client(api_key), batch_request_line(api_name, prompt_id, prompt), submit_batch(client, requests_path, api_name,
+# description) -> {'job_id', 'input_file_id'}, batch_status(client, job_id) -> ('done' | 'failed' | 'running',
+# details), download_batch(client, job_id) -> JSONL text, finish_batch(client, job_id); optional BATCH_MAX_REQUESTS
+PROVIDER_MODULES = {cons.SOURCE_GPT: 'llm.gpt', cons.SOURCE_GEMINI: 'llm.gemini'}
 
 
 def provider(api: str) -> ModuleType:
@@ -173,7 +177,12 @@ def prepare_batches(store: ResponseStore, prompts: List[dict], repetitions: int,
 
 def merge_output(store: ResponseStore, files: BatchFiles, text: str) -> int:
     """Keep the downloaded output next to the requests, add its answers to the response file, archive the
-    batch in ``done/``. Returns the number of answers merged."""
+    batch in ``done/``. Returns the number of answers merged.
+
+    TO CHECK (code review 2026-11-13, R4): Gemini writes failed requests into the output file (a line with 'error', no
+    'response'): they are stored as answers, tagged invalid, and use up a repetition. OpenAI writes them to a
+    separate error file that is never downloaded, so they are asked again by the next prepare. Decide one rule for
+    both (skip error lines, or store both and document it)."""
     files.responses.write_text(text, encoding='utf-8')
     answers = parse_output(store.model.api, text)
     for prompt_id, answer in answers:

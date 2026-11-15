@@ -21,7 +21,8 @@ import shutil
 from pathlib import Path
 
 from groundtruth import db
-from groundtruth.authorships import check_params, chunk_dir, n_chunks, write_chunk
+from groundtruth.authorships import chunk_dir, n_chunks, write_chunk
+from utils.batch import check_params
 from utils import batch
 from utils import constants as cons
 from utils import ios

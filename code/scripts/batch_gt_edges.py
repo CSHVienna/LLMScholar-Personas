@@ -16,7 +16,8 @@ import json
 from pathlib import Path
 
 from groundtruth import db
-from groundtruth.authorships import PARAMS_FILE, missing_chunks
+from groundtruth.authorships import missing_chunks
+from utils.batch import PARAMS_FILE
 from groundtruth.coauthorship import write_edges_bucket
 from utils import batch
 from utils import constants as cons

@@ -138,7 +138,7 @@ class TestCorrection(unittest.TestCase):
 
     def test_sesoi_per_metric(self):
         self.assertEqual(ix.sesoi('validity'), 0.05)
-        self.assertEqual(ix.sesoi('k_ratio'), 0.10)
+        self.assertEqual(ix.sesoi('k_balance'), 0.10)
         self.assertEqual(ix.sesoi('parity_gender_adj'), 0.05)
 
     def test_screening_blocks(self):
@@ -163,21 +163,28 @@ class TestFigures(unittest.TestCase):
         cls.table, cls.cells = ix.flag(pd.concat(tables, ignore_index=True)), pd.concat(cells, ignore_index=True)
 
     def test_heatmap_and_cells(self):
+        from matplotlib.colors import to_rgb
+        from viz import constants as viscons
         from viz import interaction_plots as ipl
         fig = ipl.plot_interaction_heatmap(self.table, ['validity', 'locality_adj'])
         self.assertGreater(len(fig.axes), 1)
         plt.close(fig)
         for block in ['language:location', 'model:k', 'size:k']:
             fig = ipl.plot_interaction_cells(self.cells, block, ['validity', 'locality_adj'])
-            self.assertEqual(len(fig.axes), 3)                 # 2 panels + colour bar (legend)
+            self.assertEqual(len(fig.axes), 2)                 # 2 panels
+            legend = fig.legends[0]                            # better / worse / |deviation|, as the RQ2 heatmap
+            self.assertEqual([p.get_facecolor()[:3] for p in legend.get_patches()],
+                             [to_rgb(c) for c in (viscons.COLOR_BETTER, viscons.COLOR_WORSE, viscons.COLOR_NO_DIRECTION)])
             plt.close(fig)
 
     def test_figure_names(self):
         from viz import interaction_plots as ipl
-        self.assertEqual(ipl.interaction_figure_name('heatmap', metrics='all_adj'), 'interactions_heatmap_omega2_all_adj')
-        self.assertEqual(ipl.interaction_figure_name('cells', 'language:location', ['validity', 'duplicates']),
-                         'interactions_cells_language-location_validity-duplicates')
-        self.assertEqual(ipl.block_label('model:k', True), '* LLM × K')
+        from viz.names import interaction_figure_name
+        self.assertEqual(interaction_figure_name('heatmap', metrics='all_adj'), 'interactions_omega2_all_heatmap_adj')
+        self.assertEqual(interaction_figure_name('cells', 'language:location', ['validity', 'duplicates']),
+                         'interactions_language-location_validity-duplicates_cells')
+        self.assertEqual(interaction_figure_name('cells', 'model:k', 'flagged'), 'interactions_model-k_flagged_cells')
+        self.assertEqual(ipl.block_label('model:k', True), '* LLM × k')
 
 
 class TestCellsGrid(unittest.TestCase):

@@ -8,6 +8,7 @@ Run from the project root:
 import sys
 import tempfile
 import unittest
+from typing import Dict
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -44,12 +45,50 @@ def people(n_models=3, seed=0):
     return pd.DataFrame(rows)
 
 
+
+# --- reference implementation of the drift (resamples the people table; flows.drift uses per-model counts) ---
+def drift_point(people: pd.DataFrame, codes: Dict[str, str]) -> pd.DataFrame:
+    known = people[people['country'] != cons.UNKNOWN]
+    rows = []
+    for location, code in codes.items():
+        prompted = known[known[cons.VAR_LOCATION] == location]
+        others = known[known[cons.VAR_LOCATION] != location]
+        share = float((prompted['country'] == code).mean()) if len(prompted) else np.nan
+        baseline = float((others['country'] == code).mean()) if len(others) else np.nan
+        rows.append({'location': location, 'country': code, 'n': len(prompted), 'share': share, 'baseline': baseline,
+                     'lift': share / baseline if baseline and baseline > 0 else np.nan})
+    return pd.DataFrame(rows)
+
+
+def drift_slow(people: pd.DataFrame, n_boot: int = cons.DEFAULT_BOOTSTRAP_SAMPLES, seed: int = cons.DEFAULT_SEED,
+               confidence: float = cons.DEFAULT_CONFIDENCE) -> pd.DataFrame:
+    """Reference implementation of flows.drift: resamples the people table itself (slow)."""
+    codes = fl.location_codes(sorted(people[cons.VAR_LOCATION].astype(str).unique()))
+    point = drift_point(people.assign(**{cons.VAR_LOCATION: people[cons.VAR_LOCATION].astype(str)}), codes)
+    groups = {m: g for m, g in people.groupby(cons.COL_MODEL, observed=True)}
+    models = list(groups)
+    rng = np.random.default_rng(seed)
+    draws = []
+    for _ in range(n_boot):
+        sample = pd.concat([groups[m] for m in rng.choice(models, size=len(models), replace=True)], ignore_index=True)
+        draws.append(drift_point(sample.assign(**{cons.VAR_LOCATION: sample[cons.VAR_LOCATION].astype(str)}), codes))
+    alpha = (1 - confidence) / 2                       # written out: independent of utils/stats
+    if draws:
+        boot = pd.concat(draws, ignore_index=True)
+        for name in ('share', 'baseline', 'lift'):
+            q = boot.groupby('location')[name].quantile([alpha, 1 - alpha]).unstack()
+            point[f"{name}_ci_low"] = point['location'].map(q[alpha])
+            point[f"{name}_ci_high"] = point['location'].map(q[1 - alpha])
+    point['n_models'] = len(models)
+    return point
+
+
 class TestPeopleTable(unittest.TestCase):
     def test_attributes_from_requested_field_with_fallback(self):
         with tempfile.TemporaryDirectory() as tmp:
             gt = Path(tmp)
             members = pd.DataFrame([
-                {'author_id': 1, 'field': 'Physics', 'gender': 'female', 'productivity': 'H'},
+                {'author_id': 1, 'field': 'Physics', 'gender': None, 'productivity': 'H'},      # no gender label
                 {'author_id': 1, 'field': 'Biology', 'gender': 'female', 'productivity': 'L'},
                 {'author_id': 2, 'field': 'Biology', 'gender': 'male', 'productivity': 'M'}])   # not in Physics
             members['seniority'] = ['senior', 'senior', 'junior']                # the person's own class
@@ -67,6 +106,7 @@ class TestPeopleTable(unittest.TestCase):
                                     cons.DEFAULT_VALID_REC_TAGS).set_index('author_id')
             self.assertEqual(sorted(table.index), [1, 2])                       # the unmatched name is not a person
             self.assertEqual(table.loc[1, 'productivity'], 'H')                 # requested field's row
+            self.assertEqual(table.loc[1, 'gender'], cons.UNKNOWN)              # a member: no fallback for a missing value
             self.assertEqual((table.loc[2, 'gender'], table.loc[2, 'productivity']), ('male', 'M'))   # fallback row
             self.assertEqual(table.loc[1, 'location'], 'Germany')               # prompt variables kept
             self.assertEqual((table.loc[1, 'seniority'], table.loc[2, fl.AUTHOR_SENIORITY]), ('senior', 'junior'))
@@ -81,12 +121,12 @@ class TestFlows(unittest.TestCase):
         self.assertIn('unknown', set(with_unknown['target']))
         top = fl.flow_table(people(), 'location', 'country', top=2)
         self.assertEqual(len(set(top['target'])), 3)                        # 2 countries + other
-        self.assertIn(fl.OTHER, set(top['target']))
+        self.assertIn(cons.OTHER, set(top['target']))
 
     def test_drift_fast_equals_reference(self):
         p = people()
         fast = fl.drift(p, n_boot=40, seed=3)
-        slow = fl.drift_slow(p, n_boot=40, seed=3)
+        slow = drift_slow(p, n_boot=40, seed=3)
         pd.testing.assert_frame_equal(fast.reset_index(drop=True), slow.reset_index(drop=True), check_dtype=False)
         counts = fl.drift_counts(p)
         pd.testing.assert_frame_equal(fl.drift(None, n_boot=40, seed=3, counts=counts), fast, check_dtype=False)
@@ -94,7 +134,7 @@ class TestFlows(unittest.TestCase):
         extra = p.iloc[:3].assign(**{cons.COL_MODEL: 'zzz-model', 'country': 'unknown'})
         q = pd.concat([p, extra], ignore_index=True)
         pd.testing.assert_frame_equal(fl.drift(q, n_boot=25, seed=1).reset_index(drop=True),
-                                      fl.drift_slow(q, n_boot=25, seed=1).reset_index(drop=True), check_dtype=False)
+                                      drift_slow(q, n_boot=25, seed=1).reset_index(drop=True), check_dtype=False)
 
     def test_drift(self):
         d = fl.drift(people(), n_boot=30).set_index('location')
@@ -105,7 +145,7 @@ class TestFlows(unittest.TestCase):
             fl.drift(people().assign(location='Atlantis'), n_boot=0)
 
     def test_plots(self):
-        from viz import flow_plots as fp
+        from viz import flow_plots as fp, labels, palette
         p = people().assign(origin=lambda d: np.where(d[cons.COL_MODEL] == 'm0', 'USA', 'CHN'))
         fig = fp.plot_flows(p, [('location', 'gender'), ('k', 'ethnicity'), ('origin', 'country')])
         self.assertEqual(len(fig.axes), 3)
@@ -119,20 +159,20 @@ class TestFlows(unittest.TestCase):
         self.assertEqual(len(fig.axes), 1)
         countries = fp.display_table(p, 'location', 'country', False)
         self.assertTrue({'DE', 'JP', 'CA'} <= set(countries['target']))       # prompt countries never pooled
-        order, colors = fp.target_order_colors('country', ['US', 'JP', 'DE', 'GB'])
+        order, colors = palette.target_order_colors('country', ['US', 'JP', 'DE', 'GB'])
         self.assertEqual(order[:2], ['DE', 'JP'])                               # prompt countries first (design order)
-        order, colors = fp.target_order_colors('gender', ['female', 'male', 'other'], ['male', 'neutral', 'female'])
+        order, colors = palette.target_order_colors('gender', ['female', 'male', 'other'], ['male', 'neutral', 'female'])
         self.assertEqual(order, ['male', 'female', 'other'])
         self.assertNotEqual(colors['male'], colors['female'])
         ethnicity = fp.display_table(p, 'location', 'ethnicity', False)        # classes outside the shown set pooled
         self.assertEqual(set(ethnicity['target']), {'british', 'east_asian', 'other'})
-        order, colors = fp.target_order_colors('ethnicity', ['british', 'other', 'east_asian'])
+        order, colors = palette.target_order_colors('ethnicity', ['british', 'other', 'east_asian'])
         self.assertEqual(order, ['east_asian', 'british', 'other'])              # fixed order of the shown classes
-        _, alone = fp.target_order_colors('ethnicity', ['british'])
+        _, alone = palette.target_order_colors('ethnicity', ['british'])
         self.assertEqual(alone['british'], colors['british'])                    # the colour follows the class
-        order, colors = fp.target_order_colors('race', ['white', 'asian', 'other'])
+        order, colors = palette.target_order_colors('race', ['white', 'asian', 'other'])
         self.assertEqual(order, ['asian', 'white', 'other'])
-        self.assertEqual(fp.class_label('ethnicity', 'east_asian'), 'East asian')
+        self.assertEqual(labels.class_label('ethnicity', 'east_asian'), 'East Asian')
 
 
 class TestStudyTargets(unittest.TestCase):

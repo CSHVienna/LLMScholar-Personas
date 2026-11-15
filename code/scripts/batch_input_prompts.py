@@ -55,7 +55,8 @@ def run(language: str, output_dir: str, combination_id: int | None, overwrite: b
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate all prompts of each language.")
     parser.add_argument("-l", "--languages", nargs='+', choices=cons.LANGUAGES, default=cons.LANGUAGES)
-    parser.add_argument("-o", "--output-dir", default=cons.DEFAULT_CONTEXT_DIR, help="Folder with <language>/ parameters.")
+    parser.add_argument("-o", "--output_dir", "--output-dir", default=cons.DEFAULT_CONTEXT_DIR,
+                        help="Folder with <language>/ parameters.")
     parser.add_argument("-c", "--combination_id", type=int, default=None, help="Show this combination.")
     parser.add_argument("--overwrite", action="store_true", help="Rewrite existing prompt files.")
     return parser

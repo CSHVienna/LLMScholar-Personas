@@ -2,7 +2,7 @@
 Step A.2: name index over ALL OpenAlex authors of one bucket (display name + alternative names).
 
 One row per (author, normalised name); names are cleaned (utils.text.clean_text) and normalised exactly like the
-recommended names (responses.recommendations.normalize_tokens: no case / accents, transliterated):
+recommended names (utils.names.normalize_tokens: no case / accents, transliterated):
     name_key        all name tokens, sorted: the same key as `name_key` of the recommendations (exact matching = join)
     name_key_short  first + last token, sorted (e.g. 'John A. Smith' -> 'john smith'); NULL for 1-token names
     name_norm       the tokens in written order ('john a smith'; for fuzzy scores, B.6a)
@@ -24,7 +24,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from groundtruth.db import is_person_sql
-from responses.recommendations import normalize_tokens, split_full_name
+from utils.names import normalize_tokens, split_full_name
 from utils.text import clean_text
 
 NAME_INDEX_SCHEMA = pa.schema([('name_key', pa.string()), ('name_key_short', pa.string()),

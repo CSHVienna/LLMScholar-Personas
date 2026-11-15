@@ -1,5 +1,5 @@
 """
-Unit tests for viz/figures.save_figure (title rule, main vs. si/ folder) and the RQ figure names (viz/rq_plots.rq_figure_name).
+Unit tests for viz/figures.save_figure (title rule, main vs. si/ folder) and the figure names (viz/names.py).
 
 Run from the project root:
     python -m unittest discover -s code/tests -v
@@ -16,7 +16,7 @@ import matplotlib                                                        # noqa:
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt                                          # noqa: E402
 
-from viz import constants as viscons, figures, rq_plots                 # noqa: E402
+from viz import constants as viscons, figures, names, rq_plots                 # noqa: E402
 
 SCRATCH = PROJECT_ROOT / 'tmp' / 'tests' / 'figures'
 
@@ -75,10 +75,20 @@ class TestSaveFigureFolder(unittest.TestCase):
 
 class TestRQFigureNames(unittest.TestCase):
     def test_names(self):
-        self.assertEqual(rq_plots.rq1_figure_name('bars', 'omega2', 'paper'), 'rq1_omega2_paper_bar')
-        self.assertEqual(rq_plots.rq1_figure_name('heatmap', 'shapley_r2'), 'rq1_shapley_r2_all_heatmap')
-        self.assertEqual(rq_plots.rq2_figure_name('forest', 'contrast', ['validity', 'duplicates']),
+        self.assertEqual(names.rq1_figure_name('bar', 'omega2', 'paper'), 'rq1_omega2_paper_bar')
+        self.assertEqual(names.rq1_figure_name('heatmap', 'shapley_r2'), 'rq1_shapley-r2_all_heatmap')
+        self.assertEqual(names.rq2_figure_name('forest', 'contrast', ['validity', 'duplicates']),
                          'rq2_contrast_validity-duplicates_forest')
+        with self.assertRaises(ValueError):
+            names.rq1_figure_name('bars', 'omega2')                              # only 'bar'
+
+    def test_convention(self):
+        """<family>_<what>_<selection>_<kind>[_adj]: '_' only between parts."""
+        self.assertEqual(names.figure_name('gt', 'field_overlap'), 'gt_field-overlap')
+        self.assertEqual(names.figure_name('gt', 'population', None, 'pct'), 'gt_population_pct')
+        self.assertEqual(names.metrics_figure_name('model_families', 'paper_adj'), 'metrics_model-families_paper_bar_adj')
+        for name in viscons.PAPER_MAIN_FIGURES:
+            self.assertLessEqual(len(name.removesuffix('_adj').split('_')), 5, name)
 
 
 class TestRQ2ForestLabel(unittest.TestCase):
@@ -188,10 +198,53 @@ class TestRQ2ForestLabel(unittest.TestCase):
         self.assertEqual([m.key for m in summary.select_metrics('paper_social_adj')],
                          ['parity_ethnicity_adj', 'locality_adj', 'parity_gender_adj', 'diversity_location_adj',
                           'diversity_ethnicity_adj', 'parity_location_adj'])
-        self.assertEqual(rq_plots.rq2_figure_name('forest', 'emm', 'paper_social_adj'),
-                         'rq2_emm_paper_social_forest_adj')
-        self.assertEqual(rq_plots.rq2_figure_name('bar', 'emm', 'paper_technical'), 'rq2_emm_paper_technical_bar')
+        self.assertEqual(names.rq2_figure_name('forest', 'emm', 'paper_social_adj'),
+                         'rq2_emm_paper-social_forest_adj')
+        self.assertEqual(names.rq2_figure_name('bar', 'emm', 'paper_technical'), 'rq2_emm_paper-technical_bar')
 
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestLabels(unittest.TestCase):
+    """viz/labels.py: one name per concept in every figure."""
+
+    def test_llm_everywhere(self):
+        from analysis.influence import MODEL_FACTOR
+        from viz import labels
+        self.assertEqual(labels.variable_title(MODEL_FACTOR), 'LLM')
+        self.assertEqual(labels.variable_title('family'), 'LLM family')
+        self.assertEqual(rq_plots.rq1_rows([MODEL_FACTOR])[0].labels, ['LLM'])
+        self.assertEqual(labels.FAMILY_TITLES['model'], 'LLM')
+
+    def test_titles_and_levels(self):
+        from utils import constants as cons
+        from viz import labels
+        self.assertEqual(labels.variable_title(cons.VAR_K), 'k')
+        self.assertEqual(labels.variable_title('reasoning'), 'Reasoning')
+        self.assertEqual(labels.level_label('reasoning', True), 'Yes')
+        self.assertEqual(labels.level_label('size', 'XL'), 'Extra large')
+        self.assertEqual(labels.level_label(cons.VAR_ROLE, 'PhD student'), 'Student')
+        self.assertEqual(labels.attribute_title('gender'), 'Gender')
+        self.assertEqual(labels.attribute_title('author_seniority'), 'Seniority')
+
+    def test_class_labels(self):
+        from viz import labels
+        self.assertEqual(labels.class_label('ethnicity', 'east_asian'), 'East Asian')
+        self.assertEqual(labels.class_label('seniority', 'junior'), 'Junior')
+        self.assertEqual(labels.class_label('country', 'US'), 'US')
+        self.assertEqual(labels.class_label('country', 'other'), 'Other')
+
+    def test_metric_short_names(self):
+        from metrics import summary
+        self.assertEqual(summary.METRICS['parity_location'].short, 'Country')
+        self.assertEqual(summary.METRICS['parity_productivity'].short, '# works')
+        self.assertEqual(summary.METRICS['diversity_influence'].label, r'Div.$_{{\#}cit}$')
+        self.assertEqual(summary.METRICS['popularity_influence_adj'].label,
+                         r'Pop.$^{adj}_{{\#}cit}$')
+
+    def test_fade_rule(self):
+        from viz import labels
+        self.assertEqual(labels.fade_rule('by', 0.05), 'BY-adjusted p ≥ 0.05')
+        self.assertEqual(labels.fade_rule(None, 0.05), '95% CI includes 0')

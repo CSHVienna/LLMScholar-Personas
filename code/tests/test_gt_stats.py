@@ -105,18 +105,18 @@ class GTStatsTest(unittest.TestCase):
     def test_population_order_and_all_fields(self):
         p = gs.population(self.con, self.dir)
         self.assertEqual(p['field'].tolist()[:3], ['Physics'] * 3)          # design order: Physics before Biology
-        self.assertEqual(p['field'].iloc[-1], gs.ALL_FIELDS)
+        self.assertEqual(p['field'].iloc[-1], cons.ALL_FIELDS)
         phys = p[p['field'] == 'Physics'].set_index('seniority')['n']
         self.assertEqual(phys.to_dict(), {'junior': 2, 'mid': 1, 'senior': 2})
-        self.assertEqual(p.loc[p['field'] == gs.ALL_FIELDS, 'n'].sum(), 8)  # memberships pooled
+        self.assertEqual(p.loc[p['field'] == cons.ALL_FIELDS, 'n'].sum(), 8)  # memberships pooled
         self.assertEqual(p[p['field'] == 'Physics']['seniority'].tolist(), ['junior', 'mid', 'senior'])
 
     def test_population_by_gender(self):
         p = gs.population(self.con, self.dir, by='gender')
         phys = p[p['field'] == 'Physics'].set_index('gender')['n'].to_dict()
         self.assertEqual(phys, {'female': 1, 'neutral': 2, 'unknown': 1, 'male': 1})
-        self.assertEqual(p['field'].iloc[-1], gs.ALL_FIELDS)
-        self.assertEqual(p.loc[p['field'] == gs.ALL_FIELDS, 'n'].sum(), 8)
+        self.assertEqual(p['field'].iloc[-1], cons.ALL_FIELDS)
+        self.assertEqual(p.loc[p['field'] == cons.ALL_FIELDS, 'n'].sum(), 8)
         with self.assertRaises(ValueError):
             gs.population(self.con, self.dir, by='country')
         self.assertEqual(gt_plots.count_unit(5e6), (1e6, 'millions'))
@@ -143,7 +143,7 @@ class GTStatsTest(unittest.TestCase):
         row = q[(q['field'] == 'Physics') & (q['seniority'] == 'senior') & (q['gender'] == 'male')].iloc[0]
         self.assertEqual(row['n'], 1)
         self.assertAlmostEqual(row['q50'], 80)
-        self.assertIn(gs.ALL_FIELDS, set(q['field']))
+        self.assertIn(cons.ALL_FIELDS, set(q['field']))
         with self.assertRaises(ValueError):
             gs.bibliometric_quantiles(self.con, self.dir, by='country')
 
@@ -194,7 +194,7 @@ class GTStatsTest(unittest.TestCase):
         shares = pd.read_parquet(self.dir / 'gt_shares.parquet')
         c = gs.composition(shares, 'gender')
         self.assertTrue(np.allclose(c.sum(axis=1), 1))
-        self.assertEqual(c.index[-1][0], gs.ALL_FIELDS)
+        self.assertEqual(c.index[-1][0], cons.ALL_FIELDS)
         known = gs.composition(shares, 'gender', include_unknown=False)
         self.assertNotIn('unknown', known.columns)
         self.assertTrue(np.allclose(known.sum(axis=1), 1))
@@ -206,7 +206,7 @@ class GTStatsTest(unittest.TestCase):
 
     def test_country_ranking(self):
         r = gs.country_ranking(self.con, self.dir)
-        pooled = r[r['field'] == gs.ALL_FIELDS].set_index('country')       # each scholar once
+        pooled = r[r['field'] == cons.ALL_FIELDS].set_index('country')       # each scholar once
         self.assertEqual(pooled['n_scholars'].to_dict(), {'US': 3, 'DE': 1, 'JP': 1, 'unknown': 1})
         self.assertEqual(pooled.loc['US', 'n_works'], 61)
         self.assertEqual(pooled.loc['US', 'n_citations'], 940)
@@ -214,7 +214,7 @@ class GTStatsTest(unittest.TestCase):
         phys = r[r['field'] == 'Physics'].set_index('country')['n_scholars'].to_dict()
         self.assertEqual(phys, {'US': 3, 'DE': 1, 'unknown': 1})
         last = gs.country_ranking(self.con, self.dir, column='last_known_country')
-        self.assertEqual(last[last['field'] == gs.ALL_FIELDS].set_index('country')['n_scholars'].to_dict(),
+        self.assertEqual(last[last['field'] == cons.ALL_FIELDS].set_index('country')['n_scholars'].to_dict(),
                          {'US': 2, 'DE': 2, 'FR': 1, 'JP': 1})
         with self.assertRaises(ValueError):
             gs.country_ranking(self.con, self.dir, column='institution')
@@ -228,7 +228,7 @@ class GTStatsTest(unittest.TestCase):
         self.assertEqual(top.loc[1, 'scholars'], 'US 60.0 %')
         self.assertEqual(top.loc[4, 'scholars'], '')                       # fewer countries than top
         fig = gt_plots.plot_gt_countries(r, 'n_scholars', top=2)          # US, DE + other (1)
-        self.assertEqual([t.get_text() for t in fig.axes[0].get_xticklabels()], ['US', 'DE', 'other (1)'])
+        self.assertEqual([t.get_text() for t in fig.axes[0].get_xticklabels()], ['US', 'DE', 'Other (1)'])
         plt.close(fig)
         fig = gt_plots.plot_gt_countries(r, 'h_index_median', top=2, min_scholars=1)   # no 'other' for h-index
         self.assertEqual(len(fig.axes[0].get_xticklabels()), 2)

@@ -23,23 +23,28 @@ import hashlib
 import json
 import math
 from pathlib import Path
+from urllib.parse import quote
 from typing import Dict, List, Optional, Sequence
 
 import duckdb
 import numpy as np
 import pandas as pd
 
-from annotation.tasks import ITEM_ID, Section, stratified_sample
+from annotation.evaluation import nominal_alpha
+from annotation.tasks import ITEM_ID, STRATUM, STRATUM_SIZE, Section, payload, stratified_sample
 from groundtruth.db import sql_path
+from groundtruth.fields import field_slug
+from metrics import technical as tm
+from responses.tags import is_valid
 from utils import constants as cons
+from utils import ios
 
 MATCHING, AUTHORS = cons.ANNOTATION_TASK_MATCHING, cons.ANNOTATION_TASK_AUTHORS
 VERIFICATION_TASKS = [MATCHING, AUTHORS]
-STRATUM, STRATUM_SIZE = 'stratum', 'stratum_size'
 MAX_SHOWN = 3
+Z_95 = 1.959964                  # standard normal quantile of a two-sided 95 % interval (Wilson, weighted CI)
 OA_URL = 'https://openalex.org/A{}'
 OA_SEARCH_URL = 'https://api.openalex.org/authors?search={}'
-REC_ID_COLUMNS = cons.RESPONSE_ID_COLUMNS + [cons.COL_REC_INDEX]
 PROFILE_COLUMNS = ['author_id', 'display_name', 'orcid', 'first_pub_year', 'last_pub_year', 'n_works', 'n_citations',
                    'h_index', 'n_works_topic', 'country', 'last_known_country']
 
@@ -128,12 +133,12 @@ def groups(task: str) -> Dict[str, List[str]]:
 # -----------------------------------------------------------------------------
 # Profiles (what the annotator sees of an OA person)
 # -----------------------------------------------------------------------------
-FIELD_COLUMNS = [c for c in ['mathematics', 'computer_science', 'physics', 'biology', 'sociology', 'psychology']]
+FIELD_COLUMNS = [field_slug(f) for f in cons.VARIABLE_VALUES[cons.VAR_FIELD]]   # A.1 columns works_<slug>
 
 
 def load_profiles(con: duckdb.DuckDBPyConnection, authors_dir: Path | str, author_ids: Sequence[int]) -> pd.DataFrame:
     """A.1 rows (bibliometrics, field work counts, country) of the given authors."""
-    ids = sorted({int(a) for a in author_ids if a is not None and not (isinstance(a, float) and math.isnan(a))})
+    ids = sorted({int(a) for a in author_ids if not pd.isna(a)})
     if not ids:
         return pd.DataFrame(columns=PROFILE_COLUMNS)
     con.register('wanted_ids', pd.DataFrame({'author_id': ids}))
@@ -148,21 +153,21 @@ def profile_text(p: pd.Series, reference_year: int = cons.GT_REFERENCE_YEAR) -> 
     if 'author_id' not in p.index:
         p = pd.concat([pd.Series({'author_id': p.name}), p])
     def num(v):
-        return '–' if v is None or (isinstance(v, float) and math.isnan(v)) else f"{int(v):,}"
+        return '–' if pd.isna(v) else f"{int(v):,}"
     lines = [f"{p.get('display_name') or '(no display name)'}", f"OpenAlex: {OA_URL.format(int(p['author_id']))}"]
     if isinstance(p.get('orcid'), str) and p['orcid']:
         orcid = p['orcid'] if p['orcid'].startswith('http') else f"https://orcid.org/{p['orcid']}"
         lines.append(f"ORCID: {orcid}")
     first, last = p.get('first_pub_year'), p.get('last_pub_year')
-    if first is not None and not (isinstance(first, float) and math.isnan(first)):
-        last_text = '–' if last is None or (isinstance(last, float) and math.isnan(last)) else str(int(last))
+    if not pd.isna(first):
+        last_text = '–' if pd.isna(last) else str(int(last))
         lines.append(f"Publications: {int(first)}–{last_text} (academic age {reference_year - int(first)} in {reference_year})")
     lines.append(f"Works: {num(p.get('n_works'))} · citations: {num(p.get('n_citations'))} · h-index: {num(p.get('h_index'))}")
     total = p.get('n_works_topic')
     shares = []
     for f in FIELD_COLUMNS:
         n = p.get(f"works_{f}")
-        if total and n and not (isinstance(n, float) and math.isnan(n)) and n > 0:
+        if total and n and not pd.isna(n) and n > 0:
             shares.append((n / total, f.replace('_', ' ').title(), int(n)))
     if shares:
         lines.append('Works in the study fields: ' + ', '.join(f"{name} {int(n)} ({s:.0%})" for s, name, n in sorted(shares, reverse=True)))
@@ -172,7 +177,6 @@ def profile_text(p: pd.Series, reference_year: int = cons.GT_REFERENCE_YEAR) -> 
 
 
 def search_link(first: Optional[str], last: Optional[str]) -> str:
-    from urllib.parse import quote
     return OA_SEARCH_URL.format(quote(f"{first or ''} {last or ''}".strip()))
 
 
@@ -209,18 +213,16 @@ def sample_matching(matching_dir: Path | str, candidates_dir: Path | str, author
     """One row per sampled distinct (rec_name, field, seniority) among the VALID recommendations (tags all in
     valid_rec_tags, as in the metrics; all if no metadata folder is given): identifiers of one occurrence, stratum,
     stratum size (distinct names in the population), and the sections shown."""
-    from utils import ios
     params = json.loads((Path(matching_dir) / '_params.json').read_text()) if (Path(matching_dir) / '_params.json').exists() else {}
-    columns = REC_ID_COLUMNS + ['first_name', 'last_name', 'rec_name', 'match_rule', 'author_id', 'author_id_field',
+    columns = cons.REC_ID_COLUMNS + ['first_name', 'last_name', 'rec_name', 'match_rule', 'author_id', 'author_id_field',
                                 'author_id_seniority', 'matched_name']
     recs = ios.load_parquet_folder(matching_dir, columns, models)
     recs = recs[recs['rec_name'].notna()].copy()
     if recommendations_metadata_dir is not None:
-        from responses.tag_stats import is_valid
-        tags = ios.load_parquet_folder(recommendations_metadata_dir, REC_ID_COLUMNS + [cons.COL_REC_TAGS], models)
+        tags = ios.load_parquet_folder(recommendations_metadata_dir, cons.REC_ID_COLUMNS + [cons.COL_REC_TAGS], models)
         valid = tags[tags[cons.COL_REC_TAGS].map(lambda t: is_valid(t, list(valid_rec_tags or cons.DEFAULT_VALID_REC_TAGS)))]
-        as_text = lambda df: df[REC_ID_COLUMNS].astype(str).agg('\x1f'.join, axis=1)
-        recs = recs[as_text(recs).isin(set(as_text(valid)))].copy()
+        valid_ids = set(tm.row_id(valid, cons.REC_ID_COLUMNS))
+        recs = recs[tm.row_id(recs, cons.REC_ID_COLUMNS).isin(valid_ids)].copy()
     recs[STRATUM] = match_stratum(recs)
     distinct = recs.drop_duplicates(['rec_name', cons.VAR_FIELD, cons.VAR_SENIORITY]).reset_index(drop=True)
     distinct[STRATUM_SIZE] = distinct[STRATUM].map(distinct[STRATUM].value_counts())
@@ -302,13 +304,12 @@ def authors_sections(row: pd.Series, profiles: pd.DataFrame, reference_year: int
 # Items file and key
 # -----------------------------------------------------------------------------
 def items_payload(task: str, sample: pd.DataFrame) -> dict:
-    items = [{ITEM_ID: row[ITEM_ID], 'sections': [s.to_dict() for s in row['sections']]} for _, row in sample.iterrows()]
-    return {'codebook': codebook(task), 'items': items, 'tag_separator': cons.TAG_SEPARATOR}
+    return payload(codebook(task), sample[ITEM_ID], sample['sections'])
 
 
 def key_table(task: str, sample: pd.DataFrame) -> pd.DataFrame:
     if task == MATCHING:
-        columns = [ITEM_ID] + REC_ID_COLUMNS + ['first_name', 'last_name', 'rec_name', 'match_rule', 'author_id',
+        columns = [ITEM_ID] + cons.REC_ID_COLUMNS + ['first_name', 'last_name', 'rec_name', 'match_rule', 'author_id',
                                                 'author_id_field', 'author_id_seniority', STRATUM, STRATUM_SIZE]
         key = sample[[c for c in columns if c in sample.columns]].copy()
         key['shown_author_ids'] = sample['shown_author_ids'].map(lambda ids: ' '.join(str(a) for a in ids))
@@ -350,7 +351,7 @@ def adjudicate_groups(answers: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=[ITEM_ID, 'group', 'label', 'is_tie', 'n_annotators'])
 
 
-def wilson(k: int, n: int, z: float = 1.959964) -> tuple:
+def wilson(k: int, n: int, z: float = Z_95) -> tuple:
     if n == 0:
         return (np.nan, np.nan)
     p = k / n
@@ -391,7 +392,7 @@ def label_rates(key: pd.DataFrame, gold: pd.DataFrame, task: str) -> pd.DataFram
                 variance += w * w * (k / n) * (1 - k / n) / n
                 weight += w
             share = weighted / weight
-            half = 1.959964 * math.sqrt(variance) / weight
+            half = Z_95 * math.sqrt(variance) / weight
             rows.append({'group': group, 'stratum': 'overall (weighted)', 'label': label, 'n': len(g),
                          'k': int((g['label'] == label).sum()), 'share': share, 'ci_low': max(0.0, share - half),
                          'ci_high': min(1.0, share + half), 'stratum_size': int(sizes.sum())})
@@ -400,7 +401,6 @@ def label_rates(key: pd.DataFrame, gold: pd.DataFrame, task: str) -> pd.DataFram
 
 def group_agreement(answers: pd.DataFrame) -> pd.DataFrame:
     """Per group: Krippendorff's alpha (nominal) over items rated by >= 2 annotators (empty if one annotator)."""
-    import krippendorff
     if answers['annotator'].nunique() < 2:
         return pd.DataFrame(columns=['group', 'krippendorff_alpha', 'n_items_multiple_annotators'])
     rows = []
@@ -408,9 +408,6 @@ def group_agreement(answers: pd.DataFrame) -> pd.DataFrame:
         codes = {l: i for i, l in enumerate(sorted(g['label'].unique()))}
         table = g.assign(code=g['label'].map(codes)).pivot_table(index='annotator', columns=ITEM_ID, values='code',
                                                                   aggfunc='first')
-        rated_twice = int((table.notna().sum(axis=0) >= 2).sum())
-        data = table.to_numpy(dtype=float)
-        alpha = krippendorff.alpha(reliability_data=data, level_of_measurement='nominal') \
-            if rated_twice and np.nanstd(data) > 0 else np.nan
+        alpha, rated_twice = nominal_alpha(table.to_numpy(dtype=float))
         rows.append({'group': group, 'krippendorff_alpha': alpha, 'n_items_multiple_annotators': rated_twice})
     return pd.DataFrame(rows)

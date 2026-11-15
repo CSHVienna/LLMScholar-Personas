@@ -24,7 +24,7 @@ from pathlib import Path
 from matching import candidates as mc
 from matching.decide import write_matches
 from groundtruth import db
-from groundtruth.authorships import check_params
+from utils.batch import check_params
 from groundtruth.fields import load_field_mapping
 from utils import batch
 from utils import analysis_config as ac

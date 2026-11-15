@@ -82,7 +82,7 @@ def run_gender(args: argparse.Namespace) -> None:
 def run_model_shard(shard: int, args: argparse.Namespace) -> str:
     """One name shard of the full-name model args.model (race / ethnicity)."""
     model = args.model
-    output_file = stages.shard_file(stages.model_dir(args.output_dir, model), shard)
+    output_file = batch.shard_file(stages.model_dir(args.output_dir, model), shard)
     if output_file.exists() and not args.overwrite:
         return f"[{model.name} shard {shard}] skipped (exists): {output_file}"
     con = db.connect(args, ':memory:')
@@ -182,7 +182,7 @@ def main() -> None:
         require_complete(all_keys, 'Keys (--stage keys)', '--stage keys')
         require_complete([gender_file(args)], 'Gender table (--stage gender)', '--stage gender')
         for model in stages.MODELS.values():
-            require_complete([stages.shard_file(stages.model_dir(args.output_dir, model), s) for s in range(args.n_shards)],
+            require_complete([batch.shard_file(stages.model_dir(args.output_dir, model), s) for s in range(args.n_shards)],
                              f"{model.name.capitalize()} shards (--stage {model.name})", f"--stage {model.name}")
         batch.run_jobs(db.buckets_of(args), run_merge, args)
     ios.printf(f"Stage {args.stage} finished")

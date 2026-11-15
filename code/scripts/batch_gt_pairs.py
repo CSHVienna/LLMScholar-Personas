@@ -18,7 +18,8 @@ import json
 from pathlib import Path
 
 from groundtruth import db
-from groundtruth.authorships import PARAMS_FILE, check_params, chunk_dir, missing_chunks
+from groundtruth.authorships import chunk_dir, missing_chunks
+from utils.batch import PARAMS_FILE, check_params
 from groundtruth.coauthorship import write_pairs_chunk
 from utils import batch
 from utils import constants as cons

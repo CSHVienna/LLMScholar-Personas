@@ -38,7 +38,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from utils import analysis_config
+from utils import analysis_config as ac
 from utils import batch
 from utils import constants as cons
 from utils import ios
@@ -87,7 +87,7 @@ def sample_recommendations(args: argparse.Namespace) -> pd.DataFrame:
 
 
 def sample_matching(args: argparse.Namespace) -> pd.DataFrame:
-    valid = analysis_config.load(args.config)['validity']['valid_rec_tags'] if args.config else cons.DEFAULT_VALID_REC_TAGS
+    valid = ac.load(args.config)['validity']['valid_rec_tags'] if args.config else cons.DEFAULT_VALID_REC_TAGS
     return verification.sample_matching(args.matching_dir, args.candidates_dir, args.authors_dir, args.per_stratum,
                                         args.max_items, args.seed, args.models, args.recommendations_metadata_dir, valid)
 

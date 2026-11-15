@@ -25,35 +25,21 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.colors import LinearSegmentedColormap, to_hex
 from matplotlib.patches import Rectangle
 
+from analysis.deviations import design_order
 from metrics import flows as fl
 from metrics import summary
 from utils import constants as cons
 from viz import constants as viscons
-from viz.metric_plots import text_size
+from viz.figures import ci, clean_axes, family_cmap, panel_grid, text_on, text_size
+from viz.labels import attribute_title, class_label, level_label, variable_title
+from viz.palette import class_hatch, pool_shown, prompt_countries, target_order_colors
 
-TARGET_TITLES = {'gender': 'perceived gender', 'race': 'perceived race', 'ethnicity': 'perceived ethnicity', 'country': 'country (latest affiliation)',
-                 fl.AUTHOR_SENIORITY: 'seniority', 'productivity': 'productivity', 'influence': 'influence',
-                 'collaboration': 'collaboration'}
-SENIORITY_ORDER = [cons.SENIORITY_JUNIOR, 'mid', cons.SENIORITY_SENIOR]
-MODEL_SOURCES = list(summary.MODEL_ATTRIBUTES) + ['family']
+MODEL_SOURCES = [*cons.MODEL_CHARACTERISTICS, cons.MODEL_FAMILY]
 
 
 # --- orders, labels, colours -------------------------------------------------------------------------------------
-def source_title(source: str) -> str:
-    if source in summary.MODEL_ATTRIBUTES:
-        return summary.MODEL_ATTRIBUTES[source][0]
-    return {'family': 'Model family', cons.COL_MODEL: 'Model'}.get(source, summary.PROMPT_TITLES.get(source, source))
-
-
-def source_family(source: str) -> str:
-    if source in MODEL_SOURCES or source == cons.COL_MODEL:
-        return 'model'
-    return summary.PERSONA if source in cons.PERSONA_VARIABLES else summary.CONTEXT
-
-
 def source_order(source: str, values: Sequence[str]) -> Tuple[List[str], List[str]]:
     """(values, labels) in the design order (prompt variables) or the order of the model characteristics."""
     present = set(map(str, values))
@@ -62,65 +48,8 @@ def source_order(source: str, values: Sequence[str]) -> Tuple[List[str], List[st
         pairs = [(str(l), lab) for l, lab in zip(levels, labels) if str(l) in present]
         rest = sorted(present - {p for p, _ in pairs})
         return [p for p, _ in pairs] + rest, [lab for _, lab in pairs] + rest
-    from analysis.deviations import design_order
     order = design_order(source, present)
-    return order, [summary.PROMPT_LABELS.get(v, v.capitalize() if v.islower() else v) for v in order]
-
-
-def _ramp(colors: Sequence[str], n: int) -> List[str]:
-    cmap = LinearSegmentedColormap.from_list('ramp', list(colors))
-    return [to_hex(cmap(x)) for x in (np.linspace(0, 1, n) if n > 1 else [0.5])]
-
-
-def target_order_colors(target: str, classes: Sequence[str], gender_labels: Optional[Sequence[str]] = None,
-                        bin_labels: Optional[Sequence[str]] = None) -> Tuple[List[str], Dict[str, str]]:
-    """Order and colour of the classes of a person attribute ('other' and 'unknown' last, in grey)."""
-    present = [c for c in dict.fromkeys(map(str, classes))]
-    special = [c for c in (fl.OTHER, fl.UNKNOWN) if c in present]
-    rest = [c for c in present if c not in special]
-    if target == 'gender':
-        scheme = list(gender_labels or cons.DEFAULT_GENDER_LABELS)
-        order = [c for c in scheme if c in rest] + sorted(set(rest) - set(scheme))
-        full = _ramp(viscons.FLOW_DIVERGING, len(scheme))
-        colors = {c: full[scheme.index(c)] if c in scheme else viscons.FLOW_OTHER_COLOR for c in order}
-    elif target in ('productivity', 'influence', 'collaboration', fl.AUTHOR_SENIORITY):
-        scheme = list(SENIORITY_ORDER if target == fl.AUTHOR_SENIORITY else bin_labels or cons.DEFAULT_GT_BIN_LABELS)
-        order = [c for c in scheme if c in rest] + sorted(set(rest) - set(scheme))
-        full = _ramp(viscons.FLOW_SEQUENTIAL, len(scheme))
-        colors = {c: full[scheme.index(c)] if c in scheme else viscons.FLOW_OTHER_COLOR for c in order}
-    elif target in ('race', 'ethnicity'):   # fixed slot per class (the same colour in every figure)
-        scheme = fl.RACE_ORDER if target == 'race' else viscons.FLOW_SHOWN_CLASSES['ethnicity']
-        order = [c for c in scheme if c in rest] + sorted(set(rest) - set(scheme))
-        palette = viscons.FLOW_CATEGORICAL
-        colors = {c: palette[scheme.index(c)] if c in scheme and scheme.index(c) < len(palette)
-                  else viscons.FLOW_OTHER_COLOR for c in order}
-    else:   # countries: the prompt countries first (design order: the same colour in every figure), then by share
-        prompt = prompt_countries()
-        order = [c for c in prompt if c in rest] + [c for c in rest if c not in prompt]
-        palette = viscons.FLOW_CATEGORICAL
-        # consecutive slots of the validated order (neighbours stay distinguishable); the prompt countries are kept in
-        # every country table (prompt_countries()), so they take the first slots: the same colour in every figure
-        colors = {c: palette[i] if i < len(palette) else viscons.FLOW_OTHER_COLOR for i, c in enumerate(order)}
-    colors.update({fl.OTHER: viscons.FLOW_OTHER_COLOR, fl.UNKNOWN: viscons.FLOW_UNKNOWN_COLOR})
-    return order + special, colors
-
-
-def class_hatch(value: str) -> dict:
-    """Extra patch style of a class: 'unknown' is hatched (its pale colour alone is too close to the surface)."""
-    return {'hatch': viscons.UNKNOWN_HATCH, 'edgecolor': viscons.UNKNOWN_HATCH_COLOR} if value == fl.UNKNOWN else {}
-
-
-def prompt_countries() -> List[str]:
-    """Country codes of the prompt locations, in the design order (kept out of 'Other' in every country table)."""
-    return [fl.LOCATION_COUNTRY[l] for l in map(str, cons.VARIABLE_VALUES[cons.VAR_LOCATION]) if l in fl.LOCATION_COUNTRY]
-
-
-def pool_shown(values: pd.Series, target: str) -> pd.Series:
-    """Classes outside viscons.FLOW_SHOWN_CLASSES[target] (e.g. the smaller ethnicities) pooled as 'other'."""
-    shown = viscons.FLOW_SHOWN_CLASSES.get(target)
-    if not shown:
-        return values
-    return values.where(values.isin(set(shown) | {fl.OTHER, fl.UNKNOWN}), fl.OTHER)
+    return order, [level_label(source, v) for v in order]
 
 
 def display_table(people: pd.DataFrame, source: str, target: str, include_unknown: bool) -> pd.DataFrame:
@@ -132,15 +61,6 @@ def display_table(people: pd.DataFrame, source: str, target: str, include_unknow
     if target in viscons.FLOW_SHOWN_CLASSES:
         people = people.assign(**{target: pool_shown(people[target].astype(str), target)})
     return fl.flow_table(people, source, target, include_unknown)
-
-
-def class_label(target: str, value: str) -> str:
-    """'east_asian' -> 'East asian'; countries and bins as they are."""
-    if value in (fl.OTHER, fl.UNKNOWN):
-        return value.capitalize()
-    if target in ('country', 'productivity', 'influence', 'collaboration'):
-        return value
-    return value.replace('_', ' ').capitalize()
 
 
 # --- one panel ---------------------------------------------------------------------------------------------------
@@ -167,7 +87,7 @@ def plot_flow(ax: plt.Axes, table: pd.DataFrame, source: str, target: str, gende
     n_source = (table.groupby('source')['n_source'].first() if n_source is None else n_source).reindex(sources)
     gap = 0.08
     w = viscons.FLOW_NODE_WIDTH
-    node_color = viscons.METRIC_BAR_COLORS.get(source_family(source), viscons.METRIC_BAR_COLORS['model'])
+    node_color = viscons.FAMILY_COLORS[cons.variable_family(source)]
 
     # left nodes: equal heights
     left_top = {s: i * (1 + gap) for i, s in enumerate(sources)}
@@ -193,11 +113,11 @@ def plot_flow(ax: plt.Axes, table: pd.DataFrame, source: str, target: str, gende
             bottom = top + h + (h_right - h) * s_curve
             emphasis = highlight is None or highlight.get(s) == t
             ax.fill_between(x, top, bottom, color=colors[t] if emphasis else viscons.FLOW_UNKNOWN_COLOR,
-                            alpha=viscons.FLOW_BAND_ALPHA if highlight is None else (0.85 if emphasis else 0.35),
+                            alpha=viscons.FLOW_BAND_ALPHA if highlight is None else (viscons.FLOW_HIGHLIGHT_ALPHA if emphasis else viscons.FLOW_FADED_ALPHA),
                             linewidth=0, **(class_hatch(t) if emphasis else {}))
             if (h >= viscons.FLOW_BAND_LABEL_MIN and highlight is None) or (highlight is not None and emphasis and h > 0):
                 ax.text(w + 0.012, y_left + h / 2, f"{h:.0%}", ha='left', va='center', fontsize=viscons.MIN_FONT_SIZE,
-                        color=viscons.METRIC_ROW_LABEL_COLOR)
+                        color=viscons.COLOR_TEXT)
             y_left += h
             right_fill[t] += h_right
     for s, label in zip(sources, source_labels):
@@ -205,7 +125,7 @@ def plot_flow(ax: plt.Axes, table: pd.DataFrame, source: str, target: str, gende
         if not left_labels:
             continue
         ax.text(-0.015, left_top[s] + 0.4, label, ha='right', va='center', fontsize='x-small',
-                color=viscons.METRIC_ROW_LABEL_COLOR)
+                color=viscons.COLOR_TEXT)
         ax.text(-0.015, left_top[s] + 0.75, f"n = {int(n_source[s]):,}", ha='right', va='center', fontsize=viscons.MIN_FONT_SIZE,
                 color=viscons.COLOR_TEXT_SECONDARY)
     mean_share = right_size / right_size.sum() if right_size.sum() else right_size
@@ -217,11 +137,11 @@ def plot_flow(ax: plt.Axes, table: pd.DataFrame, source: str, target: str, gende
         if not right_labels:
             continue
         ax.text(1.015, right_top[t] + h / 2, f"{class_label(target, t)}  {mean_share[t]:.0%}", ha='left', va='center',
-                fontsize='x-small', color=viscons.METRIC_ROW_LABEL_COLOR)
+                fontsize='x-small', color=viscons.COLOR_TEXT)
     ax.set_xlim(-label_width[0], 1 + label_width[1])
     ax.set_ylim(max(total_left, y - gap), -0.05)
     ax.axis('off')
-    ax.set_title(title or f"{source_title(source)} → {TARGET_TITLES.get(target, target)}", fontsize='small',
+    ax.set_title(title or f"{variable_title(source)} → {attribute_title(target)}", fontsize='small',
                  fontweight='bold')
     if note:
         ax.text(0.5, -0.04, note, ha='center', va='bottom', fontsize=viscons.MIN_FONT_SIZE, color=viscons.COLOR_TEXT_SECONDARY,
@@ -232,7 +152,7 @@ def plot_flow(ax: plt.Axes, table: pd.DataFrame, source: str, target: str, gende
 def unknown_note(people: pd.DataFrame, target: str, include_unknown: bool) -> Optional[str]:
     """'unknown x% left out' (n under the source values counts every mention, the bands only the known classes)."""
     share = fl.unknown_share(people, target)
-    return None if include_unknown or not share else f"unknown {share:.0%} left out"
+    return None if include_unknown or not share else f"Unknown {share:.0%} left out"
 
 
 def plot_drift_flow(people: pd.DataFrame, top: int = viscons.FLOW_TOP_COUNTRIES, include_unknown: bool = False,
@@ -243,11 +163,11 @@ def plot_drift_flow(people: pd.DataFrame, top: int = viscons.FLOW_TOP_COUNTRIES,
     codes = fl.location_codes(locations)
     table = fl.flow_table(people, cons.VAR_LOCATION, 'country', include_unknown, top, keep=list(codes.values()))
     others = [c for c in table.groupby('target')['n'].sum().sort_values(ascending=False).index
-              if c not in codes.values() and c not in (fl.OTHER, fl.UNKNOWN)]
+              if c not in codes.values() and c not in (cons.OTHER, cons.UNKNOWN)]
     present = set(table['target'])
     order = [codes[l] for l in locations if codes[l] in present] + others   # a country without mentions: not shown
     n_rows = max(len(locations), table['target'].nunique())
-    fig = plt.figure(figsize=(width, n_rows * viscons.FLOW_ROW_IN * 1.6 + 0.6))
+    fig = plt.figure(figsize=(width, n_rows * viscons.FLOW_ROW_IN * viscons.FLOW_NODE_SPACING + viscons.FLOW_DRIFT_PAD_IN))
     left_in = max(text_size(l, 'x-small')[0] for l in labels) + 0.1
     right_in = max(text_size(f"{c}  100%", 'x-small')[0] for c in table['target'].unique()) + 0.1
     flow_in = max(width - left_in - right_in - 0.2, 0.5)
@@ -259,7 +179,6 @@ def plot_drift_flow(people: pd.DataFrame, top: int = viscons.FLOW_TOP_COUNTRIES,
     return fig
 
 
-
 def with_model_columns(people: pd.DataFrame, metadata: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     """The people table with the model characteristics (access, size, reasoning, origin, family) as columns."""
     metadata = summary.load_model_metadata() if metadata is None else metadata
@@ -267,16 +186,31 @@ def with_model_columns(people: pd.DataFrame, metadata: Optional[pd.DataFrame] = 
     return people.merge(metadata[[cons.COL_MODEL] + columns], on=cons.COL_MODEL, how='left')
 
 
+def _flow_rows(people: pd.DataFrame, pairs: Sequence[Tuple[str, str]], ncols: int, include_unknown: bool) -> tuple:
+    """The display tables of the panels, the grid (nrows, ncols) and the height of each row of panels (inches: the
+    panel with the most nodes sets it)."""
+    nrows, ncols = panel_grid(len(pairs), ncols)
+    tables = [display_table(people, s, t, include_unknown) for s, t in pairs]
+    n_nodes = [max(t['source'].nunique(), t['target'].nunique()) for t in tables]
+    rows_in = [max(n_nodes[r * ncols:(r + 1) * ncols]) * viscons.FLOW_ROW_IN * viscons.FLOW_NODE_SPACING
+               + viscons.FLOW_ROW_PAD_IN for r in range(nrows)]
+    return tables, nrows, ncols, rows_in
+
+
+def _label_room(pair: Tuple[str, str], table: pd.DataFrame, side: str, pad: float) -> float:
+    """Inches for the source labels (side 'left') or the class labels with their share (side 'right') of a panel."""
+    source, target = pair
+    if side == 'left':
+        _, labels = source_order(source, table['source'].unique())
+        return max(text_size(l, 'x-small')[0] for l in labels) + pad
+    return max(text_size(f"{class_label(target, c)}  100%", 'x-small')[0] for c in table['target'].unique()) + pad
+
+
 def plot_flows(people: pd.DataFrame, pairs: Sequence[Tuple[str, str]], include_unknown: bool = False,
                gender_labels=None, bin_labels=None, ncols: Optional[int] = None,
                width: float = viscons.PAPER_TEXT_WIDTH_IN, title: Optional[str] = None) -> plt.Figure:
     """A row (or grid) of flow panels, one per (source, target)."""
-    ncols = ncols or min(len(pairs), 3)
-    nrows = int(np.ceil(len(pairs) / ncols))
-    tables = [display_table(people, s, t, include_unknown)
-              for s, t in pairs]
-    n_nodes = [max(t['source'].nunique(), t['target'].nunique()) for t in tables]
-    rows_in = [max(n_nodes[r * ncols:(r + 1) * ncols]) * viscons.FLOW_ROW_IN * 1.6 + 0.45 for r in range(nrows)]
+    tables, nrows, ncols, rows_in = _flow_rows(people, pairs, ncols or 3, include_unknown)
     fig = plt.figure(figsize=(width, sum(rows_in)))
     panel_w = width / ncols
     top = 1.0
@@ -287,9 +221,8 @@ def plot_flows(people: pd.DataFrame, pairs: Sequence[Tuple[str, str]], include_u
             if i >= len(pairs):
                 break
             (source, target), table = pairs[i], tables[i]
-            _, labels = source_order(source, table['source'].unique())
-            left_in = max(text_size(l, 'x-small')[0] for l in labels) + 0.08
-            right_in = max(text_size(f"{class_label(target, t)}  100%", 'x-small')[0] for t in table['target'].unique()) + 0.08
+            left_in = _label_room(pairs[i], table, 'left', 0.08)
+            right_in = _label_room(pairs[i], table, 'right', 0.08)
             flow_in = max(panel_w - left_in - right_in - 0.1, 0.4)
             ax = fig.add_axes([(c * panel_w + 0.05) / width, top - h + 0.06 * h, (panel_w - 0.1) / width, 0.8 * h])
             plot_flow(ax, table, source, target, gender_labels, bin_labels, (left_in / flow_in, right_in / flow_in),
@@ -306,54 +239,49 @@ def plot_drift(people: pd.DataFrame, drift: pd.DataFrame, top: int = viscons.FLO
                include: Sequence[str] = ()) -> plt.Figure:
     """Location drift (see module docstring). include: countries shown as their own column in any case (after the
     top ones, e.g. MX), not pooled into Other."""
-    known = people[people['country'].astype(str) != fl.UNKNOWN].copy()
+    known = people[people['country'].astype(str) != cons.UNKNOWN].copy()
     known[cons.VAR_LOCATION] = known[cons.VAR_LOCATION].astype(str)
     locations, _ = source_order(cons.VAR_LOCATION, known[cons.VAR_LOCATION].unique())
     codes = fl.location_codes(locations)
     others = [c for c in fl.top_classes(known['country'], top + len(codes)) if c not in codes.values()]
     columns = [codes[l] for l in locations] + others[:max(top - len(codes), 0)]
     columns += [c for c in include if c not in columns]
-    known['col'] = known['country'].where(known['country'].isin(columns), fl.OTHER)
-    columns += [fl.OTHER]
+    known['col'] = known['country'].where(known['country'].isin(columns), cons.OTHER)
+    columns += [cons.OTHER]
     shares = pd.crosstab(known[cons.VAR_LOCATION], known['col'], normalize='index').reindex(
         index=locations, columns=columns).fillna(0.0)
 
     fig, (ax, bx) = plt.subplots(1, 2, figsize=(width, viscons.DRIFT_ROW_IN * len(locations) + 0.62),
                                  layout='constrained', gridspec_kw={'width_ratios': [len(columns), 5.5], 'wspace': 0.02})
     vmax = max(float(shares.to_numpy().max()), 0.05)
-    cmap = LinearSegmentedColormap.from_list('share', [viscons.FAMILY_ZERO['persona'], viscons.FAMILY_COLORS['persona'],
-                                                       viscons.RQ1_HEATMAP_DARK['persona']])
+    cmap = family_cmap(cons.FAMILY_PERSONA)                  # location is a persona variable
     ax.imshow(shares.to_numpy(), cmap=cmap, vmin=0, vmax=vmax, aspect='auto')
     for i, loc in enumerate(locations):
         for j, col in enumerate(columns):
             v = shares.iat[i, j]
-            ax.text(j, i, f"{v:.0%}" if v >= 0.005 else '', ha='center', va='center_baseline',
-                    fontsize=viscons.MIN_FONT_SIZE, color='white' if v > 0.6 * vmax else viscons.METRIC_ROW_LABEL_COLOR)
+            ax.text(j, i, f"{v:.0%}" if v >= viscons.DRIFT_MIN_SHOWN_SHARE else '', ha='center', va='center_baseline',
+                    fontsize=viscons.MIN_FONT_SIZE, color=text_on(cmap(min(v / vmax, 1.0))))
         j = columns.index(codes[loc])
-        ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1, fill=False, edgecolor=viscons.METRIC_ROW_LABEL_COLOR,
+        ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1, fill=False, edgecolor=viscons.COLOR_TEXT,
                                linewidth=0.9))
-    ax.set_xticks(range(len(columns)), [c if c != fl.OTHER else 'Other' for c in columns], fontsize='x-small')
+    ax.set_xticks(range(len(columns)), [class_label('country', c) for c in columns], fontsize='x-small')
     ax.set_yticks(range(len(locations)), [f"{l} ({codes[l]})" for l in locations], fontsize='small')
     ax.set_xlabel("Country of the recommended people", fontsize='small', labelpad=2)
     ax.set_ylabel("Prompted location", fontsize='small')
     ax.tick_params(length=0, pad=2)
-    for side in ax.spines.values():
-        side.set_visible(False)
+    clean_axes(ax, hide='all')
 
     # right: share from the prompt's own country, vs the same share when the other locations are prompted (rows as
     # in the heatmap, so no labels of their own); the lift written right of the point
     d = drift.set_index('location').reindex(locations)
     ys = np.arange(len(locations))
     bx.hlines(ys, d['baseline'], d['share'], color=viscons.COLOR_GRID, linewidth=2, zorder=1)
-    bx.scatter(d['baseline'], ys, color=viscons.METRIC_BAR_COLORS['model'], s=16, zorder=2, label='other locations prompted')
+    bx.scatter(d['baseline'], ys, zorder=2, label='Other locations prompted', **viscons.DRIFT_BASELINE_MARKER)
     high = d['share']
     if 'share_ci_low' in d:
-        bx.errorbar(d['share'], ys, xerr=[(d['share'] - d['share_ci_low']).clip(lower=0),
-                                         (d['share_ci_high'] - d['share']).clip(lower=0)],
-                    fmt='none', ecolor=viscons.CI_COLOR, elinewidth=viscons.CI_LINEWIDTH,
-                    capsize=viscons.CI_CAPSIZE, capthick=viscons.CI_CAPTHICK, zorder=2)
+        ci(bx, d['share'], ys, d['share_ci_low'], d['share_ci_high'], zorder=2)
         high = d[['share', 'share_ci_high']].max(axis=1)
-    bx.scatter(d['share'], ys, color=viscons.FAMILY_COLORS['persona'], s=18, zorder=3, label='this location prompted')
+    bx.scatter(d['share'], ys, zorder=3, label='This location prompted', **viscons.DRIFT_PROMPTED_MARKER)
     x_max = max(0.05, float(np.nanmax(high.to_numpy())) * 1.22)
     for y, (x, lift) in zip(ys, zip(high, d['lift'])):
         if np.isfinite(lift):
@@ -365,10 +293,7 @@ def plot_drift(people: pd.DataFrame, drift: pd.DataFrame, top: int = viscons.FLO
     bx.set_xlabel("Share from the prompt's country (×: lift)", fontsize='small', labelpad=2)
     bx.tick_params(axis='x', labelsize='x-small', length=2, pad=1.5)
     bx.tick_params(axis='y', length=0)
-    bx.grid(axis='x', color=viscons.COLOR_GRID, linewidth=0.5)
-    bx.set_axisbelow(True)
-    for side in ('top', 'right', 'left'):
-        bx.spines[side].set_visible(False)
+    clean_axes(bx, 'x', hide=('top', 'right', 'left'), linewidth=0.5)
     # inside, one column, on the right where the rows end earliest (top / middle / bottom two rows): never on a point
     values = np.nan_to_num(high.to_numpy(), nan=0.0)
     n = len(values)
@@ -389,32 +314,18 @@ def plot_flow_grid(people: pd.DataFrame, source: Optional[str] = None, target: O
     if (source is None) == (target is None):
         raise ValueError("give exactly one of source= (vary the person attribute) or target= (vary the prompt variable)")
     pairs = [(source, t) for t in targets] if source else [(s, target) for s in sources]
-    ncols = min(ncols, len(pairs))
-    nrows = int(np.ceil(len(pairs) / ncols))
     width = width or viscons.PAPER_TEXT_WIDTH_IN          # always the paper text width (A4)
-    tables = [display_table(people, s, t, include_unknown)
-              for s, t in pairs]
+    tables, nrows, ncols, rows_in = _flow_rows(people, pairs, ncols, include_unknown)
     mentions = {s: people[s].astype(str).value_counts() for s, _ in pairs}       # n = all mentions (also unknown)
-    n_nodes = [max(t['source'].nunique(), t['target'].nunique()) for t in tables]
-    rows_in = [max(n_nodes[r * ncols:(r + 1) * ncols]) * viscons.FLOW_ROW_IN * 1.6 + 0.45 for r in range(nrows)]
     fig = plt.figure(figsize=(width, sum(rows_in) + (0.25 if title else 0)))
-
-    def left_room(i):
-        s, t = pairs[i]
-        _, labels = source_order(s, tables[i]['source'].unique())
-        return max(text_size(l, 'x-small')[0] for l in labels) + 0.1
-
-    def right_room(i):
-        s, t = pairs[i]
-        return max(text_size(f"{class_label(t, c)}  100%", 'x-small')[0] for c in tables[i]['target'].unique()) + 0.08
 
     top = 1.0 - (0.25 / (sum(rows_in) + 0.25) if title else 0)
     total_h = sum(rows_in) + (0.25 if title else 0)
     for r in range(nrows):
         idx = list(range(r * ncols, min((r + 1) * ncols, len(pairs))))
         # label room: source fixed -> left labels only in the first panel; target fixed -> right labels only in the last
-        lefts = [left_room(i) if (target or i == idx[0]) else 0.05 for i in idx]
-        rights = [right_room(i) if (source or i == idx[-1]) else 0.05 for i in idx]
+        lefts = [_label_room(pairs[i], tables[i], 'left', 0.1) if (target or i == idx[0]) else 0.05 for i in idx]
+        rights = [_label_room(pairs[i], tables[i], 'right', 0.08) if (source or i == idx[-1]) else 0.05 for i in idx]
         flow_in = max((width - sum(lefts) - sum(rights) - 0.1 * len(idx)) / len(idx), 0.35)
         x = 0.05
         h = rows_in[r] / total_h
@@ -422,13 +333,13 @@ def plot_flow_grid(people: pd.DataFrame, source: Optional[str] = None, target: O
             s, t = pairs[i]
             panel_w = lefts[k] + flow_in + rights[k]
             ax = fig.add_axes([x / width, top - h + 0.06 * h, panel_w / width, 0.8 * h])
-            panel_title = (TARGET_TITLES.get(t, t) if source else source_title(s)).capitalize()
+            panel_title = attribute_title(t) if source else variable_title(s)
             plot_flow(ax, tables[i], s, t, gender_labels, bin_labels, (lefts[k] / flow_in, rights[k] / flow_in),
                       left_labels=bool(target) or k == 0, right_labels=bool(source) or k == len(idx) - 1,
                       n_source=mentions[s], title=panel_title, note=unknown_note(people, t, include_unknown))
             x += panel_w + 0.1
         top -= h
-    fig.suptitle(title or (f"{source_title(source)} (prompt) → recommended people" if source
-                           else f"Prompt → {TARGET_TITLES.get(target, target)} of the recommended people"),
+    fig.suptitle(title or (f"{variable_title(source)} (prompt) → recommended people" if source
+                           else f"Prompt → {attribute_title(target).lower()} of the recommended people"),
                  fontsize='small', y=0.995)
     return fig

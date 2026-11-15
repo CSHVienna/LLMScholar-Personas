@@ -35,9 +35,10 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
-from analysis.influence import DEFAULT_FACTORS, MODEL_FACTOR, Gram, _prepare, resample_models
+from analysis.influence import DEFAULT_FACTORS, MODEL_FACTOR, Gram, prepare, resample_models
 from analysis.multiple_testing import add_p_values, benjamini_hochberg, benjamini_yekutieli, holm, wald_p
 from utils import constants as cons
+from utils.stats import grouped_percentile_summary, percentile_summary
 
 Block = Tuple[str, str]
 GLOBAL = 'all'
@@ -78,7 +79,7 @@ class Design:
 
     def __init__(self, data: pd.DataFrame, metric: str, base: Sequence[str], blocks: Sequence[Block],
                  levels: Optional[Dict[str, List[str]]] = None):
-        self.y, base_blocks = _prepare(data, metric, base)
+        self.y, base_blocks = prepare(data, metric, base)
         self.base = list(base)
         self.levels, self.codes = {}, {}          # factor -> level names; factor -> (codes, number of levels)
         for factor in dict.fromkeys(f for block in blocks for f in block):
@@ -171,7 +172,6 @@ def interactions(df: pd.DataFrame, metric: str, base: Sequence[str] = DEFAULT_FA
         stats, cells = _estimates(replicate, screening, decompositions)
         boot_stats.append(stats)
         boot_cells.append({name: c.assign(b=b) for name, c in cells.items() if MODEL_FACTOR not in name.split(':')})
-    alpha = (1 - confidence) / 2
     measures = ['delta_r2', 'delta_r2_adj', 'f2', 'omega2', 'max_abs_deviation', 'share']
     rows = []
     for name in [*map(block_name, blocks), GLOBAL]:
@@ -189,13 +189,9 @@ def interactions(df: pd.DataFrame, metric: str, base: Sequence[str] = DEFAULT_FA
         for measure in measures:
             if measure not in point[name]:
                 continue
-            values = np.array([s[name].get(measure, np.nan) for s in boot_stats], dtype=float)
-            values = values[np.isfinite(values)]
             row[measure] = point[name][measure]
-            row[f"{measure}_ci_low"], row[f"{measure}_ci_high"] = (np.quantile(values, [alpha, 1 - alpha])
-                                                                   if len(values) else (np.nan, np.nan))
-            row[f"{measure}_std"] = values.std(ddof=1) if len(values) > 1 else np.nan
-            row[f"{measure}_n_boot"] = len(values)
+            draws = [s[name].get(measure, np.nan) for s in boot_stats]
+            row.update({f"{measure}_{k}": v for k, v in percentile_summary(draws, confidence).items()})
         se = row.get('omega2_std', np.nan)
         row['p_value'] = float(wald_p(row['omega2'], se, 'greater')) if np.isfinite(se) and se > 0 and np.isfinite(
             row['omega2']) else np.nan
@@ -203,12 +199,12 @@ def interactions(df: pd.DataFrame, metric: str, base: Sequence[str] = DEFAULT_FA
     table = pd.DataFrame(rows)
     table['r2_base'] = 1 - design.gram.rss(design.base) / design.total if design.total else np.nan
     table['n_configs'], table['n_models'] = design.n, data[MODEL_FACTOR].nunique()
-    cells = _cell_table(metric, blocks, design, point_cells, boot_cells, alpha)
+    cells = _cell_table(metric, blocks, design, point_cells, boot_cells, confidence)
     return table, cells
 
 
 def _cell_table(metric: str, blocks: Sequence[Block], design: Design, point: Dict[str, pd.DataFrame],
-                boot: List[Dict[str, pd.DataFrame]], alpha: float) -> pd.DataFrame:
+                boot: List[Dict[str, pd.DataFrame]], confidence: float) -> pd.DataFrame:
     """One row per cell of every block: observed, additive, deviation (+ _ci_low, _ci_high, _std, _n_boot)."""
     out = []
     for a, b in blocks:
@@ -219,9 +215,7 @@ def _cell_table(metric: str, blocks: Sequence[Block], design: Design, point: Dic
         if draws:
             d = pd.concat(draws, ignore_index=True)
             d['deviation'] = d['observed'] - d['additive']
-            ci = d.groupby(['ia', 'ib'])['deviation'].agg(
-                deviation_ci_low=lambda v: np.quantile(v, alpha), deviation_ci_high=lambda v: np.quantile(v, 1 - alpha),
-                deviation_std=lambda v: v.std(ddof=1) if len(v) > 1 else np.nan, deviation_n_boot='count')
+            ci = grouped_percentile_summary(d, ['ia', 'ib'], 'deviation', confidence).add_prefix('deviation_')
             frame = frame.merge(ci.reset_index(), on=['ia', 'ib'], how='left')
         else:
             for s in ('ci_low', 'ci_high', 'std'):
@@ -239,7 +233,7 @@ def _cell_table(metric: str, blocks: Sequence[Block], design: Design, point: Dic
 def sesoi(metric: str, default: float = cons.INTERACTION_SESOI,
           by_metric: Optional[Dict[str, float]] = None) -> float:
     by_metric = cons.INTERACTION_SESOI_BY_METRIC if by_metric is None else by_metric
-    return by_metric.get(metric, by_metric.get(metric.removesuffix('_adj'), default))
+    return by_metric.get(metric, by_metric.get(metric.removesuffix(cons.ADJ_SUFFIX), default))
 
 
 def flag(table: pd.DataFrame, alpha: float = cons.INTERACTION_ALPHA, omega2_min: float = cons.INTERACTION_OMEGA2_MIN,

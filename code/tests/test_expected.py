@@ -21,7 +21,7 @@ import pandas as pd                                                      # noqa:
 
 from metrics import expected as ex                                       # noqa: E402
 from metrics import social as so                                         # noqa: E402
-from metrics import summary as su                                        # noqa: E402
+from metrics import summary                                        # noqa: E402
 from utils import constants as cons                                      # noqa: E402
 
 TOL = 0.01      # Monte Carlo error with LABEL_DRAWS draws is ~0.002
@@ -34,7 +34,7 @@ def exact(population: pd.Series, q: pd.Series, n: int, include_unknown: bool):
         prob = float(np.prod([population[l] for l in labels]))
         counts = pd.Series(labels).value_counts()
         p = so.known(counts / counts.sum(), include_unknown)
-        n_known = int(counts.sum() if include_unknown else counts.drop(so.UNKNOWN, errors='ignore').sum())
+        n_known = int(counts.sum() if include_unknown else counts.drop(cons.UNKNOWN, errors='ignore').sum())
         parities.append((prob, so.parity(p, q)))
         diversities.append((prob, so.diversity(p, len(q), n_known)))
     mean = lambda pairs: (sum(w * v for w, v in pairs if np.isfinite(v)) / sum(w for w, v in pairs if np.isfinite(v))
@@ -109,11 +109,15 @@ class TestPeople(unittest.TestCase):
             self.assertTrue(set(ids) <= group)
             self.assertEqual(len(ex.sample_members(gt, 'Physics', 'senior', 50_000, seed=1)), len(group))
 
-    def test_mean_pairwise_cosine_is_similarity(self):
+    def test_similarity_closed_form_equals_the_pair_loop(self):
+        from itertools import combinations
         vectors = np.random.default_rng(4).normal(size=(30, 4))
         vectors[3] = 0.0                                                        # a zero vector counts as cosine 0
-        self.assertAlmostEqual(ex.mean_pairwise_cosine(vectors), so.similarity(vectors))
-        self.assertTrue(np.isnan(ex.mean_pairwise_cosine(vectors[:1])))
+        norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+        unit = np.divide(vectors, norms, out=np.zeros_like(vectors), where=norms > 0)
+        pair_loop = np.mean([unit[i] @ unit[j] for i, j in combinations(range(len(unit)), 2)])
+        self.assertAlmostEqual(so.similarity(vectors), pair_loop, places=12)
+        self.assertTrue(np.isnan(so.similarity(vectors[:1])))
 
 
 class TestAdjusted(unittest.TestCase):
@@ -170,6 +174,8 @@ class TestAdjusted(unittest.TestCase):
         responses = pd.DataFrame([{**config, cons.COL_RUN_ID: 1, cons.COL_RESPONSE_TAGS: 'correct', 'n_persons': 2}])
         people = pd.DataFrame([{**config, cons.COL_RUN_ID: 1, 'author_id': a} for a in (1, 2)])
         expected = ex.Expected(self.table)
+        for n in (0, np.nan, None):                                           # no people: no expected value
+            self.assertTrue(np.isnan(expected.value('parity_gender', 'Physics', 'senior', n)))
         metrics, _ = so.social_metrics(responses, people, self.gt, expectations=expected)
         row = metrics.iloc[0]
         for key in ex.SIMULATED:
@@ -199,27 +205,28 @@ class TestAdjusted(unittest.TestCase):
 
     def test_registry(self):
         for key in so.ADJUSTED_KEYS:
-            self.assertIn(key, su.METRICS)
-            self.assertEqual(su.METRICS[key].group, su.METRICS[key[:-4]].group + '_adj')
-        self.assertEqual([m.key for m in su.select_metrics('parity')], cons.METRIC_COLUMN_SETS['parity'])
-        self.assertEqual([m.key for m in su.select_metrics('paper', adjusted=True)], cons.METRIC_COLUMN_SETS['paper_adj'])
+            self.assertIn(key, summary.METRICS)
+            self.assertEqual(summary.METRICS[key].group, summary.METRICS[key[:-4]].group + '_adj')
+        self.assertEqual([m.key for m in summary.select_metrics('parity')], cons.METRIC_COLUMN_SETS['parity'])
+        self.assertEqual([m.key for m in summary.select_metrics('paper', adjusted=True)], cons.METRIC_COLUMN_SETS['paper_adj'])
         self.assertIn('validity', cons.METRIC_COLUMN_SETS['all_adj'])            # technical metrics unchanged
-        self.assertEqual(su.adjusted_selection('paper', True), 'paper_adj')
-        self.assertEqual(su.adjusted_selection('technical', True), 'technical')         # no social metrics: as is
-        self.assertEqual(su.adjusted_selection(None, True), 'all_adj')
-        self.assertIsNone(su.adjusted_selection(None, False))
-        self.assertEqual(su.adjusted_selection(['validity', 'parity_gender'], True), ['validity', 'parity_gender_adj'])
+        self.assertEqual(summary.adjusted_selection('paper', True), 'paper_adj')
+        self.assertEqual(summary.adjusted_selection('technical', True), 'technical')         # no social metrics: as is
+        self.assertEqual(summary.adjusted_selection(None, True), 'all_adj')
+        self.assertIsNone(summary.adjusted_selection(None, False))
+        self.assertEqual(summary.adjusted_selection(['validity', 'parity_gender'], True), ['validity', 'parity_gender_adj'])
         from viz import rq_plots
-        self.assertEqual(rq_plots.rq1_figure_name('bar', 'omega2', 'paper'), 'rq1_omega2_paper_bar')
-        self.assertEqual(rq_plots.rq1_figure_name('bar', 'omega2', 'paper_adj'), 'rq1_omega2_paper_bar_adj')
-        self.assertEqual(rq_plots.rq2_figure_name('heatmap', 'deviation', 'all_adj'), 'rq2_deviation_all_heatmap_adj')
-        self.assertEqual(rq_plots.rq1_figure_name('heatmap', 'omega2', None), 'rq1_omega2_all_heatmap')
-        self.assertEqual(rq_plots.rq1_figure_name('bar', 'omega2', ['validity', 'parity_gender_adj']),
-                         'rq1_omega2_validity-parity_gender_bar_adj')
-        self.assertEqual(su.split_adjusted('technical'), ('technical', False))
+        from viz import names
+        self.assertEqual(names.rq1_figure_name('bar', 'omega2', 'paper'), 'rq1_omega2_paper_bar')
+        self.assertEqual(names.rq1_figure_name('bar', 'omega2', 'paper_adj'), 'rq1_omega2_paper_bar_adj')
+        self.assertEqual(names.rq2_figure_name('heatmap', 'deviation', 'all_adj'), 'rq2_deviation_all_heatmap_adj')
+        self.assertEqual(names.rq1_figure_name('heatmap', 'omega2', None), 'rq1_omega2_all_heatmap')
+        self.assertEqual(names.rq1_figure_name('bar', 'omega2', ['validity', 'parity_gender_adj']),
+                         'rq1_omega2_validity-parity-gender_bar_adj')
+        self.assertEqual(summary.split_adjusted('technical'), ('technical', False))
         results = pd.DataFrame({'metric': ['validity', 'parity_gender', 'parity_gender_adj']})
-        self.assertEqual(rq_plots.rq1_metric_keys(results), ['validity', 'parity_gender'])   # default: raw only
-        self.assertEqual(rq_plots.rq1_metric_keys(results, 'parity_adj'), ['parity_gender_adj'])
+        self.assertEqual(rq_plots.metric_keys(results), ['validity', 'parity_gender'])   # default: raw only
+        self.assertEqual(rq_plots.metric_keys(results, 'parity_adj'), ['parity_gender_adj'])
 
 
 if __name__ == '__main__':

@@ -28,6 +28,7 @@ set -euo pipefail
 
 # --- Locations (independent of the working directory) ------------------------
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPTS_DIR}/_pipeline_lib.sh"      # log, selected, ensure_config
 PROJECT_ROOT="$(cd "${SCRIPTS_DIR}/../.." && pwd)"
 LOGS_DIR="${PROJECT_ROOT}/logs"
 RESULTS_DIR="${PROJECT_ROOT}/results"
@@ -60,16 +61,16 @@ RECOMMENDATIONS_METADATA_DIR="${RESULTS_DIR}/recommendations_metadata"
 run_per_model() {
     local name="$1" script="$2" args="$3 --log_dir ${LOGS_DIR} ${EXTRA_ARGS}"
     local joblog="${LOGS_DIR}/$(date +%Y-%m-%d-%H:%M)_${name}_${PARAMS}.joblog"
-    echo "[$(date +%H:%M:%S)] ${name}: ${JOBS} jobs, joblog ${joblog}"
+    log "${name}: ${JOBS} jobs, joblog ${joblog}"
     if ! parallel -j "${JOBS}" --nice 10 --joblog "${joblog}" \
             "${PYTHON}" "${SCRIPTS_DIR}/${script}" --models {} ${args} '>' /dev/null \
             :::: "${MODELS_FILE}"; then
-        echo "[$(date +%H:%M:%S)] ${name}: some models FAILED (see ${joblog}, column Exitval, and their logs in ${LOGS_DIR})"
+        log "${name}: some models FAILED (see ${joblog}, column Exitval, and their logs in ${LOGS_DIR})"
         echo "Re-run only the failed ones with:"
         echo "  parallel --resume-failed -j ${JOBS} --nice 10 --joblog ${joblog} ${PYTHON} ${SCRIPTS_DIR}/${script} --models {} ${args} '>' /dev/null :::: ${MODELS_FILE}"
         exit 1
     fi
-    echo "[$(date +%H:%M:%S)] ${name}: done"
+    log "${name}: done"
 }
 
 # --- Steps --------------------------------------------------------------------

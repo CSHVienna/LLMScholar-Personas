@@ -10,9 +10,10 @@ import pandas as pd
 from utils import constants as cons
 
 NO_NAME, NO_MATCH = 'no name', 'no match'
+ALL_MODELS = 'all models'                     # row of the shares tables: mean over the models
 RULE_ORDER = cons.MATCH_RULES + [NO_MATCH, NO_NAME]
 
-LEVELS = ['matched_name', 'matched_name_field', 'matched_name_seniority', 'matched_author']
+LEVELS = [f"matched_{level}" for level in cons.MATCH_LEVELS]
 OUTCOME_AUTHOR, OUTCOME_FIELD, OUTCOME_SENIORITY = 'author', 'field only', 'seniority only'
 OUTCOME_AMBIGUOUS, OUTCOME_NAME = 'ambiguous', 'name only'
 OUTCOME_ORDER = [OUTCOME_AUTHOR, OUTCOME_FIELD, OUTCOME_SENIORITY, OUTCOME_AMBIGUOUS, OUTCOME_NAME, NO_MATCH, NO_NAME]
@@ -57,7 +58,7 @@ def shares(df: pd.DataFrame, column: pd.Series, order: List[str], by: str = cons
     """Share of each category per group (rows: groups + 'all models' = mean of the group shares)."""
     counts = pd.crosstab(df[by], column).reindex(columns=order, fill_value=0)
     table = counts.div(counts.sum(axis=1), axis=0)
-    table.loc['all models'] = table.mean()
+    table.loc[ALL_MODELS] = table.mean()
     return table
 
 
@@ -65,7 +66,7 @@ def level_rates(df: pd.DataFrame, by: str = cons.COL_MODEL) -> pd.DataFrame:
     """Share of recommendations (with a name) matched at each level, per group + 'all models' (mean of groups)."""
     named = df[df['rec_name'].notna()]
     table = named.groupby(by)[LEVELS].mean()
-    table.loc['all models'] = table.mean()
+    table.loc[ALL_MODELS] = table.mean()
     return table
 
 

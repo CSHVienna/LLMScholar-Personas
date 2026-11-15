@@ -40,7 +40,7 @@ class TestInfluence(unittest.TestCase):
         df = data()
         table = anova_lm(smf.ols('y ~ C(model) + C(language) + C(k)', data=df).fit(), typ=2)
         ms_error = table.loc['Residual', 'sum_sq'] / table.loc['Residual', 'df']
-        y, blocks = inf._prepare(df, 'y', FACTORS)
+        y, blocks = inf.prepare(df, 'y', FACTORS)
         omega = inf.omega_squared(y, blocks)
         for factor, name in zip(FACTORS, ['C(model)', 'C(language)', 'C(k)']):
             ss, dof = table.loc[name, 'sum_sq'], table.loc[name, 'df']
@@ -51,7 +51,7 @@ class TestInfluence(unittest.TestCase):
 
     def test_shapley_sums_to_r2(self):
         df = data()
-        y, blocks = inf._prepare(df, 'y', FACTORS)
+        y, blocks = inf.prepare(df, 'y', FACTORS)
         shares = inf.shapley_r2(y, blocks)
         r2 = 1 - inf.residual_ss(y, list(blocks.values())) / ((y - y.mean()) ** 2).sum()
         self.assertAlmostEqual(sum(shares.values()), r2, places=10)
@@ -82,7 +82,6 @@ class TestInfluence(unittest.TestCase):
         self.assertEqual(table['n_configs'].iloc[0], df['y'].notna().sum())
 
 
-
 class TestRq1Figure(unittest.TestCase):
     def test_rq1_bars(self):
         import matplotlib
@@ -98,7 +97,6 @@ class TestRq1Figure(unittest.TestCase):
         self.assertEqual(len(fig.axes), 1)
 
 
-
 class TestEdgeCases(unittest.TestCase):
     def test_constant_metric_is_not_estimable(self):
         df = data().assign(y=0.0)                                      # e.g. duplicates = 0 everywhere
@@ -108,13 +106,12 @@ class TestEdgeCases(unittest.TestCase):
     def test_empty_cells_use_ranks(self):
         df = data()
         df = df[~((df['model'] == 'm0') & (df['k'] == 10))]            # an empty model x k cell: still estimable
-        y, blocks = inf._prepare(df, 'y', FACTORS)
+        y, blocks = inf.prepare(df, 'y', FACTORS)
         omega = inf.omega_squared(y, blocks)
         self.assertTrue(all(np.isfinite(v) for v in omega.values()))
         df2 = data().assign(k2=lambda d: d['k'])                       # a factor duplicating another adds no rank
-        y2, blocks2 = inf._prepare(df2, 'y', FACTORS + ['k2'])
+        y2, blocks2 = inf.prepare(df2, 'y', FACTORS + ['k2'])
         self.assertTrue(np.isnan(inf.omega_squared(y2, blocks2)['k2']))
-
 
 
 class TestNested(unittest.TestCase):
@@ -133,7 +130,7 @@ class TestNested(unittest.TestCase):
 
     def test_field_keeps_its_effect(self):
         factors = ['model', 'field', 'subfield']
-        y, blocks = inf._prepare(self.fields_data(0.0), 'y', factors)
+        y, blocks = inf.prepare(self.fields_data(0.0), 'y', factors)
         omega = inf.omega_squared(y, blocks)
         self.assertGreater(omega['field'], 0.9)                         # not zeroed by the nested subfield
         self.assertLess(abs(omega['subfield']), 0.05)                   # no difference within fields
@@ -142,17 +139,16 @@ class TestNested(unittest.TestCase):
 
     def test_within_field_differences_go_to_subfield(self):
         factors = ['model', 'field', 'subfield']
-        y, blocks = inf._prepare(self.fields_data(0.2), 'y', factors)
+        y, blocks = inf.prepare(self.fields_data(0.2), 'y', factors)
         omega, shares = inf.omega_squared(y, blocks), inf.shapley_r2(y, blocks)
         self.assertGreater(omega['subfield'], 0.8)
         self.assertGreater(shares['subfield'], 0.05)
-        y0, blocks0 = inf._prepare(self.fields_data(0.0), 'y', factors)   # same noise, no within-field difference
+        y0, blocks0 = inf.prepare(self.fields_data(0.0), 'y', factors)   # same noise, no within-field difference
 
         def ss_field(y_, blocks_):
             gram = inf.Gram(y_, blocks_)
             return gram.rss(['model']) - gram.rss(['model', 'field'])
         self.assertAlmostEqual(ss_field(y, blocks), ss_field(y0, blocks0), places=8)   # field's own SS unchanged
-
 
 
 class TestRq1Heatmap(unittest.TestCase):
@@ -164,11 +160,9 @@ class TestRq1Heatmap(unittest.TestCase):
 
     def test_kinds_and_measures(self):
         from viz import rq_plots
-        for kind in ['bars', 'heatmap']:
-            for measure in ['omega2', 'shapley_r2']:
-                self.assertIsNotNone(rq_plots.plot_rq1_figure(self.results, kind, measure))
-        with self.assertRaises(ValueError):
-            rq_plots.plot_rq1_figure(self.results, 'pie')
+        for measure in ['omega2', 'shapley_r2']:
+            self.assertIsNotNone(rq_plots.plot_rq1(self.results, measure))
+            self.assertIsNotNone(rq_plots.plot_rq1_heatmap(self.results, measure))
 
     def test_residual_only_for_shapley(self):
         from viz import rq_plots

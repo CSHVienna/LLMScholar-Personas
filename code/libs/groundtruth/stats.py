@@ -35,14 +35,10 @@ import pandas as pd
 from demographics import ethnicity as eth
 from demographics import race
 from groundtruth.db import shared_gt_dir, sql_path
-from groundtruth.population import SCOPE_FIELD_SENIORITY, SCOPE_SENIORITY, UNKNOWN
 from utils import constants as cons
 
-ALL_FIELDS = 'All fields'
-OTHER = 'other'
-SENIORITY_ORDER = list(cons.SENIORITY_CLASSES)
 GT_FILES = ['gt_authors', 'gt_members', 'gt_shares', 'gt_cutoffs']
-BY_ATTRIBUTES = ('gender', 'race', 'ethnicity')
+BY_ATTRIBUTES = tuple(cons.DEMOGRAPHIC_ATTRIBUTES)
 POPULATION_BY = ('seniority', *BY_ATTRIBUTES)
 PROMINENCE_GROUPS = [*cons.GT_BIN_METRICS, *(f'top_{n}' for n in cons.GT_TOP_METRICS)]
 
@@ -91,13 +87,13 @@ def _src(gt_dir: Path | str, name: str) -> str:
 def field_order(fields: Sequence[str]) -> List[str]:
     known = [str(f) for f in cons.VARIABLE_VALUES[cons.VAR_FIELD]]
     present = set(map(str, fields))
-    return [f for f in known if f in present] + sorted(present - set(known) - {ALL_FIELDS}) + \
-        ([ALL_FIELDS] if ALL_FIELDS in present else [])
+    return [f for f in known if f in present] + sorted(present - set(known) - {cons.ALL_FIELDS}) + \
+        ([cons.ALL_FIELDS] if cons.ALL_FIELDS in present else [])
 
 
-def _sort_cells(df: pd.DataFrame) -> pd.DataFrame:
+def sort_cells(df: pd.DataFrame) -> pd.DataFrame:
     """Rows in the design order: fields (All fields last), then junior / mid / senior."""
-    fields, seniorities = field_order(df['field'].unique()), SENIORITY_ORDER
+    fields, seniorities = field_order(df['field'].unique()), cons.SENIORITY_CLASSES
     key = pd.DataFrame({'f': df['field'].map({f: i for i, f in enumerate(fields)}),
                         's': df['seniority'].map({s: i for i, s in enumerate(seniorities)}).fillna(len(seniorities))})
     return df.loc[key.sort_values(['f', 's'], kind='stable').index].reset_index(drop=True)
@@ -127,12 +123,12 @@ def population(con: duckdb.DuckDBPyConnection, gt_dir: Path | str, by: str = 'se
     if by not in POPULATION_BY:
         raise ValueError(f"by must be one of {POPULATION_BY}: {by}")
     df = con.execute(f"""
-        SELECT coalesce(field, '{ALL_FIELDS}') AS field, {by}, count(*) AS n
+        SELECT coalesce(field, '{cons.ALL_FIELDS}') AS field, {by}, count(*) AS n
         FROM {_src(gt_dir, 'gt_members')}
         GROUP BY GROUPING SETS ((field, {by}), ({by}))""").df()
     df['share_of_field'] = df['n'] / df.groupby('field')['n'].transform('sum')
     if by == 'seniority':
-        return _sort_cells(df)
+        return sort_cells(df)
     df = df.sort_values(['n'], ascending=False, kind='stable')
     order = {f: i for i, f in enumerate(field_order(df['field'].unique()))}
     return df.sort_values('field', key=lambda c: c.map(order), kind='stable').reset_index(drop=True)
@@ -174,7 +170,7 @@ def bibliometric_quantiles(con: duckdb.DuckDBPyConnection, gt_dir: Path | str,
     df = con.execute(f"""
         WITH m AS (SELECT unnest(fields) AS field, {', '.join(keys)}, {', '.join(metrics)}
                    FROM {_src(gt_dir, 'gt_authors')})
-        SELECT coalesce(field, '{ALL_FIELDS}') AS field, {', '.join(keys)}, {aggs}
+        SELECT coalesce(field, '{cons.ALL_FIELDS}') AS field, {', '.join(keys)}, {aggs}
         FROM m GROUP BY GROUPING SETS ((field, {', '.join(keys)}), ({', '.join(keys)}))""").df()
     rows = []
     for _, r in df.iterrows():
@@ -188,7 +184,7 @@ def bibliometric_quantiles(con: duckdb.DuckDBPyConnection, gt_dir: Path | str,
     out = pd.DataFrame(rows)
     if by:
         out = out.sort_values(by, kind='stable')
-    out = _sort_cells(out)
+    out = sort_cells(out)
     out['metric'] = pd.Categorical(out['metric'], list(metrics))
     return out.sort_values('metric', kind='stable').reset_index(drop=True)
 
@@ -231,7 +227,7 @@ def gender_coverage(con: duckdb.DuckDBPyConnection, gt_dir: Path | str) -> pd.Da
     """Scholars by perceived gender label, with the reason of 'unknown': no usable first name (initials only, ...) or
     a first name without a nomquamgender probability. Columns label, n, share."""
     df = con.execute(f"""
-        SELECT CASE WHEN gender <> '{UNKNOWN}' THEN gender
+        SELECT CASE WHEN gender <> '{cons.UNKNOWN}' THEN gender
                     WHEN gender_first_name IS NULL OR gender_first_name = '' THEN 'unknown: no usable first name'
                     ELSE 'unknown: first name not in nomquamgender' END AS label, count(*) AS n
         FROM {_src(gt_dir, 'gt_authors')} GROUP BY 1 ORDER BY n DESC""").df()
@@ -245,21 +241,21 @@ def composition(shares: pd.DataFrame, attribute: str, include_unknown: bool = Tr
     seniority scope is added as field 'All fields'. top: keep the `top` classes with the largest pooled share (+ keep,
     e.g. the prompt countries) and pool the rest into 'other'. Without unknown, shares are renormalised over the known
     classes (as parity does with include_unknown = no)."""
-    scopes = [SCOPE_FIELD_SENIORITY, SCOPE_SENIORITY] if add_all else [SCOPE_FIELD_SENIORITY]
+    scopes = [cons.SCOPE_FIELD_SENIORITY, cons.SCOPE_SENIORITY] if add_all else [cons.SCOPE_FIELD_SENIORITY]
     df = shares[(shares['attribute'] == attribute) & shares['scope'].isin(scopes)].copy()
     if df.empty:
         raise ValueError(f"No GT shares for attribute '{attribute}'")
-    df['field'] = df['field'].fillna(ALL_FIELDS)
+    df['field'] = df['field'].fillna(cons.ALL_FIELDS)
     if not include_unknown:
-        df = df[df['class'] != UNKNOWN]
+        df = df[df['class'] != cons.UNKNOWN]
     if top is not None:
-        pooled = df.groupby('class')['n'].sum().drop(UNKNOWN, errors='ignore').sort_values(ascending=False)
+        pooled = df.groupby('class')['n'].sum().drop(cons.UNKNOWN, errors='ignore').sort_values(ascending=False)
         kept = set(pooled.index[:top]) | set(keep)
-        df['class'] = df['class'].where(df['class'].isin(kept | {UNKNOWN}), OTHER)
+        df['class'] = df['class'].where(df['class'].isin(kept | {cons.UNKNOWN}), cons.OTHER)
     table = df.pivot_table(index=['field', 'seniority'], columns='class', values='n', aggfunc='sum', fill_value=0)
     table = table.div(table.sum(axis=1), axis=0)
     table.columns.name = attribute
-    order = _sort_cells(table.reset_index()[['field', 'seniority']])
+    order = sort_cells(table.reset_index()[['field', 'seniority']])
     return table.reindex(pd.MultiIndex.from_frame(order))
 
 
@@ -280,9 +276,9 @@ def country_ranking(con: duckdb.DuckDBPyConnection, gt_dir: Path | str, column: 
     measures = f"""count(*) AS n_scholars, sum(n_works) AS n_works, sum(n_citations) AS n_citations,
                    avg(h_index) AS h_index_mean, approx_quantile(h_index, 0.5) AS h_index_median"""
     df = con.execute(f"""
-        WITH a AS (SELECT coalesce({column}, '{UNKNOWN}') AS country, fields, n_works, n_citations, h_index
+        WITH a AS (SELECT coalesce({column}, '{cons.UNKNOWN}') AS country, fields, n_works, n_citations, h_index
                    FROM {_src(gt_dir, 'gt_authors')})
-        SELECT '{ALL_FIELDS}' AS field, country, {measures} FROM a GROUP BY country
+        SELECT '{cons.ALL_FIELDS}' AS field, country, {measures} FROM a GROUP BY country
         UNION ALL
         SELECT field, country, {measures}
         FROM (SELECT unnest(fields) AS field, country, n_works, n_citations, h_index FROM a)
@@ -295,7 +291,7 @@ def country_ranking(con: duckdb.DuckDBPyConnection, gt_dir: Path | str, column: 
     return df.sort_values('field', key=lambda c: c.map(order), kind='stable').reset_index(drop=True)
 
 
-def country_order(ranking: pd.DataFrame, measure: str = 'n_scholars', field: str = ALL_FIELDS,
+def country_order(ranking: pd.DataFrame, measure: str = 'n_scholars', field: str = cons.ALL_FIELDS,
                   include_unknown: bool = False, min_scholars: int = 0) -> pd.DataFrame:
     """The countries of one field sorted by `measure` (largest first): country, value, share (additive measures: of the
     shown total, i.e. renormalised over known countries without unknown) and cumulative share. min_scholars: leave out
@@ -304,7 +300,7 @@ def country_order(ranking: pd.DataFrame, measure: str = 'n_scholars', field: str
         raise ValueError(f"measure must be one of {list(COUNTRY_MEASURES)}: {measure}")
     d = ranking[ranking['field'] == field]
     if not include_unknown:
-        d = d[d['country'] != UNKNOWN]
+        d = d[d['country'] != cons.UNKNOWN]
     d = d[d['n_scholars'] >= min_scholars]
     d = d.assign(value=d[measure])[['country', 'n_scholars', 'value']]
     d = d.sort_values(['value', 'country'], ascending=[False, True]).reset_index(drop=True)
@@ -316,7 +312,7 @@ def country_order(ranking: pd.DataFrame, measure: str = 'n_scholars', field: str
 
 
 def country_top(ranking: pd.DataFrame, measures: Sequence[str] = tuple(COUNTRY_MEASURES), top: int = 20,
-                field: str = ALL_FIELDS, include_unknown: bool = False, min_scholars: int = 0) -> pd.DataFrame:
+                field: str = cons.ALL_FIELDS, include_unknown: bool = False, min_scholars: int = 0) -> pd.DataFrame:
     """Rows = rank 1..top, one column per measure: 'US 18.2 %' (additive: share; h-index: value). Countries that
     change rank between measures show which choice matters."""
     columns = {}
@@ -335,7 +331,7 @@ def shares_by_prominence(con: duckdb.DuckDBPyConnection, gt_dir: Path | str, att
     Without unknown, shares are over the known labels (as parity). The top groups compare 'top' with everyone."""
     if attribute not in BY_ATTRIBUTES:
         raise ValueError(f"attribute must be one of {BY_ATTRIBUTES}: {attribute}")
-    unknown = '' if include_unknown else f"WHERE class <> '{UNKNOWN}'"
+    unknown = '' if include_unknown else f"WHERE class <> '{cons.UNKNOWN}'"
     parts = []
     for group in groups:
         if group.startswith('top_'):
@@ -346,13 +342,13 @@ def shares_by_prominence(con: duckdb.DuckDBPyConnection, gt_dir: Path | str, att
                          f"FROM {_src(gt_dir, 'gt_members')}")
         else:
             parts.append(f"SELECT field, seniority, '{group}' AS grp, {group} AS level, {attribute} AS class "
-                         f"FROM {_src(gt_dir, 'gt_members')} WHERE {group} <> '{UNKNOWN}'")
+                         f"FROM {_src(gt_dir, 'gt_members')} WHERE {group} <> '{cons.UNKNOWN}'")
     df = con.execute(f"""
         WITH u AS ({' UNION ALL '.join(parts)}), k AS (SELECT * FROM u {unknown})
-        SELECT coalesce(field, '{ALL_FIELDS}') AS field, seniority, grp AS "group", level, class, count(*) AS n
+        SELECT coalesce(field, '{cons.ALL_FIELDS}') AS field, seniority, grp AS "group", level, class, count(*) AS n
         FROM k GROUP BY GROUPING SETS ((field, seniority, grp, level, class), (seniority, grp, level, class))""").df()
     df['share'] = df['n'] / df.groupby(['field', 'seniority', 'group', 'level'])['n'].transform('sum')
-    return _sort_cells(df)
+    return sort_cells(df)
 
 
 def cutoffs_table(cutoffs: pd.DataFrame, bin_labels: Sequence[str] = cons.DEFAULT_GT_BIN_LABELS) -> pd.DataFrame:
@@ -367,11 +363,10 @@ def cutoffs_table(cutoffs: pd.DataFrame, bin_labels: Sequence[str] = cons.DEFAUL
         row = {'field': field, 'seniority': seniority, 'attribute': attribute, 'ranges': text}
         row.update({f"share_{c}": g.at[c, 'n'] / total for c in g.index})
         rows.append(row)
-    out = _sort_cells(pd.DataFrame(rows))
+    out = sort_cells(pd.DataFrame(rows))
     return out
 
 
 def _fmt(value) -> str:
     value = float(value)
     return f"{value:,.0f}" if value.is_integer() else f"{value:,.2f}"
-

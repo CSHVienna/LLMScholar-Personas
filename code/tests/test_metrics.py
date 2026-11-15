@@ -99,8 +99,9 @@ class TestResponseMetrics(unittest.TestCase):
 
     def test_k_and_duplicates(self):
         m = self.metrics()
-        self.assertEqual((m.loc[1, 'k_ratio'], m.loc[2, 'k_ratio']), (4 / 3, 2 / 3))   # all person records count
-        self.assertTrue(np.isnan(m.loc[3, 'k_ratio']))                                  # refused: not valid
+        self.assertEqual((m.loc[1, 'k_balance'], m.loc[2, 'k_balance']), (1.0, 2 * 2 / (2 + 3)))   # 3 of 3; 2 of 3
+        self.assertEqual(self.metrics(keep_duplicates=True).loc[1, 'k_balance'], 1.0)   # repeats always counted
+        self.assertTrue(np.isnan(m.loc[3, 'k_balance']))                                # refused: not valid
         self.assertEqual((m.loc[1, 'n_valid_recs'], m.loc[1, 'n_unique_names']), (3, 2))
         self.assertAlmostEqual(m.loc[1, 'duplicates'], 1 / 3)
         self.assertEqual(m.loc[2, 'duplicates'], 0.0)
